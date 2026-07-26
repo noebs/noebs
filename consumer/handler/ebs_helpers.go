@@ -14,7 +14,11 @@ type ebsCall[Req any] func(ctx context.Context, tenantID string, req Req) (ebs_f
 
 func authenticatedEBS(next fiber.Handler) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		ctx, err := consumer.WithTransactionActor(c.UserContext(), getUserID(c))
+		userID, err := authenticatedUserID(c)
+		if err != nil {
+			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing authenticated user identity"})
+		}
+		ctx, err := consumer.WithTransactionActor(c.UserContext(), userID)
 		if err != nil {
 			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing authenticated user identity"})
 		}

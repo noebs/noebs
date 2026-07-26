@@ -17,8 +17,8 @@ const (
 )
 
 func (h *Handler) AddDeviceToken(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	if userID <= 0 {
+	userID, err := authenticatedUserID(c)
+	if err != nil {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
 	}
 	type data struct {
@@ -59,8 +59,8 @@ func (h *Handler) NecToName(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetUser(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	if userID <= 0 {
+	userID, err := authenticatedUserID(c)
+	if err != nil {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
 	}
 	tenantID, err := resolveTenantID(c)
@@ -84,8 +84,8 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "profile data is invalid", "code": "invalid_profile"})
 	}
-	userID := getUserID(c)
-	if userID <= 0 {
+	userID, err := authenticatedUserID(c)
+	if err != nil {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
 	}
 	tenantID, err := resolveTenantID(c)
@@ -114,8 +114,8 @@ func normalizeUserProfileInput(profile ebs_fields.UserProfile) (ebs_fields.UserP
 }
 
 func (h *Handler) GetUserLanguage(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	if userID <= 0 {
+	userID, err := authenticatedUserID(c)
+	if err != nil {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
 	}
 	tenantID, err := resolveTenantID(c)
@@ -130,8 +130,8 @@ func (h *Handler) GetUserLanguage(c *fiber.Ctx) error {
 }
 
 func (h *Handler) SetUserLanguage(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	if userID <= 0 {
+	userID, err := authenticatedUserID(c)
+	if err != nil {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
 	}
 	language := strings.TrimSpace(c.Query("language"))
@@ -149,8 +149,8 @@ func (h *Handler) SetUserLanguage(c *fiber.Ctx) error {
 }
 
 func (h *Handler) KYC(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	if userID <= 0 {
+	userID, err := authenticatedUserID(c)
+	if err != nil {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
 	}
 	if len(c.Body()) > maxKYCRequestBodyBytes {
@@ -174,8 +174,8 @@ func (h *Handler) KYC(c *fiber.Ctx) error {
 }
 
 func (h *Handler) TransactionByUUID(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	if userID <= 0 {
+	userID, err := authenticatedUserID(c)
+	if err != nil {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing authenticated user identity"})
 	}
 	id := strings.TrimSpace(c.Query("uuid"))

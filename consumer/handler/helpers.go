@@ -60,20 +60,12 @@ func jsonResponse(c *fiber.Ctx, code int, payload interface{}) error {
 	return c.Status(code).JSON(payload)
 }
 
-func getUserID(c *fiber.Ctx) int64 {
-	if v := c.Locals("user_id"); v != nil {
-		switch t := v.(type) {
-		case uint:
-			return int64(t)
-		case int:
-			return int64(t)
-		case int64:
-			return t
-		case float64:
-			return int64(t)
-		}
+func authenticatedUserID(c *fiber.Ctx) (int64, error) {
+	userID, ok := c.Locals("user_id").(int64)
+	if !ok || userID <= 0 {
+		return 0, apperr.ErrUnauthorized
 	}
-	return 0
+	return userID, nil
 }
 
 func getTenantID(c *fiber.Ctx) string {

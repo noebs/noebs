@@ -11,9 +11,9 @@ import (
 )
 
 func (h *Handler) ListOpaqueCards(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	cards, err := h.Service.ListOpaqueCardsForUserID(c.UserContext(), tenantID, userID)
 	if err != nil {
@@ -23,9 +23,9 @@ func (h *Handler) ListOpaqueCards(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CreateOpaqueCardEnrollmentIntent(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	intent, err := h.Service.CreateOpaqueCardEnrollmentIntent(c.UserContext(), tenantID, userID)
 	if err != nil {
@@ -35,9 +35,9 @@ func (h *Handler) CreateOpaqueCardEnrollmentIntent(c *fiber.Ctx) error {
 }
 
 func (h *Handler) ConfirmOpaqueCardEnrollment(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	var req consumer.ConfirmCardEnrollmentRequest
 	if err := bindJSON(c, &req); err != nil {
@@ -51,9 +51,9 @@ func (h *Handler) ConfirmOpaqueCardEnrollment(c *fiber.Ctx) error {
 }
 
 func (h *Handler) RenameOpaqueCard(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	var req struct {
 		Name *string `json:"name"`
@@ -71,9 +71,9 @@ func (h *Handler) RenameOpaqueCard(c *fiber.Ctx) error {
 }
 
 func (h *Handler) RetireOpaqueCard(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	if err := h.Service.RetireOpaqueCardForUserID(c.UserContext(), tenantID, userID, c.Params("card_id")); err != nil {
 		return opaqueCardError(c, err)
@@ -82,9 +82,9 @@ func (h *Handler) RetireOpaqueCard(c *fiber.Ctx) error {
 }
 
 func (h *Handler) SetOpaqueMainCard(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	if err := h.Service.SetOpaqueMainCardForUserID(c.UserContext(), tenantID, userID, c.Params("card_id")); err != nil {
 		return opaqueCardError(c, err)
@@ -93,9 +93,9 @@ func (h *Handler) SetOpaqueMainCard(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CreateCardEnrollmentIntentInternal(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	result, err := h.Service.CreateCardEnrollmentIntentForUserID(c.UserContext(), tenantID, userID, time.Now().UTC())
 	if err != nil {
@@ -105,9 +105,9 @@ func (h *Handler) CreateCardEnrollmentIntentInternal(c *fiber.Ctx) error {
 }
 
 func (h *Handler) BeginCardEnrollmentInternal(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	var cmd consumer.BeginCardEnrollmentCommand
 	if err := bindJSON(c, &cmd); err != nil {
@@ -121,9 +121,9 @@ func (h *Handler) BeginCardEnrollmentInternal(c *fiber.Ctx) error {
 }
 
 func (h *Handler) ClaimCardEnrollmentRailInternal(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	var cmd consumer.ClaimCardEnrollmentRailCommand
 	if err := bindJSON(c, &cmd); err != nil {
@@ -137,9 +137,9 @@ func (h *Handler) ClaimCardEnrollmentRailInternal(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CompleteCardEnrollmentInternal(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	var cmd consumer.CompleteCardEnrollmentCommand
 	if err := bindJSON(c, &cmd); err != nil {
@@ -153,9 +153,9 @@ func (h *Handler) CompleteCardEnrollmentInternal(c *fiber.Ctx) error {
 }
 
 func (h *Handler) FailCardEnrollmentInternal(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	var cmd consumer.FailCardEnrollmentCommand
 	if err := bindJSON(c, &cmd); err != nil {
@@ -167,18 +167,23 @@ func (h *Handler) FailCardEnrollmentInternal(c *fiber.Ctx) error {
 	return c.SendStatus(http.StatusNoContent)
 }
 
-func opaqueCardIdentity(c *fiber.Ctx) (string, int64, bool) {
+func opaqueCardIdentity(c *fiber.Ctx) (string, int64, error) {
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
-		_ = jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-		return "", 0, false
+		return "", 0, err
 	}
-	userID := getUserID(c)
-	if userID <= 0 {
-		_ = jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing authenticated user identity"})
-		return "", 0, false
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		return "", 0, err
 	}
-	return tenantID, userID, true
+	return tenantID, userID, nil
+}
+
+func opaqueCardIdentityError(c *fiber.Ctx, err error) error {
+	if errors.Is(err, store.ErrMissingTenantID) || errors.Is(err, store.ErrInvalidTenantID) {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
+	}
+	return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing authenticated user identity"})
 }
 
 func opaqueCardError(c *fiber.Ctx, err error) error {

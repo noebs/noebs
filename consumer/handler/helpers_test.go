@@ -112,3 +112,63 @@ func TestStatusForErrorMapsMissingInternalClientToUnavailable(t *testing.T) {
 		t.Fatalf("statusForError(ErrMissingInternalHTTPClient) = %d, want %d", got, http.StatusServiceUnavailable)
 	}
 }
+
+func TestAuthenticatedUserIDRequiresExactGatewayType(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   any
+		wantID  int64
+		wantErr bool
+	}{
+		{name: "exact int64", value: int64(42), wantID: 42},
+		{name: "missing", wantErr: true},
+		{name: "zero", value: int64(0), wantErr: true},
+		{name: "int", value: int(42), wantErr: true},
+		{name: "uint", value: uint(42), wantErr: true},
+		{name: "float", value: float64(42.9), wantErr: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			app := fiber.New()
+			app.Get("/", func(c *fiber.Ctx) error {
+				if test.value != nil {
+					c.Locals("user_id", test.value)
+				}
+				userID, err := authenticatedUserID(c)
+				if (err != nil) != test.wantErr {
+					t.Fatalf("authenticatedUserID() error = %v, wantErr %t", err, test.wantErr)
+				}
+				if userID != test.wantID {
+					t.Fatalf("authenticatedUserID() = %d, want %d", userID, test.wantID)
+				}
+				return c.SendStatus(http.StatusNoContent)
+			})
+
+			response, err := app.Test(httptest.NewRequest(http.MethodGet, "/", nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = response.Body.Close()
+		})
+	}
+}
+
+func TestGetTransactionsRejectsMalformedGatewayUserIdentity(t *testing.T) {
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("tenant_id", "tenant-1")
+		c.Locals("user_id", float64(42))
+		return c.Next()
+	})
+	app.Get("/transactions", (&Handler{}).GetTransactions)
+
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/transactions", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusUnauthorized)
+	}
+}

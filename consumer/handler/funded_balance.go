@@ -15,9 +15,9 @@ import (
 )
 
 func (h *Handler) OpaqueBalance(c *fiber.Ctx) error {
-	tenantID, userID, ok := opaqueCardIdentity(c)
-	if !ok {
-		return nil
+	tenantID, userID, err := opaqueCardIdentity(c)
+	if err != nil {
+		return opaqueCardIdentityError(c, err)
 	}
 	var req consumer.OpaqueBalanceRequest
 	if err := decodeOpaqueBalanceRequest(c.Body(), &req); err != nil {

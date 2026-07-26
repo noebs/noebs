@@ -7,7 +7,10 @@ import (
 )
 
 func (h *Handler) GetTransactions(c *fiber.Ctx) error {
-	userID := getUserID(c)
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing authenticated user identity"})
+	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
