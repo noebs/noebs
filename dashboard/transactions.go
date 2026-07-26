@@ -1,8 +1,9 @@
 package dashboard
 
 import (
-	"encoding/json"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -18,43 +19,6 @@ type MerchantTransactions struct {
 	FailedTransactions     int     `json:"failed_transactions" db:"failed_transactions"`
 }
 
-// To allow Redis to use this struct directly in marshaling
-func (p *MerchantTransactions) MarshalBinary() ([]byte, error) {
-	return json.Marshal(p)
-
-}
-
-// To allow Redis to use this struct directly in marshaling
-func (p *MerchantTransactions) UnmarshalBinary(data []byte) error {
-	return json.Unmarshal(data, p)
-}
-
-func purchaseSum(tran []string) float32 {
-	var trans []MerchantTransactions
-	var mtran MerchantTransactions
-	for _, k := range tran {
-		json.Unmarshal([]byte(k), &mtran)
-		trans = append(trans, mtran)
-	}
-	var sum float32
-	for _, k := range trans {
-		sum += k.PurchaseAmount
-	}
-	return sum
-}
-
-func ToPurchase(f ebs_fields.PurchaseFields) MerchantTransactions {
-	amount := f.TranAmount
-	var m MerchantTransactions
-	m.PurchaseAmount = amount
-	return m
-}
-
-type SearchModel struct {
-	Page       int    `form:"page"`
-	TerminalID string `form:"tid" binding:"required"`
-}
-
 func pagination(num int, page int) int {
 	r := num % page
 	if r == 0 {
@@ -63,33 +27,41 @@ func pagination(num int, page int) int {
 	return num/page + 1
 }
 
-func errorsCounter(t []ebs_fields.EBSResponse) int {
-	var errors int
-	for _, v := range t {
-		if v.ResponseCode != 0 && v.ResponseStatus == "Successful" {
-			errors++
-		}
+func dashboardTransactionFilter(tenantID, terminalID string) (string, []any) {
+	if terminalID == "" {
+		return "tenant_id = ?", []any{tenantID}
 	}
-	return errors
+	return "tenant_id = ? AND terminal_id LIKE ?", []any{tenantID, "%" + terminalID + "%"}
 }
 
-type dashboardStats struct {
-	Amount float32
+func dashboardBasePath(tenantID string) string {
+	return "/backoffice/t/" + url.PathEscape(tenantID) + "/reporting"
 }
 
-type merchantStats struct {
-	//created_at, sum(tran_amount) as amount, terminal_id").Group("terminal_id"
-	Amount     float32
-	TerminalID string
-}
-
-func structToSlice(t []ebs_fields.EBSResponse) []string {
-	var s []string
-	for _, v := range t {
-		d, _ := json.Marshal(v)
-		s = append(s, string(d))
+func dashboardPageURL(data DashboardTableView, page int) string {
+	query := url.Values{"page": []string{strconv.Itoa(page)}}
+	if data.TerminalIDFilter != "" {
+		query.Set("tid", data.TerminalIDFilter)
 	}
-	return s
+	return data.BasePath + "?" + query.Encode()
+}
+
+func dashboardStreamURL(data DashboardTableView) string {
+	if data.TerminalIDFilter == "" {
+		return data.BasePath + "/stream"
+	}
+	query := url.Values{"tid": []string{data.TerminalIDFilter}}
+	return data.BasePath + "/stream?" + query.Encode()
+}
+
+func transactionCurrency(tran ebs_fields.EBSResponse) string {
+	if tran.TranCurrencyCode != "" {
+		return tran.TranCurrencyCode
+	}
+	if tran.TranCurrency != "" {
+		return tran.TranCurrency
+	}
+	return "Not reported"
 }
 
 func TimeFormatter(t time.Time) string {

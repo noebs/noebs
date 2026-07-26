@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/parsing"
@@ -202,14 +201,6 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 	if !ok {
 		return
 	}
-	var search SearchModel
-	if len(c.Body()) > 0 {
-		if err := parseJSON(c, &search); err != nil {
-			jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
-			return
-		}
-	}
-
 	db, err := s.ensureDB()
 	if err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
@@ -218,125 +209,42 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 
 	pageSize := 50
 	offset := (page - 1) * pageSize
-	log.Printf("The offset is: %v", offset)
+	terminalID := c.Query("tid")
+	where, args := dashboardTransactionFilter(tenantID, terminalID)
 
-	var tran []ebs_fields.EBSResponse
-	var count int64
-	var totAmount dashboardStats
-	var mStats []merchantStats
-	var leastMerchants []merchantStats
-	var terminalFees []merchantStats
-
-	if err := db.GetContext(c.UserContext(), &count, db.Rebind("SELECT COUNT(*) FROM transactions WHERE tenant_id = ?"), tenantID); err != nil {
+	var statsRow dashboardTransactionStats
+	statsQuery := `SELECT
+		COUNT(*) AS number_transactions,
+		COALESCE(SUM(CASE WHEN response_code = 0 THEN 1 ELSE 0 END), 0) AS successful_transactions,
+		COALESCE(SUM(CASE WHEN response_code = 0 THEN 0 ELSE 1 END), 0) AS failed_transactions
+		FROM transactions WHERE ` + where
+	if err := db.GetContext(c.UserContext(), &statsRow, db.Rebind(statsQuery), args...); err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
-	if err := db.GetContext(c.UserContext(), &totAmount, db.Rebind("SELECT COALESCE(SUM(tran_amount), 0) AS amount FROM transactions WHERE tenant_id = ?"), tenantID); err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
-		return
+	stats := DashboardStatsView{
+		NumberTransactions:     statsRow.NumberTransactions,
+		SuccessfulTransactions: statsRow.SuccessfulTransactions,
+		FailedTransactions:     statsRow.FailedTransactions,
 	}
 
-	if search.TerminalID != "" {
-		tran, err = fetchTransactions(
-			c.UserContext(),
-			db,
-			`SELECT id, created_at, updated_at, payload FROM transactions
-			 WHERE tenant_id = ? AND terminal_id LIKE ?
-			 ORDER BY id DESC LIMIT ? OFFSET ?`,
-			tenantID,
-			"%"+search.TerminalID+"%",
-			pageSize,
-			offset,
-		)
-	} else {
-		tran, err = fetchTransactions(
-			c.UserContext(),
-			db,
-			`SELECT id, created_at, updated_at, payload FROM transactions
-			 WHERE tenant_id = ? ORDER BY id DESC LIMIT ? OFFSET ?`,
-			tenantID,
-			pageSize,
-			offset,
-		)
-	}
+	rowsQuery := `SELECT id, created_at, updated_at, payload
+		FROM transactions WHERE ` + where + `
+		ORDER BY id DESC LIMIT ? OFFSET ?`
+	rowArgs := append(append([]any{}, args...), pageSize, offset)
+	tran, err := fetchTransactions(c.UserContext(), db, db.Rebind(rowsQuery), rowArgs...)
 	if err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
 
-	start := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.UTC)
-	end := start.AddDate(0, 1, 0)
-
-	if err := db.SelectContext(
-		c.UserContext(),
-		&mStats,
-		db.Rebind(`SELECT terminal_id, COALESCE(SUM(tran_amount), 0) AS amount
-			FROM transactions
-			WHERE tenant_id = ? AND created_at >= ? AND created_at < ?
-			GROUP BY terminal_id
-			ORDER BY amount DESC`),
-		tenantID,
-		start,
-		end,
-	); err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
-		return
-	}
-	if err := db.SelectContext(
-		c.UserContext(),
-		&leastMerchants,
-		db.Rebind(`SELECT terminal_id, COUNT(*) AS amount
-			FROM transactions
-			WHERE tenant_id = ? AND tran_amount >= ? AND response_status = ? AND created_at >= ? AND created_at < ?
-			GROUP BY terminal_id
-			ORDER BY amount`),
-		tenantID,
-		1,
-		"Successful",
-		start,
-		end,
-	); err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
-		return
-	}
-	if err := db.SelectContext(
-		c.UserContext(),
-		&terminalFees,
-		db.Rebind(`SELECT terminal_id, COUNT(tran_fee) AS amount
-			FROM transactions
-			WHERE tenant_id = ? AND tran_amount >= ? AND response_status = ? AND created_at >= ? AND created_at < ?
-			GROUP BY terminal_id
-			ORDER BY amount DESC`),
-		tenantID,
-		1,
-		"Successful",
-		start,
-		end,
-	); err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
-		return
-	}
-
-	log.Printf("the least merchats are: %v", leastMerchants)
-
-	pager := pagination(int(count), 50)
-	errors := errorsCounter(tran)
-	stats := DashboardStatsView{
-		NumberTransactions:     int(count),
-		SuccessfulTransactions: int(count) - errors,
-		FailedTransactions:     errors,
-	}
-
-	sumFees := computeSum(terminalFees)
 	view := DashboardTableView{
-		Transactions:   tran,
-		PageCount:      pager + 1,
-		Stats:          stats,
-		Amounts:        totAmount,
-		MerchantStats:  mStats,
-		LeastMerchants: leastMerchants,
-		TerminalFees:   terminalFees,
-		SumFees:        sumFees,
+		Transactions:     tran,
+		PageCount:        pagination(stats.NumberTransactions, pageSize),
+		CurrentPage:      page,
+		Stats:            stats,
+		TerminalIDFilter: terminalID,
+		BasePath:         dashboardBasePath(tenantID),
 	}
 	renderComponent(c, http.StatusOK, DashboardTablePage(view))
 }
@@ -358,10 +266,8 @@ func (s *Service) QRStatus(c *fiber.Ctx) {
 		return
 	}
 
-	pageCount := pagination(len(data), 50) + 1
 	view := QRStatusView{
 		Transactions: data,
-		PageCount:    pageCount,
 	}
 	renderComponent(c, http.StatusOK, QRStatusPage(view))
 }
@@ -398,11 +304,12 @@ func (s *Service) Stream(c *fiber.Ctx) {
 	if !ok {
 		return
 	}
+	where, args := dashboardTransactionFilter(tenantID, c.Query("tid"))
 	trans, err := fetchTransactions(
 		c.UserContext(),
 		db,
-		"SELECT id, created_at, updated_at, payload FROM transactions WHERE tenant_id = ? ORDER BY id DESC",
-		tenantID,
+		db.Rebind("SELECT id, created_at, updated_at, payload FROM transactions WHERE "+where+" ORDER BY id DESC"),
+		args...,
 	)
 	if err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
@@ -414,7 +321,7 @@ func (s *Service) Stream(c *fiber.Ctx) {
 	}
 
 	c.Set("Content-Disposition", `attachment; filename="transactions.json"`)
-	c.Set("Content-Type", "application/octet-stream")
+	c.Set("Content-Type", fiber.MIMEApplicationJSONCharsetUTF8)
 	if err := c.SendStream(&stream); err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
@@ -452,16 +359,4 @@ func (s *Service) MerchantTransactionsEndpoint(c *fiber.Ctx) {
 		return
 	}
 	jsonResponse(c, http.StatusOK, fiber.Map{"result": stats})
-}
-
-//TODO
-// - Add Merchant views
-// - Add Merchant stats / per month
-
-func computeSum(m []merchantStats) float32 {
-	var s float32
-	for _, v := range m {
-		s += v.Amount
-	}
-	return s
 }

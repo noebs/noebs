@@ -1,8 +1,6 @@
 package dashboard
 
 import (
-	"strconv"
-
 	"github.com/bradfitz/iter"
 )
 
@@ -40,15 +38,16 @@ templ DashboardTablePage(data DashboardTableView) {
 			<div class="container">
 				<div class="row">
 					<div class="col">
-						<form action="">
+						<form action={ data.BasePath } method="get">
+							<label for="terminal-filter">Terminal ID</label>
 							<label>
-								<input type="text" placeholder="Search.." name="tid">
+								<input id="terminal-filter" type="search" placeholder="Search terminal IDs" name="tid" value={ data.TerminalIDFilter }>
 							</label>
-							<button type="submit" class="btn btn-outline-primary btn-sm">Submit</button>
+							<button type="submit" class="btn btn-outline-primary btn-sm">Search</button>
 						</form>
 					</div>
 					<div class="col">
-						<a type="submit" class="btn btn-primary btn-sm" role="button" href="./stream">Download all data</a>
+						<a class="btn btn-primary btn-sm" role="button" href={ dashboardStreamURL(data) }>Download matching data</a>
 					</div>
 				</div>
 
@@ -56,20 +55,16 @@ templ DashboardTablePage(data DashboardTableView) {
 					<div class="col">
 						<ul class="list-group list-group-horizontal-sm">
 							<li class="list-group-item d-flex justify-content-between align-items-center">
-								All transactions so far
+								Matching transactions
 								<span class="badge badge-primary badge-pill">{ data.Stats.NumberTransactions }</span>
 							</li>
 							<li class="list-group-item d-flex justify-content-between align-items-center">
-								Successful Transactions
+								Approved by EBS
 								<span class="badge badge-primary badge-pill">{ data.Stats.SuccessfulTransactions }</span>
 							</li>
 							<li class="list-group-item d-flex justify-content-between align-items-center">
-								Failed Transactions
+								Rejected or unknown
 								<span class="badge badge-primary badge-pill">{ data.Stats.FailedTransactions }</span>
-							</li>
-							<li class="list-group-item d-flex justify-content-between align-items-center">
-								Total Amount
-								<span class="badge badge-primary badge-pill">{ data.Amounts.Amount }</span>
 							</li>
 						</ul>
 					</div>
@@ -83,6 +78,7 @@ templ DashboardTablePage(data DashboardTableView) {
 									<th scope="col">ID</th>
 									<th scope="col">Date Time</th>
 									<th scope="col">Amount</th>
+									<th scope="col">Currency</th>
 									<th scope="col">Reference Number</th>
 									<th scope="col">Approval Code</th>
 									<th scope="col">Terminal ID</th>
@@ -95,6 +91,7 @@ templ DashboardTablePage(data DashboardTableView) {
 									<th scope="row">{ tran.ID }</th>
 									<td>{ TimeFormatter(tran.CreatedAt) }</td>
 									<td>{ tran.TranAmount }</td>
+									<td>{ transactionCurrency(tran) }</td>
 									<td>{ tran.ReferenceNumber }</td>
 									<td>{ tran.ApprovalCode }</td>
 									<td>{ tran.TerminalID }</td>
@@ -110,94 +107,11 @@ templ DashboardTablePage(data DashboardTableView) {
 					<div class="col-sm">
 						<ul class="pagination pagination-sm">
 							for i := range iter.N(data.PageCount) {
-								<li class="page-item"><a class="page-link" href={"?page=" + strconv.Itoa(i)}>{ i }</a></li>
+								<li class={ "page-item", templ.KV("active", i + 1 == data.CurrentPage) }>
+									<a class="page-link" href={ dashboardPageURL(data, i + 1) }>{ i + 1 }</a>
+								</li>
 							}
 						</ul>
-					</div>
-				</div>
-
-				<hr>
-
-				<div class="row">
-					<div class="col">
-						<p class="lead">Top Transactions This Month</p>
-						<table class="table table-sm table-hover">
-							<thead class="thead-light">
-								<tr>
-									<th scope="col">Terminal ID</th>
-									<th scope="col">Monthly Amount</th>
-								</tr>
-							</thead>
-							for i, stat := range data.MerchantStats {
-								if i == 0 {
-									<tr class="table-primary">
-										<th scope="row">{ stat.TerminalID }</th>
-										<td>{ stat.Amount }</td>
-									</tr>
-								} else {
-									<tr>
-										<th scope="row">{ stat.TerminalID }</th>
-										<td>{ stat.Amount }</td>
-									</tr>
-								}
-							}
-						</table>
-					</div>
-					<div class="col">
-						<p class="lead">Terminals With LEAST # Transactions This Month</p>
-						<table class="table table-sm table-hover">
-							<thead class="thead-light">
-								<tr>
-									<th scope="col">Terminal ID</th>
-									<th scope="col">Number of Transactions</th>
-								</tr>
-							</thead>
-							for i, stat := range data.LeastMerchants {
-								if i == 0 {
-									<tr class="table-danger">
-										<th scope="row">{ stat.TerminalID }</th>
-										<td>{ stat.Amount }</td>
-									</tr>
-								} else {
-									<tr>
-										<th scope="row">{ stat.TerminalID }</th>
-										<td>{ stat.Amount }</td>
-									</tr>
-								}
-							}
-						</table>
-					</div>
-				</div>
-
-				<hr>
-
-				<div class="row">
-					<div class="col">
-						<p class="lead">Transaction Fees Per Terminal</p>
-						<table class="table table-sm table-hover">
-							<thead class="thead-light">
-								<tr>
-									<th scope="col">Terminal ID</th>
-									<th scope="col">Transaction Fees Amount</th>
-								</tr>
-							</thead>
-							for i, stat := range data.TerminalFees {
-								if i == 0 {
-									<tr class="table-primary">
-										<th scope="row">{ stat.TerminalID }</th>
-										<td>{ stat.Amount }</td>
-									</tr>
-								} else {
-									<tr>
-										<th scope="row">{ stat.TerminalID }</th>
-										<td>{ stat.Amount }</td>
-									</tr>
-								}
-							}
-						</table>
-					</div>
-					<div class="col">
-						<p class="lead">The sum of transaction fees is: { data.SumFees }</p>
 					</div>
 				</div>
 			</div>
@@ -234,17 +148,6 @@ templ QRStatusPage(data QRStatusView) {
 					</div>
 				</div>
 
-				<div class="row">
-					<div class="col-sm">
-						<ul class="pagination pagination-sm">
-							for i := range iter.N(data.PageCount) {
-								<li class="page-item"><a class="page-link" href={"?page=" + strconv.Itoa(i)}>{ i }</a></li>
-							}
-						</ul>
-					</div>
-					<div class="col-sm">
-					</div>
-				</div>
 				<hr>
 			</div>
 		</main>

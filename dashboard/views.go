@@ -9,17 +9,14 @@ type DashboardStatsView struct {
 }
 
 type DashboardTableView struct {
-	Transactions   []ebs_fields.EBSResponse
-	PageCount      int
-	Stats          DashboardStatsView
-	Amounts        dashboardStats
-	MerchantStats  []merchantStats
-	LeastMerchants []merchantStats
-	TerminalFees   []merchantStats
-	SumFees        float32
+	Transactions     []ebs_fields.EBSResponse
+	PageCount        int
+	CurrentPage      int
+	Stats            DashboardStatsView
+	TerminalIDFilter string
+	BasePath         string
 }
 
 type QRStatusView struct {
 	Transactions []ebs_fields.EBSResponse
-	PageCount    int
 }

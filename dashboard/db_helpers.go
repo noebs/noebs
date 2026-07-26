@@ -22,6 +22,12 @@ type transactionRow struct {
 	Payload   string       `db:"payload"`
 }
 
+type dashboardTransactionStats struct {
+	NumberTransactions     int `db:"number_transactions"`
+	SuccessfulTransactions int `db:"successful_transactions"`
+	FailedTransactions     int `db:"failed_transactions"`
+}
+
 func (s *Service) ensureDB() (*sqlx.DB, error) {
 	if s == nil || s.Store == nil || s.Store.DB == nil || s.Store.DB.DB == nil {
 		return nil, errors.New("nil db")

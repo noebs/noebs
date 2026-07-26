@@ -154,7 +154,7 @@ func TestDashboardTransactionQueryRejectsInvalidFieldsBeforeDB(t *testing.T) {
 	}
 }
 
-func TestBrowserDashboardRejectsMalformedSearchBeforeDB(t *testing.T) {
+func TestBrowserDashboardIgnoresGETBodyAtBoundary(t *testing.T) {
 	service := Service{}
 	app := fiber.New()
 	app.Get("/browser", gateway.InternalTenantIdentityMiddleware(), func(c *fiber.Ctx) error {
@@ -162,7 +162,7 @@ func TestBrowserDashboardRejectsMalformedSearchBeforeDB(t *testing.T) {
 		return nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/browser", strings.NewReader("{"))
+	req := httptest.NewRequest(http.MethodGet, "/browser?tid=terminal-1", strings.NewReader("{"))
 	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant-1")
 	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	resp, err := app.Test(req)
@@ -171,8 +171,8 @@ func TestBrowserDashboardRejectsMalformedSearchBeforeDB(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d after ignoring GET body", resp.StatusCode, http.StatusInternalServerError)
 	}
 }
 
