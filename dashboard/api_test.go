@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -268,6 +269,28 @@ func TestMerchantTransactionsEndpointReturnsQueryErrors(t *testing.T) {
 
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
+	}
+}
+
+func TestMerchantTransactionSummaryIsCountOnly(t *testing.T) {
+	payload, err := json.Marshal(MerchantTransactionCounts{
+		AllTransactions:        3,
+		SuccessfulTransactions: 2,
+		FailedTransactions:     1,
+	})
+	if err != nil {
+		t.Fatalf("marshal summary: %v", err)
+	}
+	encoded := string(payload)
+	for _, want := range []string{`"transactions_count":3`, `"successful_transactions":2`, `"failed_transactions":1`} {
+		if !strings.Contains(encoded, want) {
+			t.Fatalf("summary = %s, want %s", encoded, want)
+		}
+	}
+	for _, unsupported := range []string{"purchase_amount", "tran_amount", "response_status"} {
+		if strings.Contains(encoded, unsupported) || strings.Contains(merchantTransactionCountsQuery, unsupported) {
+			t.Fatalf("merchant summary retains unsupported contract %q", unsupported)
+		}
 	}
 }
 

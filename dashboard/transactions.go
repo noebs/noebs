@@ -12,11 +12,10 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type MerchantTransactions struct {
-	PurchaseAmount         float32 `json:"purchase_amount" db:"purchase_amount"`
-	AllTransactions        int     `json:"purchases_count" db:"all_transactions"`
-	SuccessfulTransactions int     `json:"successful_transactions" db:"successful_transactions"`
-	FailedTransactions     int     `json:"failed_transactions" db:"failed_transactions"`
+type MerchantTransactionCounts struct {
+	AllTransactions        int `json:"transactions_count" db:"all_transactions"`
+	SuccessfulTransactions int `json:"successful_transactions" db:"successful_transactions"`
+	FailedTransactions     int `json:"failed_transactions" db:"failed_transactions"`
 }
 
 func pagination(num int, page int) int {

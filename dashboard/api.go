@@ -21,6 +21,13 @@ var (
 	ErrInvalidDashboardQuery = errors.New("invalid dashboard query")
 )
 
+const merchantTransactionCountsQuery = `SELECT
+	COUNT(*) AS all_transactions,
+	COALESCE(SUM(CASE WHEN response_code = 0 THEN 1 ELSE 0 END), 0) AS successful_transactions,
+	COALESCE(SUM(CASE WHEN response_code = 0 THEN 0 ELSE 1 END), 0) AS failed_transactions
+	FROM transactions
+	WHERE tenant_id = ? AND terminal_id = ?`
+
 type Service struct {
 	Store       *store.Store
 	NoebsConfig ebs_fields.NoebsConfig
@@ -346,15 +353,8 @@ func (s *Service) MerchantTransactionsEndpoint(c *fiber.Ctx) {
 	if !ok {
 		return
 	}
-	var stats MerchantTransactions
-	stmt := `SELECT
-		COALESCE(SUM(tran_amount), 0) AS purchase_amount,
-		COUNT(*) AS all_transactions,
-		COALESCE(SUM(CASE WHEN response_status = 'Successful' THEN 1 ELSE 0 END), 0) AS successful_transactions,
-		COALESCE(SUM(CASE WHEN response_status != 'Successful' THEN 1 ELSE 0 END), 0) AS failed_transactions
-		FROM transactions
-		WHERE tenant_id = ? AND terminal_id = ?`
-	if err := db.GetContext(c.UserContext(), &stats, db.Rebind(stmt), tenantID, tid); err != nil {
+	var stats MerchantTransactionCounts
+	if err := db.GetContext(c.UserContext(), &stats, db.Rebind(merchantTransactionCountsQuery), tenantID, tid); err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
