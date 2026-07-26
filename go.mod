@@ -33,6 +33,7 @@ require (
 	go.temporal.io/api v1.59.0
 	go.temporal.io/sdk v1.39.0
 	golang.org/x/oauth2 v0.36.0
+	golang.org/x/sys v0.47.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217
 	google.golang.org/grpc v1.79.3
 	gopkg.in/yaml.v3 v3.0.1
@@ -136,7 +137,6 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/shopspring/decimal v1.4.0
 	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/api v0.183.0
 	google.golang.org/protobuf v1.36.10

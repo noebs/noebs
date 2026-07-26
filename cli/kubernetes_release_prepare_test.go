@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,7 @@ import (
 func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 	inputRoot := t.TempDir()
 	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
-	outputRoot := filepath.Join(t.TempDir(), "release")
+	outputRoot := filepath.Join(t.TempDir(), "missing-parent", "release")
 
 	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
 	if err != nil {
@@ -106,6 +107,14 @@ func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 	if err := validateKubernetesReleaseManifest(outputRoot); err != nil {
 		t.Fatalf("validateKubernetesReleaseManifest() error = %v", err)
 	}
+	if manifest := readPreparedFile(t, outputRoot, "release-manifest.yaml"); strings.Contains(manifest, ".release.prepare-") {
+		t.Fatal("release manifest contains the staging directory name")
+	}
+	requireDirectoryEntries(t, filepath.Dir(outputRoot), []string{"release"})
+	requirePreparedMode(t, outputRoot, 0o700)
+	requirePreparedMode(t, filepath.Join(outputRoot, ".sops"), 0o700)
+	requirePreparedMode(t, filepath.Join(outputRoot, ".sops", "age-key.txt"), 0o600)
+	requirePreparedMode(t, filepath.Join(outputRoot, "platform", "temporal-postgres-password.txt"), 0o600)
 }
 
 func TestPrepareKubernetesReleaseRejectsDuplicatePSPCallbackID(t *testing.T) {
@@ -280,9 +289,115 @@ func TestPrepareKubernetesReleaseRejectsNonEmptyOutputRoot(t *testing.T) {
 	writePreflightFile(t, outputRoot, "stale", "do not overwrite")
 
 	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err == nil || !strings.Contains(err.Error(), "output root must be empty") {
+	if err == nil || !strings.Contains(err.Error(), "output root must not exist") {
 		t.Fatalf("prepareKubernetesRelease() error = %v, want non-empty output rejection", err)
 	}
+}
+
+func TestPrepareKubernetesReleaseRemovesSensitiveStagingAfterValidationFailure(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	outputParent := t.TempDir()
+	outputRoot := filepath.Join(outputParent, "release")
+	injectedErr := errors.New("injected release validation failure")
+	observedSensitiveStaging := false
+	decrypt := func(path, _ string) ([]byte, error) {
+		if filepath.Base(path) == "workload-auth-postgres-roles.secrets.yaml" {
+			stagingRoot := filepath.Dir(filepath.Dir(path))
+			for _, name := range []string{
+				".sops/age-key.txt",
+				"platform/temporal-postgres-password.txt",
+				"platform/keycloak-postgres-password.txt",
+				"release-manifest.yaml",
+			} {
+				if _, err := os.Stat(filepath.Join(stagingRoot, name)); err != nil {
+					return nil, fmt.Errorf("expected sensitive staging artifact %s: %w", name, err)
+				}
+			}
+			observedSensitiveStaging = true
+			return nil, injectedErr
+		}
+		return os.ReadFile(path)
+	}
+
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, decrypt, plainKubernetesSecretEncrypt)
+	if !errors.Is(err, injectedErr) {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want injected validation failure", err)
+	}
+	if !observedSensitiveStaging {
+		t.Fatal("validation failure was not injected after sensitive staging output")
+	}
+	assertPathMissing(t, outputRoot)
+	requireDirectoryEntries(t, outputParent, nil)
+}
+
+func TestPrepareKubernetesReleaseRejectsExistingEmptyOutputRoot(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	outputParent := t.TempDir()
+	outputRoot := filepath.Join(outputParent, "release")
+	if err := os.Mkdir(outputRoot, 0o711); err != nil {
+		t.Fatal(err)
+	}
+
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "output root must not exist") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want existing output rejection", err)
+	}
+	requirePreparedMode(t, outputRoot, 0o711)
+	requireDirectoryEntries(t, outputRoot, nil)
+	requireDirectoryEntries(t, outputParent, []string{"release"})
+}
+
+func TestPrepareKubernetesReleaseRejectsDanglingOutputSymlink(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	outputParent := t.TempDir()
+	outputRoot := filepath.Join(outputParent, "release")
+	if err := os.Symlink(filepath.Join(outputParent, "missing-target"), outputRoot); err != nil {
+		t.Skipf("create output symlink: %v", err)
+	}
+
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "output root must not exist") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want existing output rejection", err)
+	}
+	info, err := os.Lstat(outputRoot)
+	if err != nil {
+		t.Fatalf("lstat output symlink: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("output symlink was replaced")
+	}
+	requireDirectoryEntries(t, outputParent, []string{"release"})
+}
+
+func TestPrepareKubernetesReleasePreservesConcurrentDestination(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	outputParent := t.TempDir()
+	outputRoot := filepath.Join(outputParent, "release")
+	createdDestination := false
+	decrypt := func(path, _ string) ([]byte, error) {
+		if !createdDestination && filepath.Base(path) == "workload-auth-postgres-roles.secrets.yaml" {
+			if err := os.Mkdir(outputRoot, 0o711); err != nil {
+				return nil, err
+			}
+			createdDestination = true
+		}
+		return os.ReadFile(path)
+	}
+
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, decrypt, plainKubernetesSecretEncrypt)
+	if !errors.Is(err, os.ErrExist) || !strings.Contains(err.Error(), "publish kubernetes release output root") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want publication conflict", err)
+	}
+	if !createdDestination {
+		t.Fatal("concurrent destination was not created during staged validation")
+	}
+	requirePreparedMode(t, outputRoot, 0o711)
+	requireDirectoryEntries(t, outputRoot, nil)
+	requireDirectoryEntries(t, outputParent, []string{"release"})
 }
 
 func TestKubernetesReleaseInputsExampleMatchesStrictSchema(t *testing.T) {
@@ -497,6 +612,32 @@ func assertPathMissing(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("stat %s error = %v, want not exist", path, err)
+	}
+}
+
+func requirePreparedMode(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %s: %v", path, err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Fatalf("%s mode = %o, want %o", path, got, want)
+	}
+}
+
+func requireDirectoryEntries(t *testing.T, path string, want []string) {
+	t.Helper()
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		t.Fatalf("read directory %s: %v", path, err)
+	}
+	got := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		got = append(got, entry.Name())
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("%s entries = %q, want %q", path, got, want)
 	}
 }
 

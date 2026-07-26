@@ -213,13 +213,7 @@ func prepareKubernetesRelease(repoRoot, inputsPath, ageKeyPath, outputRoot strin
 	if err := release.validate(); err != nil {
 		return err
 	}
-	if err := release.write(outputRoot, encrypt); err != nil {
-		return err
-	}
-	if err := writeKubernetesReleaseManifest(outputRoot); err != nil {
-		return err
-	}
-	return validateKubernetesSecretReleaseRootWithDecrypt(outputRoot, decrypt)
+	return release.publish(outputRoot, decrypt, encrypt)
 }
 
 func resolveKubernetesReleaseOutputRoot(outputRoot string) (string, error) {
@@ -231,14 +225,49 @@ func resolveKubernetesReleaseOutputRoot(outputRoot string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve kubernetes release output root: %w", err)
 	}
-	entries, err := os.ReadDir(absoluteRoot)
-	if err == nil && len(entries) != 0 {
-		return "", fmt.Errorf("kubernetes release output root must be empty: %s", absoluteRoot)
+	if _, err = os.Lstat(absoluteRoot); err == nil {
+		return "", fmt.Errorf("kubernetes release output root must not exist: %s", absoluteRoot)
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("read kubernetes release output root %s: %w", absoluteRoot, err)
 	}
 	return absoluteRoot, nil
+}
+
+func (r preparedKubernetesRelease) publish(outputRoot string, decrypt deploymentDecryptFunc, encrypt kubernetesSecretEncryptFunc) (resultErr error) {
+	parent := filepath.Dir(outputRoot)
+	base := filepath.Base(outputRoot)
+	if err := os.MkdirAll(parent, 0o700); err != nil {
+		return fmt.Errorf("create kubernetes release output parent %s: %w", parent, err)
+	}
+	stagingRoot, err := os.MkdirTemp(parent, "."+base+".prepare-*")
+	if err != nil {
+		return fmt.Errorf("create kubernetes release staging root: %w", err)
+	}
+	defer func() {
+		if stagingRoot == "" {
+			return
+		}
+		if err := os.RemoveAll(stagingRoot); err != nil {
+			cleanupErr := fmt.Errorf("remove kubernetes release staging root: %w", err)
+			resultErr = errors.Join(resultErr, cleanupErr)
+		}
+	}()
+
+	if err := r.write(stagingRoot, encrypt); err != nil {
+		return err
+	}
+	if err := writeKubernetesReleaseManifest(stagingRoot); err != nil {
+		return err
+	}
+	if err := validateKubernetesSecretReleaseRootWithDecrypt(stagingRoot, decrypt); err != nil {
+		return err
+	}
+	if err := publishKubernetesReleaseDirectory(stagingRoot, outputRoot); err != nil {
+		return fmt.Errorf("publish kubernetes release output root %s: %w", outputRoot, err)
+	}
+	stagingRoot = ""
+	return nil
 }
 
 func readNoebsKubernetesConfigMapData(repoRoot string) (map[string]string, error) {
