@@ -830,14 +830,16 @@ func initConfig() {
 		if err != nil {
 			logrusLogger.Fatalf("error configuring wallet worker Temporal authority: %v", err)
 		}
-		register := func(w temporalworker.Worker) {
-			walletworker.RegisterWallet(w, walletworker.RegisterDeps{
+		register := func(w temporalworker.Worker) error {
+			return walletworker.RegisterWallet(w, walletworker.RegisterDeps{
 				Store:         walletService.Store,
 				PSPActivities: pspActivities,
 				FXActivities:  fxActivities,
 			})
 		}
-		runner, err := walletworker.NewRunner(context.Background(), workerOpts, register)
+		dialCtx, cancelDial := context.WithTimeout(context.Background(), temporalWorkerDialTimeout)
+		runner, err := walletworker.NewRunner(dialCtx, workerOpts, register)
+		cancelDial()
 		if err != nil {
 			logrusLogger.Fatalf("error creating wallet worker: %v", err)
 		}

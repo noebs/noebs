@@ -30,7 +30,7 @@ func (s *Server) ensureTemporalClient() (temporalClient, error) {
 	}
 	s.temporalOnce.Do(func() {
 		opts := s.TemporalOptions
-		client, err := walletworker.NewClient(opts)
+		client, err := walletworker.NewClient(context.Background(), opts)
 		if err != nil {
 			s.temporalErr = err
 			return

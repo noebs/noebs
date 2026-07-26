@@ -17,6 +17,7 @@ var (
 	ErrMissingTaskQueue           = errors.New("missing temporal task queue")
 	ErrMissingTemporalTLS         = errors.New("missing temporal TLS configuration")
 	ErrMissingTemporalCredentials = errors.New("missing temporal credentials")
+	ErrMissingRegistrar           = errors.New("missing temporal worker registrar")
 )
 
 type Options struct {
@@ -66,12 +67,12 @@ type Runner struct {
 	Worker worker.Worker
 }
 
-func NewClient(opts Options) (client.Client, error) {
+func NewClient(ctx context.Context, opts Options) (client.Client, error) {
 	clientOptions, err := temporalClientOptions(opts)
 	if err != nil {
 		return nil, err
 	}
-	return client.Dial(clientOptions)
+	return client.DialContext(ctx, clientOptions)
 }
 
 func NewNamespaceClient(opts Options) (client.NamespaceClient, error) {
@@ -100,18 +101,21 @@ func temporalClientOptions(opts Options) (client.Options, error) {
 	}, nil
 }
 
-func NewRunner(ctx context.Context, opts Options, register func(worker.Worker)) (*Runner, error) {
-	_ = ctx
+func NewRunner(ctx context.Context, opts Options, register func(worker.Worker) error) (*Runner, error) {
 	if err := opts.Validate(); err != nil {
 		return nil, err
 	}
-	c, err := NewClient(opts)
+	if register == nil {
+		return nil, ErrMissingRegistrar
+	}
+	c, err := NewClient(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 	w := worker.New(c, string(opts.TaskQueue), worker.Options{})
-	if register != nil {
-		register(w)
+	if err := register(w); err != nil {
+		c.Close()
+		return nil, err
 	}
 	return &Runner{Client: c, Worker: w}, nil
 }

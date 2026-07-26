@@ -22,6 +22,7 @@ const (
 	temporalLedgerClientID    = "noebs-temporal-wallet-ledger"
 	temporalWorkerClientID    = "noebs-temporal-wallet-worker"
 	temporalBootstrapClientID = "noebs-temporal-namespace-bootstrap"
+	temporalWorkerDialTimeout = 30 * time.Second
 )
 
 func buildTemporalOptions(ctx context.Context, cfg ebs_fields.NoebsConfig, taskQueue walletworker.TaskQueue, expectedClientID string) (walletworker.Options, error) {
