@@ -8,7 +8,7 @@ import (
 	"github.com/adonese/noebs/store"
 )
 
-func (s *Service) storeLastTransactions(ctx context.Context, tenantID, merchantID string, res *ebs_fields.EBSParserFields) error {
+func (s *Service) storeLastTransactions(ctx context.Context, tenantID, requestedMerchantID string, res *ebs_fields.EBSParserFields) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
@@ -20,7 +20,7 @@ func (s *Service) storeLastTransactions(ctx context.Context, tenantID, merchantI
 		return nil
 	}
 	for _, purchase := range res.LastTransactions {
-		txn, err := qrPurchaseTransaction(merchantID, purchase)
+		txn, err := qrPurchaseTransaction(requestedMerchantID, purchase)
 		if err != nil {
 			return err
 		}
@@ -51,16 +51,13 @@ func qrPurchaseTransaction(requestMerchantID string, purchase ebs_fields.QRPurch
 	if uuid == "" {
 		return ebs_fields.EBSResponse{}, store.ErrMissingUUID
 	}
-	merchantID := strings.TrimSpace(purchase.MerchantID)
-	if merchantID == "" {
-		merchantID = requestMerchantID
-	}
-	if merchantID != requestMerchantID {
+	providerMerchantID := strings.TrimSpace(purchase.MerchantID)
+	if providerMerchantID != "" && providerMerchantID != requestMerchantID {
 		return ebs_fields.EBSResponse{}, ErrInvalidMerchantID
 	}
 	return ebs_fields.EBSResponse{
 		UUID:                     uuid,
-		MerchantID:               merchantID,
+		MerchantID:               providerMerchantID,
 		MerchantName:             purchase.MerchantName,
 		MerchantCity:             purchase.MerchantCity,
 		MerchantAccountReference: purchase.MerchantAccountReference,

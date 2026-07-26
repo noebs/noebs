@@ -38,7 +38,7 @@ func TestQRPurchaseTransactionValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("qrPurchaseTransaction() error = %v", err)
 	}
-	if got.MerchantID != "merchant-1" || got.UUID != "qr-tx-1" {
+	if got.MerchantID != "" || got.UUID != "qr-tx-1" {
 		t.Fatalf("qrPurchaseTransaction() = %+v", got)
 	}
 }
@@ -63,7 +63,6 @@ func TestQRTransactionsRecordsLastTransactions(t *testing.T) {
 			EBSMapFields: ebs_fields.EBSMapFields{
 				LastTransactions: []ebs_fields.QRPurchase{{
 					UUID:            "qr-tx-1",
-					MerchantID:      "merchant-1",
 					MerchantName:    "Merchant One",
 					Pan:             "9222081700000000",
 					ResponseCode:    0,
@@ -107,12 +106,32 @@ func TestQRTransactionsRecordsLastTransactions(t *testing.T) {
 	if len(res.LastTransactions) != 1 {
 		t.Fatalf("lastTransactions = %d, want 1", len(res.LastTransactions))
 	}
+	if res.LastTransactions[0].MerchantID != "" {
+		t.Fatalf("provider merchant = %q, want absent", res.LastTransactions[0].MerchantID)
+	}
 
 	stored, err := storeSvc.GetTransactionByUUID(ctx, tenantID, "qr-tx-1")
 	if err != nil {
 		t.Fatalf("GetTransactionByUUID(qr-tx-1): %v", err)
 	}
-	if stored.MerchantID != "merchant-1" || stored.PAN != "922208*****0000" || stored.TranAmount != 1250 {
+	if stored.MerchantID != "" || stored.PAN != "922208*****0000" || stored.TranAmount != 1250 {
 		t.Fatalf("stored transaction = %+v", stored)
+	}
+	var eventPayload string
+	if err := storeSvc.DB.GetContext(ctx, &eventPayload, storeSvc.DB.Rebind(`SELECT transaction_events.payload
+		FROM transaction_events
+		JOIN transactions ON transactions.id = transaction_events.transaction_id
+			AND transactions.tenant_id = transaction_events.tenant_id
+		WHERE transactions.tenant_id = ? AND transactions.uuid = ?`), tenantID, "qr-tx-1"); err != nil {
+		t.Fatalf("read transaction event: %v", err)
+	}
+	var event struct {
+		Transaction map[string]json.RawMessage `json:"transaction"`
+	}
+	if err := json.Unmarshal([]byte(eventPayload), &event); err != nil {
+		t.Fatalf("decode transaction event: %v", err)
+	}
+	if _, exists := event.Transaction["merchantID"]; exists {
+		t.Fatalf("transaction event relabeled the requested merchant as provider evidence: %s", eventPayload)
 	}
 }
