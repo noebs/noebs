@@ -101,8 +101,9 @@ func TestOpaqueCardHTTPEnrollmentRetryAndPublicIsolation(t *testing.T) {
 		dropCompleteResponse: true,
 	}
 	ebsAdapter := &consumer.Service{
-		HTTPClient:      &http.Client{Transport: transport, Timeout: 10 * time.Second},
-		WorkloadSigners: testEBSAdapterWorkloadSigners(t),
+		HTTPClient:         &http.Client{Transport: transport, Timeout: 10 * time.Second},
+		InternalHTTPClient: &http.Client{Transport: transport, Timeout: 10 * time.Second},
+		WorkloadSigners:    testEBSAdapterWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerID:       "fixture-app",
 			ConsumerIP:       fixture.Server.URL + "/",

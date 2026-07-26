@@ -52,9 +52,9 @@ func (s *Service) doCardVaultCommand(ctx context.Context, tenantID string, userI
 	if s == nil {
 		return ErrMissingService
 	}
-	client := s.internalHTTPClient()
+	client := s.InternalHTTPClient
 	if client == nil {
-		return ErrMissingHTTPClient
+		return ErrMissingInternalHTTPClient
 	}
 	tenantID, err := store.ValidateTenantID(tenantID)
 	if err != nil {
@@ -89,9 +89,9 @@ func (s *Service) doAdminServiceCommand(ctx context.Context, tenantID string, ta
 	if s == nil {
 		return ErrMissingService
 	}
-	client := s.internalHTTPClient()
+	client := s.InternalHTTPClient
 	if client == nil {
-		return ErrMissingHTTPClient
+		return ErrMissingInternalHTTPClient
 	}
 	tenantID, err := store.ValidateTenantID(tenantID)
 	if err != nil {
@@ -121,7 +121,7 @@ func (s *Service) doAdminServiceCommand(ctx context.Context, tenantID string, ta
 func executeServiceCommand(client *http.Client, req *http.Request, commandErr error, out any) error {
 	resp, err := doInternalRequest(client, req)
 	if err != nil {
-		return fmt.Errorf("%w: %v", commandErr, err)
+		return fmt.Errorf("%w: %w", commandErr, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

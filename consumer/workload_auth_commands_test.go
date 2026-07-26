@@ -79,8 +79,8 @@ func TestInternalServiceCommandsCarryVerifiedWorkloadIdentity(t *testing.T) {
 		notificationServiceDiscoveryKey: server.URL,
 	}
 	ebs := &Service{
-		HTTPClient:  server.Client(),
-		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: discovery},
+		InternalHTTPClient: server.Client(),
+		NoebsConfig:        ebs_fields.NoebsConfig{ServiceDiscovery: discovery},
 		WorkloadSigners: commandSignerSet(t, "ebs-adapter-test", ebsPrivate,
 			cardVaultServiceDiscoveryKey, notificationServiceDiscoveryKey),
 	}
@@ -125,7 +125,7 @@ func TestInternalServiceCommandDoesNotSendWithoutSigner(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	service := &Service{
-		HTTPClient: server.Client(),
+		InternalHTTPClient: server.Client(),
 		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: map[string]string{
 			notificationServiceDiscoveryKey: server.URL,
 		}},
@@ -136,5 +136,38 @@ func TestInternalServiceCommandDoesNotSendWithoutSigner(t *testing.T) {
 	}
 	if hits.Load() != 0 {
 		t.Fatalf("unsigned upstream hits = %d", hits.Load())
+	}
+}
+
+func TestInternalServiceCommandRequiresDedicatedClient(t *testing.T) {
+	service := &Service{
+		HTTPClient: http.DefaultClient,
+		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: map[string]string{
+			notificationServiceDiscoveryKey: "https://notification.invalid",
+		}},
+	}
+
+	err := service.doAdminServiceCommand(context.Background(), "tenant-1", notificationCommandTarget, "/internal/notification-chat/push-data", struct{}{}, nil)
+	if !errors.Is(err, ErrMissingInternalHTTPClient) {
+		t.Fatalf("error = %v, want %v", err, ErrMissingInternalHTTPClient)
+	}
+}
+
+func TestExecuteServiceCommandPreservesTransportCause(t *testing.T) {
+	transportErr := errors.New("transport failed")
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, transportErr
+	})}
+	req, err := http.NewRequest(http.MethodPost, "https://notification.invalid/push-data", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = executeServiceCommand(client, req, ErrNotificationCommand, nil)
+	if !errors.Is(err, ErrNotificationCommand) {
+		t.Fatalf("error = %v, want command category %v", err, ErrNotificationCommand)
+	}
+	if !errors.Is(err, transportErr) {
+		t.Fatalf("error = %v, want transport cause %v", err, transportErr)
 	}
 }

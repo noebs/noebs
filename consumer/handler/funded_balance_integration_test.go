@@ -105,9 +105,10 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 		vaultHost: mustURLHost(t, vaultHTTP.URL),
 	}
 	ebsService := &consumer.Service{
-		Store:           ebsStore,
-		HTTPClient:      &http.Client{Transport: transport, Timeout: 10 * time.Second},
-		WorkloadSigners: testEBSAdapterWorkloadSigners(t),
+		Store:              ebsStore,
+		HTTPClient:         &http.Client{Transport: transport, Timeout: 10 * time.Second},
+		InternalHTTPClient: &http.Client{Transport: transport, Timeout: 10 * time.Second},
+		WorkloadSigners:    testEBSAdapterWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerID:            "fixture-app",
 			ConsumerIP:            fixture.Server.URL + "/",

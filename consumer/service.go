@@ -27,16 +27,6 @@ type Service struct {
 	WorkloadSigners    *workloadauth.SignerSet
 }
 
-func (s *Service) internalHTTPClient() *http.Client {
-	if s == nil {
-		return nil
-	}
-	if s.InternalHTTPClient != nil {
-		return s.InternalHTTPClient
-	}
-	return s.HTTPClient
-}
-
 func (s *Service) recordTransaction(ctx context.Context, tenantID string, res ebs_fields.EBSResponse) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
