@@ -22,19 +22,7 @@ func (s *Service) StoreNotificationPushData(ctx context.Context, tenantID string
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	tenantID, err := store.ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	data := cmd.Data
-	data.UUID = strings.TrimSpace(data.UUID)
-	if data.UUID == "" {
-		return ErrMissingUUID
-	}
-	data.TenantID = tenantID
-	data.UserMobile = strings.TrimSpace(data.UserMobile)
-	data.Phone = strings.TrimSpace(data.Phone)
-	return s.Store.CreatePushData(ctx, tenantID, &data)
+	return s.Store.CreatePushData(ctx, tenantID, cmd.Data)
 }
 
 func (s *Service) StorePushDataInNotificationChat(ctx context.Context, tenantID string, data PushData) error {

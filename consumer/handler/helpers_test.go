@@ -93,10 +93,22 @@ func TestStatusForErrorMapsDuplicateTransactionsToConflict(t *testing.T) {
 	}
 }
 
-func TestStatusForErrorMapsMerchantValidationToBadRequest(t *testing.T) {
-	for _, err := range []error{consumer.ErrMissingMerchantID, consumer.ErrInvalidMerchantID} {
+func TestStatusForErrorMapsValidationToBadRequest(t *testing.T) {
+	for _, err := range []error{
+		consumer.ErrMissingMerchantID,
+		consumer.ErrInvalidMerchantID,
+		store.ErrInvalidPushData,
+		store.ErrMissingPushTarget,
+		store.ErrInvalidTransactionUUID,
+	} {
 		if got := statusForError(err); got != http.StatusBadRequest {
 			t.Fatalf("statusForError(%v) = %d, want %d", err, got, http.StatusBadRequest)
 		}
+	}
+}
+
+func TestStatusForErrorMapsMissingInternalClientToUnavailable(t *testing.T) {
+	if got := statusForError(consumer.ErrMissingInternalHTTPClient); got != http.StatusServiceUnavailable {
+		t.Fatalf("statusForError(ErrMissingInternalHTTPClient) = %d, want %d", got, http.StatusServiceUnavailable)
 	}
 }

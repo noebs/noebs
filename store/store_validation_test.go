@@ -186,14 +186,33 @@ func TestStore_CreateTransaction_MissingUUID(t *testing.T) {
 func TestStore_CreatePushDataRequiresExplicitFields(t *testing.T) {
 	s := &Store{}
 	ctx := context.Background()
-	if err := s.CreatePushData(ctx, "t1", nil); !errors.Is(err, ErrMissingPushData) {
-		t.Fatalf("CreatePushData(nil) error = %v, want %v", err, ErrMissingPushData)
+	if err := s.CreatePushData(ctx, "t1", ebs_fields.PushDataRecord{}); !errors.Is(err, ErrMissingUUID) {
+		t.Fatalf("CreatePushData(empty) error = %v, want %v", err, ErrMissingUUID)
 	}
-	if err := s.CreatePushData(ctx, "t1", &ebs_fields.PushDataRecord{UUID: " "}); !errors.Is(err, ErrMissingUUID) {
-		t.Fatalf("CreatePushData(missing uuid) error = %v, want %v", err, ErrMissingUUID)
+	if err := s.CreatePushData(ctx, "t1", ebs_fields.PushDataRecord{UUID: " push-uuid ", UserMobile: "0912"}); !errors.Is(err, ErrInvalidPushData) {
+		t.Fatalf("CreatePushData(noncanonical uuid) error = %v, want %v", err, ErrInvalidPushData)
 	}
-	if err := s.CreatePushData(ctx, "t1", &ebs_fields.PushDataRecord{UUID: "push-uuid"}); !errors.Is(err, ErrMissingPushTarget) {
+	if err := s.CreatePushData(ctx, "t1", ebs_fields.PushDataRecord{UUID: "push-uuid", UserMobile: " 0912 "}); !errors.Is(err, ErrInvalidPushData) {
+		t.Fatalf("CreatePushData(noncanonical target) error = %v, want %v", err, ErrInvalidPushData)
+	}
+	if err := s.CreatePushData(ctx, "t1", ebs_fields.PushDataRecord{UUID: "push-uuid"}); !errors.Is(err, ErrMissingPushTarget) {
 		t.Fatalf("CreatePushData(missing target) error = %v, want %v", err, ErrMissingPushTarget)
+	}
+	const transactionUUID = "ed9de23b-734f-4db4-91f0-b6299a7b80a2"
+	if err := s.CreatePushData(ctx, "t1", ebs_fields.PushDataRecord{
+		UUID:            transactionUUID + ":sender",
+		UserMobile:      "0912",
+		TransactionUUID: transactionUUID,
+	}); !errors.Is(err, ErrInvalidTransactionUUID) {
+		t.Fatalf("CreatePushData(implicit ebs uuid) error = %v, want %v", err, ErrInvalidTransactionUUID)
+	}
+	if err := s.CreatePushData(ctx, "t1", ebs_fields.PushDataRecord{
+		UUID:            transactionUUID + ":sender",
+		UserMobile:      "0912",
+		TransactionUUID: " " + transactionUUID + " ",
+		EBSUUID:         " " + transactionUUID + " ",
+	}); !errors.Is(err, ErrInvalidTransactionUUID) {
+		t.Fatalf("CreatePushData(noncanonical transaction uuid) error = %v, want %v", err, ErrInvalidTransactionUUID)
 	}
 }
 
@@ -307,7 +326,7 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 			return err
 		}},
 		{"CreatePushData", func(tenantID string) error {
-			return s.CreatePushData(ctx, tenantID, &ebs_fields.PushDataRecord{UUID: "push-uuid"})
+			return s.CreatePushData(ctx, tenantID, ebs_fields.PushDataRecord{UUID: "push-uuid"})
 		}},
 		{"GetMeterName", func(tenantID string) error {
 			_, err := s.GetMeterName(ctx, tenantID, "nec")

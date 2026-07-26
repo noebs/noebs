@@ -279,41 +279,33 @@ func decodeStoredTransactionPayload(payload, label string) (ebs_fields.EBSRespon
 	return res, nil
 }
 
-func (s *Store) CreatePushData(ctx context.Context, tenantID string, data *ebs_fields.PushDataRecord) error {
+func (s *Store) CreatePushData(ctx context.Context, tenantID string, data ebs_fields.PushDataRecord) error {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
 	}
-	if data == nil {
-		return ErrMissingPushData
-	}
-	data.UUID = strings.TrimSpace(data.UUID)
 	if data.UUID == "" {
 		return ErrMissingUUID
 	}
-	data.To = strings.TrimSpace(data.To)
-	data.Phone = strings.TrimSpace(data.Phone)
-	data.DeviceID = strings.TrimSpace(data.DeviceID)
-	data.UserMobile = strings.TrimSpace(data.UserMobile)
-	rawTransactionUUID := data.TransactionUUID
-	data.TransactionUUID = strings.TrimSpace(rawTransactionUUID)
-	data.EBSUUID = strings.TrimSpace(data.EBSUUID)
-	if data.TransactionUUID != "" {
-		if rawTransactionUUID != data.TransactionUUID {
-			return ErrInvalidTransactionUUID
-		}
-		transactionUUID, err := normalizeCanonicalTransactionUUID(data.TransactionUUID)
-		if err != nil {
-			return err
-		}
-		if data.EBSUUID != "" && data.EBSUUID != transactionUUID {
-			return ErrInvalidTransactionUUID
-		}
-		data.TransactionUUID = transactionUUID
-		data.EBSUUID = transactionUUID
+	if strings.TrimSpace(data.UUID) != data.UUID ||
+		strings.TrimSpace(data.To) != data.To ||
+		strings.TrimSpace(data.Phone) != data.Phone ||
+		strings.TrimSpace(data.DeviceID) != data.DeviceID ||
+		strings.TrimSpace(data.UserMobile) != data.UserMobile {
+		return ErrInvalidPushData
 	}
 	if data.To == "" && data.Phone == "" && data.DeviceID == "" && data.UserMobile == "" {
 		return ErrMissingPushTarget
+	}
+	if data.TransactionUUID != "" {
+		if err := validateCanonicalTransactionUUID(data.TransactionUUID); err != nil {
+			return err
+		}
+		if data.EBSUUID != data.TransactionUUID {
+			return ErrInvalidTransactionUUID
+		}
+	} else if data.EBSUUID != "" {
+		return ErrInvalidTransactionUUID
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -348,13 +340,12 @@ func (s *Store) CreatePushData(ctx context.Context, tenantID string, data *ebs_f
 	return err
 }
 
-func normalizeCanonicalTransactionUUID(value string) (string, error) {
-	value = strings.TrimSpace(value)
+func validateCanonicalTransactionUUID(value string) error {
 	parsed, err := uuid.Parse(value)
 	if err != nil || parsed.String() != value {
-		return "", ErrInvalidTransactionUUID
+		return ErrInvalidTransactionUUID
 	}
-	return value, nil
+	return nil
 }
 
 func (s *Store) GetMeterName(ctx context.Context, tenantID, nec string) (string, error) {

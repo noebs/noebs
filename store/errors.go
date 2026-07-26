@@ -15,7 +15,7 @@ var (
 	ErrProfileAlreadyExists     = errors.New("profile projection already exists")
 	ErrProfileContactConflict   = errors.New("profile contact already exists")
 	ErrMissingDeviceToken       = errors.New("missing device token")
-	ErrMissingPushData          = errors.New("missing push data")
+	ErrInvalidPushData          = errors.New("invalid push data")
 	ErrMissingPushTarget        = errors.New("missing push target")
 	ErrMissingUUID              = errors.New("missing uuid")
 	ErrInvalidTransactionUUID   = errors.New("invalid_transaction_uuid")

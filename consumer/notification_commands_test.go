@@ -50,11 +50,16 @@ func TestStoreNotificationPushDataRejectsMissingInputs(t *testing.T) {
 	if err := service.StoreNotificationPushData(context.Background(), "default", StorePushDataCommand{Data: PushData{UUID: "uuid"}}); !errors.Is(err, store.ErrInvalidTenantID) {
 		t.Fatalf("reserved tenant error = %v, want %v", err, store.ErrInvalidTenantID)
 	}
-	if err := service.StoreNotificationPushData(context.Background(), "tenant-a", StorePushDataCommand{}); !errors.Is(err, ErrMissingUUID) {
-		t.Fatalf("missing uuid error = %v, want %v", err, ErrMissingUUID)
+	if err := service.StoreNotificationPushData(context.Background(), "tenant-a", StorePushDataCommand{}); !errors.Is(err, store.ErrMissingUUID) {
+		t.Fatalf("missing uuid error = %v, want %v", err, store.ErrMissingUUID)
 	}
 	if err := service.StoreNotificationPushData(context.Background(), "tenant-a", StorePushDataCommand{Data: PushData{UUID: "uuid"}}); !errors.Is(err, store.ErrMissingPushTarget) {
 		t.Fatalf("missing push target error = %v, want %v", err, store.ErrMissingPushTarget)
+	}
+	if err := service.StoreNotificationPushData(context.Background(), "tenant-a", StorePushDataCommand{Data: PushData{
+		UUID: " uuid", UserMobile: "0912",
+	}}); !errors.Is(err, store.ErrInvalidPushData) {
+		t.Fatalf("noncanonical push data error = %v, want %v", err, store.ErrInvalidPushData)
 	}
 }
 
