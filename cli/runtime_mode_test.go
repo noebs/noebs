@@ -488,12 +488,15 @@ func TestServiceRoleRuntimeConfigRequiresKafkaProjectionConfig(t *testing.T) {
 	}
 }
 
-func TestServiceRoleRuntimeConfigDoesNotRequireCardVaultServiceDiscovery(t *testing.T) {
+func TestServiceRoleRuntimeConfigScopesCardVaultDataKeyToRuntime(t *testing.T) {
 	if err := validateRoleRuntimeConfig(serviceRoleCardVault, runtimeConfigForRole(serviceRoleCardVault, ebs_fields.NoebsConfig{DataKey: "card-vault-data-key"})); err != nil {
 		t.Fatalf("card-vault runtime config error = %v", err)
 	}
 	if err := validateRoleRuntimeConfig(serviceRoleCardVault, runtimeConfigForRole(serviceRoleCardVault, ebs_fields.NoebsConfig{})); !errors.Is(err, store.ErrMissingDataKey) {
 		t.Fatalf("card-vault missing data key error = %v, want %v", err, store.ErrMissingDataKey)
+	}
+	if err := validateRoleRuntimeConfig(serviceRoleCardVaultMigrate, runtimeConfigForRole(serviceRoleCardVaultMigrate, ebs_fields.NoebsConfig{})); err != nil {
+		t.Fatalf("card-vault-migrate runtime config without data key error = %v", err)
 	}
 }
 

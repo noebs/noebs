@@ -15,9 +15,23 @@ import (
 
 func TestValidateDeploymentRootAcceptsExplicitMicroserviceInputs(t *testing.T) {
 	root := writePreflightRoot(t, preflightRootOptions{})
+	migrateSecret := getMap(readYAMLMapFileMust(t, filepath.Join(root, "deploy", "docker", "secrets", "card-vault-migrate.secrets.yaml")), "noebs")
+	if _, present := migrateSecret["data_key"]; present {
+		t.Fatal("Docker card-vault-migrate fixture contains live data_key")
+	}
 
 	if err := validateDeploymentRootWithDecrypt(root, readPlainPreflightSecret); err != nil {
 		t.Fatalf("validateDeploymentRootWithDecrypt() error = %v", err)
+	}
+}
+
+func TestValidateDeploymentRootAcceptsLegacyCardVaultMigrationDataKey(t *testing.T) {
+	root := writePreflightRoot(t, preflightRootOptions{})
+	path := filepath.Join(root, "deploy", "docker", "secrets", "card-vault-migrate.secrets.yaml")
+	setNoebsSecretField(t, path, "data_key", "legacy-card-vault-data-key")
+
+	if err := validateDeploymentRootWithDecrypt(root, readPlainPreflightSecret); err != nil {
+		t.Fatalf("validateDeploymentRootWithDecrypt() legacy migration data_key error = %v", err)
 	}
 }
 
@@ -114,6 +128,10 @@ func TestValidateDeploymentRootRejectsPlaceholders(t *testing.T) {
 
 func TestValidateKubernetesDeploymentRootAcceptsMountedInputs(t *testing.T) {
 	root := writeRenderedKubernetesPreflightRoot(t)
+	migrateSecret := getMap(readYAMLMapFileMust(t, filepath.Join(root, "secrets", "card-vault-migrate.secrets.yaml")), "noebs")
+	if _, present := migrateSecret["data_key"]; present {
+		t.Fatal("rendered Kubernetes card-vault-migrate fixture contains live data_key")
+	}
 
 	if err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret); err != nil {
 		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v", err)

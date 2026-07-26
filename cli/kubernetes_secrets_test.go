@@ -99,6 +99,24 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 	}
 	requireRenderedSecretContains(t, secrets, "ghcr-credentials", ".dockerconfigjson", `"ghcr.io"`)
 	requireRenderedSecretContains(t, secrets, "ebs-adapter-secrets", "secrets.yaml", "consumer_endpoint")
+	for _, test := range []struct {
+		secretName string
+		wantKey    string
+		wantKeySet bool
+	}{
+		{secretName: "card-vault-secrets", wantKey: "card-vault-data-key", wantKeySet: true},
+		{secretName: "card-vault-migrate-secrets"},
+	} {
+		var document map[string]interface{}
+		payload := secretByName(t, secrets, test.secretName).StringData["secrets.yaml"]
+		if err := yaml.Unmarshal([]byte(payload), &document); err != nil {
+			t.Fatalf("parse rendered %s payload: %v", test.secretName, err)
+		}
+		got, present := getMap(document, "noebs")["data_key"]
+		if present != test.wantKeySet || present && got != test.wantKey {
+			t.Fatalf("rendered %s data_key = %#v, present=%t, want %#v, present=%t", test.secretName, got, present, test.wantKey, test.wantKeySet)
+		}
+	}
 	if strings.Contains(output.String(), "AGE-SECRET-KEY-") || strings.Contains(output.String(), "sops-age-key") {
 		t.Fatal("rendered Kubernetes Secrets expose the SOPS age identity")
 	}
@@ -319,7 +337,7 @@ func kubernetesSecretTestPayloads() map[string]string {
 	} {
 		payloads[role+".secrets.yaml"] = serviceDatabaseSecret(owner)
 	}
-	payloads["card-vault-migrate.secrets.yaml"] = serviceDatabaseSecret("card-vault") + "  data_key: card-vault-data-key\n"
+	payloads["card-vault-migrate.secrets.yaml"] = serviceDatabaseSecret("card-vault")
 
 	prepared, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{Database: kubernetesReleaseWorkloadDatabaseInput{
 		MigratePassword: testCanonicalReleaseSecret(6),

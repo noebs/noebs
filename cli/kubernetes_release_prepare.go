@@ -598,7 +598,6 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
-	cardVaultMigrate["data_key"] = cardVault["data_key"]
 	setSecret("card-vault-migrate", cardVaultMigrate)
 
 	ebsAdapter, err := withDB(serviceRoleEBSAdapter)

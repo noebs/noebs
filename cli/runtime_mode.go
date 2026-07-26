@@ -288,7 +288,7 @@ func roleUsesWalletFeature(role serviceRole) bool {
 }
 
 func roleRequiresDataKey(role serviceRole) bool {
-	return role == serviceRoleCardVault || role == serviceRoleCardVaultMigrate
+	return role == serviceRoleCardVault
 }
 
 func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {

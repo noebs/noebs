@@ -104,6 +104,14 @@ func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 	if _, present := provider["callback_id"]; present {
 		t.Fatal("PSP provider credential map contains public callback authority")
 	}
+	cardVaultSecret := getMap(readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "card-vault.secrets.yaml")), "noebs")
+	if got := firstString(cardVaultSecret, "data_key"); got != "card-vault-data-key" {
+		t.Fatalf("prepared card-vault data_key = %q, want exact release input", got)
+	}
+	cardVaultMigrateSecret := getMap(readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "card-vault-migrate.secrets.yaml")), "noebs")
+	if _, present := cardVaultMigrateSecret["data_key"]; present {
+		t.Fatal("prepared card-vault-migrate secret contains live data_key")
+	}
 	if err := validateKubernetesReleaseManifest(outputRoot); err != nil {
 		t.Fatalf("validateKubernetesReleaseManifest() error = %v", err)
 	}
