@@ -205,7 +205,7 @@ templ PendingApprovalsPage(data PendingApprovalsView) {
 					<tbody>
 						for _, transfer := range data.ManualTransfers {
 							<tr>
-									<td><a href={ adminWalletPath(data.TenantID, "/manual/" + transfer.WorkflowID) }>{ transfer.WorkflowID }</a></td>
+								<td><a href={ adminWalletPath(data.TenantID, "/manual/" + transfer.WorkflowID) }>{ transfer.WorkflowID }</a></td>
 								<td>{ transfer.TransferType }</td>
 								<td>{ formatNullString(transfer.WalletID) }</td>
 								<td>{ transfer.RequestedByOperatorID }</td>
@@ -401,10 +401,10 @@ templ PSPTransactionsPage(data PSPTransactionsView) {
 							<th>Client Ref</th>
 							<th>Provider</th>
 							<th>Direction</th>
-							<th>Status</th>
-							<th>Amount</th>
-							<th>Currency</th>
-							<th>Workflow</th>
+							<th>Provider status</th>
+							<th>Amount (minor units)</th>
+							<th>Currency / unit version</th>
+							<th>Orchestration workflow</th>
 							<th>Created</th>
 						</tr>
 					</thead>
@@ -416,7 +416,7 @@ templ PSPTransactionsPage(data PSPTransactionsView) {
 								<td>{ txn.Direction }</td>
 								<td>{ txn.Status }</td>
 								<td>{ txn.Amount }</td>
-								<td>{ txn.Currency }</td>
+								<td>{ txn.Currency } / { txn.CurrencyUnitID }</td>
 								<td>{ formatNullString(txn.WorkflowID) }</td>
 								<td>{ formatTime(txn.CreatedAt) }</td>
 							</tr>
@@ -433,24 +433,24 @@ templ PSPTransactionDetailPage(data PSPTransactionDetailView) {
 		<div class="card mb-3">
 			<div class="card-body">
 				<h5 class="card-title">Client Ref { data.Transaction.ClientReference }</h5>
+				<div class="alert alert-warning">
+					Provider status records the PSP integration state only. It does not prove ledger completion or external settlement.
+				</div>
 				<p class="card-text">Provider: { data.Transaction.PSPProvider }</p>
 				<p class="card-text">Direction: { data.Transaction.Direction }</p>
-				<p class="card-text">Status: { data.Transaction.Status }</p>
-				<p class="card-text">Amount: { data.Transaction.Amount } { data.Transaction.Currency }</p>
-				<p class="card-text">Workflow: { formatNullString(data.Transaction.WorkflowID) }</p>
-				<p class="card-text">PSP Txn: { formatNullString(data.Transaction.PSPTransactionID) }</p>
-				<p class="card-text">Response: { formatNullString(data.Transaction.ResponseCode) } { formatNullString(data.Transaction.ResponseMessage) }</p>
+				<p class="card-text">Provider status: { data.Transaction.Status }</p>
+				<p class="card-text">Amount (minor units): { data.Transaction.Amount } { data.Transaction.Currency }</p>
+				<p class="card-text">Currency unit version: { data.Transaction.CurrencyUnitID }</p>
+				<p class="card-text">Orchestration workflow: { formatNullString(data.Transaction.WorkflowID) }</p>
+				<p class="card-text">Provider transaction: { formatNullString(data.Transaction.PSPTransactionID) }</p>
+				<p class="card-text">Provider response: { formatNullString(data.Transaction.ResponseCode) } { formatNullString(data.Transaction.ResponseMessage) }</p>
 				<p class="card-text">Created: { formatTime(data.Transaction.CreatedAt) }</p>
 				<p class="card-text">Confirmed: { formatNullTime(data.Transaction.ConfirmedAt) }</p>
 				<p class="card-text">Last Polled: { formatNullTime(data.Transaction.LastPolledAt) }</p>
 				<p class="card-text">Next Poll: { formatNullTime(data.Transaction.NextPollAt) }</p>
 			</div>
 		</div>
-
-		<h3 class="h6">Raw Request</h3>
-		<pre class="bg-light p-3 border rounded"><code>{ formatJSON(data.Transaction.RawRequest) }</code></pre>
-		<h3 class="h6 mt-3">Raw Response</h3>
-		<pre class="bg-light p-3 border rounded"><code>{ formatJSON(data.Transaction.RawResponse) }</code></pre>
+		<p class="text-muted">Raw provider payloads are not shown in this view.</p>
 	}
 }
 
