@@ -47,87 +47,94 @@ var otelShutdown func(context.Context) error
 var otelEnabled bool
 
 func main() {
+	if err := runMain(); err != nil {
+		logrusLogger.WithError(err).Error("service stopped")
+		os.Exit(1)
+	}
+}
+
+func runMain() error {
 	if isRenderConfigCommand() {
 		if err := renderConfigFiles(); err != nil {
-			logrusLogger.Fatalf("render config failed: %v", err)
+			return fmt.Errorf("render config: %w", err)
 		}
-		return
+		return nil
 	}
 	if isValidateDeploymentCommand() {
 		if err := validateDeploymentCommand(); err != nil {
-			logrusLogger.Fatalf("validate deployment failed: %v", err)
+			return fmt.Errorf("validate deployment: %w", err)
 		}
-		return
+		return nil
 	}
 	if isValidateKubernetesDeploymentCommand() {
 		if err := validateKubernetesDeploymentCommand(); err != nil {
-			logrusLogger.Fatalf("validate kubernetes deployment failed: %v", err)
+			return fmt.Errorf("validate kubernetes deployment: %w", err)
 		}
-		return
+		return nil
 	}
 	if isRenderKubernetesSecretsCommand() {
 		if err := renderKubernetesSecretsCommand(); err != nil {
-			logrusLogger.Fatalf("render kubernetes secrets failed: %v", err)
+			return fmt.Errorf("render kubernetes secrets: %w", err)
 		}
-		return
+		return nil
 	}
 	if isRenderEdgeInternalTransportCommand() {
 		if err := renderEdgeInternalTransportCommand(); err != nil {
-			logrusLogger.Fatalf("render edge internal transport failed: %v", err)
+			return fmt.Errorf("render edge internal transport: %w", err)
 		}
-		return
+		return nil
 	}
 	if isRenderKeycloakBootstrapSecretsCommand() {
 		if err := renderKeycloakBootstrapSecretsCommand(); err != nil {
-			logrusLogger.Fatalf("render Keycloak bootstrap secrets failed: %v", err)
+			return fmt.Errorf("render Keycloak bootstrap secrets: %w", err)
 		}
-		return
+		return nil
 	}
 	if isPrepareKubernetesReleaseCommand() {
 		if err := prepareKubernetesReleaseCommand(); err != nil {
-			logrusLogger.Fatalf("prepare kubernetes release failed: %v", err)
+			return fmt.Errorf("prepare kubernetes release: %w", err)
 		}
-		return
+		return nil
 	}
 	if isReconcileKeycloakCommand() {
 		if err := reconcileKeycloakCommand(); err != nil {
-			logrusLogger.Fatalf("reconcile Keycloak failed: %v", err)
+			return fmt.Errorf("reconcile Keycloak: %w", err)
 		}
-		return
+		return nil
 	}
 	if isAssignKeycloakMembershipsCommand() {
 		if err := assignKeycloakMembershipsCommand(); err != nil {
-			logrusLogger.Fatalf("assign Keycloak memberships failed: %v", err)
+			return fmt.Errorf("assign Keycloak memberships: %w", err)
 		}
-		return
+		return nil
 	}
 	if isLookupKeycloakSubjectCommand() {
 		if err := lookupKeycloakSubjectCommand(); err != nil {
-			logrusLogger.Fatalf("lookup Keycloak subject failed: %v", err)
+			return fmt.Errorf("lookup Keycloak subject: %w", err)
 		}
-		return
+		return nil
 	}
 	if isDeleteKeycloakBootstrapCommand() {
 		if err := deleteKeycloakBootstrapCommand(); err != nil {
-			logrusLogger.Fatalf("delete Keycloak bootstrap client failed: %v", err)
+			return fmt.Errorf("delete Keycloak bootstrap client: %w", err)
 		}
-		return
+		return nil
 	}
 	if isEnsureTemporalNamespaceCommand() {
 		if err := ensureTemporalNamespaceCommand(); err != nil {
-			logrusLogger.Fatalf("ensure Temporal namespace failed: %v", err)
+			return fmt.Errorf("ensure Temporal namespace: %w", err)
 		}
-		return
+		return nil
 	}
 	if isInternalHealthcheckCommand() {
 		if err := checkInternalHealth(); err != nil {
-			logrusLogger.Fatalf("internal healthcheck failed: %v", err)
+			return fmt.Errorf("internal healthcheck: %w", err)
 		}
-		return
+		return nil
 	}
 	role, err := currentServiceRole()
 	if err != nil {
-		logrusLogger.Fatalf("error in runtime service role: %v", err)
+		return fmt.Errorf("runtime service role: %w", err)
 	}
 	if workloadAuthDatabase != nil {
 		defer func() { _ = workloadAuthDatabase.Close() }()
@@ -144,100 +151,87 @@ func main() {
 	}
 	if role.runsMigrations() {
 		logrusLogger.Print("migration service role completed")
-		return
+		return nil
 	}
 	if role.cleansWorkloadAuthNonces() {
 		if err := cleanupExpiredWorkloadNonces(context.Background()); err != nil {
-			logrusLogger.Fatalf("workload nonce cleanup failed: %v", err)
+			return fmt.Errorf("cleanup workload nonces: %w", err)
 		}
-		return
+		return nil
 	}
 	if role.cleansGatewayAuthSessions() {
 		if err := cleanupExpiredGatewayAuth(context.Background()); err != nil {
-			logrusLogger.Fatalf("gateway authentication cleanup failed: %v", err)
+			return fmt.Errorf("cleanup gateway authentication: %w", err)
 		}
-		return
+		return nil
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	return runService(ctx, role)
+}
+
+func runService(ctx context.Context, role serviceRole) error {
 	if role.startsBackgroundHealth() {
 		if _, err := startBackgroundHealthServer(ctx, role, noebsConfig.Port); err != nil {
-			logrusLogger.Fatalf("error starting background health server: %v", err)
+			return fmt.Errorf("start background health server: %w", err)
 		}
 	}
 
-	if role.startsGRPC() && grpcServer != nil && grpcListener != nil {
-		go func() {
-			logrusLogger.Printf("grpc server listening on %s", grpcListener.Addr())
-			if err := grpcServer.Serve(grpcListener); err != nil {
-				logrusLogger.WithError(err).Error("grpc server stopped")
-			}
-		}()
-	}
-	go func() {
-		<-ctx.Done()
-		if grpcServer != nil {
-			grpcServer.GracefulStop()
-		}
-	}()
 	if role == serviceRoleWalletLedger {
 		if grpcServer == nil || grpcListener == nil {
-			logrusLogger.Fatal("wallet-ledger role requires an initialized grpc server")
+			return fmt.Errorf("wallet-ledger role requires an initialized grpc server")
 		}
-		<-ctx.Done()
-		return
+		logrusLogger.Printf("grpc server listening on %s", grpcListener.Addr())
+		return runGRPCServer(ctx, grpcServer, grpcListener, applicationShutdownTimeout)
 	}
 	if role == serviceRoleWalletWorker {
 		if walletWorker == nil {
-			logrusLogger.Fatal("wallet-worker role requires an initialized temporal worker")
+			return fmt.Errorf("wallet-worker role requires an initialized temporal worker")
 		}
 		<-ctx.Done()
 		walletWorker.Stop()
-		return
+		return nil
 	}
 	if role.startsEBSEventPublisher() {
 		if ebsEventPublisher == nil {
-			logrusLogger.Fatal("ebs-adapter-events role requires an initialized event publisher")
+			return fmt.Errorf("ebs-adapter-events role requires an initialized event publisher")
 		}
 		if err := ebsEventPublisher.Run(ctx); err != nil {
-			logrusLogger.Fatalf("ebs-adapter-events stopped: %v", err)
+			return fmt.Errorf("run ebs-adapter-events: %w", err)
 		}
-		return
+		return nil
 	}
 	if role.startsAdminReportingProjector() {
 		if adminReportingProjector == nil {
-			logrusLogger.Fatal("admin-reporting-projector role requires an initialized projector")
+			return fmt.Errorf("admin-reporting-projector role requires an initialized projector")
 		}
 		if err := adminReportingProjector.Run(ctx); err != nil {
-			logrusLogger.Fatalf("admin-reporting-projector stopped: %v", err)
+			return fmt.Errorf("run admin-reporting-projector: %w", err)
 		}
-		return
+		return nil
 	}
 	if !role.startsHTTP() {
-		logrusLogger.Fatalf("service role %s has no runnable process", role)
+		return fmt.Errorf("service role %s has no runnable process", role)
 	}
-	go func() {
-		<-ctx.Done()
-		closeWalletLedgerPublicClient()
-	}()
+	defer closeWalletLedgerPublicClient()
 
 	if role.startsChat() && noebsConfig.ChatEnabled {
 		if hub == nil {
-			logrusLogger.Fatal("notification-chat role requires an initialized chat hub")
+			return fmt.Errorf("notification-chat role requires an initialized chat hub")
 		}
 		go hub.Run()
 	}
 	if noebsConfig.Port == "" {
-		logrusLogger.Fatalf("%s role requires port", role)
+		return fmt.Errorf("%s role requires port", role)
 	}
 	listener, err := net.Listen("tcp", noebsConfig.Port)
 	if err != nil {
-		logrusLogger.Fatal(fmt.Errorf("listen on %s: %w", noebsConfig.Port, err))
+		return fmt.Errorf("listen on %s: %w", noebsConfig.Port, err)
 	}
 	if internalTransportServerTLS != nil {
 		listener = tls.NewListener(listener, internalTransportServerTLS.Clone())
 	}
-	logrusLogger.Fatal(GetMainEngine().Listener(listener))
+	return runHTTPServer(ctx, GetMainEngine(), listener, applicationShutdownTimeout)
 }
