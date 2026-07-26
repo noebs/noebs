@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/gofiber/fiber/v2"
 )
 
 type redisPurchaseFields map[string]interface{}
@@ -134,22 +133,6 @@ func MockEBSServer() *httptest.Server {
 
 	}
 	return httptest.NewServer(http.HandlerFunc(f))
-}
-
-func wrapHandler(h interface{}) fiber.Handler {
-	switch v := h.(type) {
-	case func(*fiber.Ctx) error:
-		return v
-	case func(*fiber.Ctx):
-		return func(c *fiber.Ctx) error {
-			v(c)
-			return nil
-		}
-	default:
-		return func(c *fiber.Ctx) error {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"code": "invalid_handler", "message": "unsupported handler type"})
-		}
-	}
 }
 
 func additionalFieldsToHash(a string) (map[string]string, error) {

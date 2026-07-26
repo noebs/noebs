@@ -434,8 +434,11 @@ func registerAdminReportingRoutes(route *fiber.App, tenantIdentity fiber.Handler
 	route.Use("/dashboard/assets", filesystem.New(filesystem.Config{
 		Root: dashboard.AssetFileSystem(),
 	}))
-	dashboardGet := func(path string, handler interface{}) {
-		route.Get(path, adminIdentity, tenantIdentity, wrapHandler(handler))
+	dashboardGet := func(path string, handler func(*fiber.Ctx)) {
+		route.Get(path, adminIdentity, tenantIdentity, func(c *fiber.Ctx) error {
+			handler(c)
+			return nil
+		})
 	}
 	dashboardGet("/dashboard", dashService.BrowserDashboard)
 	dashboardGet("/dashboard/", dashService.BrowserDashboard)
