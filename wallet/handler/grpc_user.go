@@ -488,7 +488,7 @@ func rawJSONFromString(raw string) json.RawMessage {
 func mapWalletGRPCError(err error) error {
 	st, ok := status.FromError(err)
 	if !ok {
-		return apperr.Wrap(err, apperr.ErrInternal, err.Error())
+		return apperr.Wrap(err, apperr.ErrInternal, "")
 	}
 	switch st.Code() {
 	case codes.InvalidArgument:

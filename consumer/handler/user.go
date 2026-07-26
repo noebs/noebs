@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
@@ -143,7 +144,7 @@ func (h *Handler) SetUserLanguage(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "You must set a language", "code": "client_error"})
 	}
 	if err := h.Service.SetUserLanguage(c.UserContext(), tenantID, userID, language); err != nil {
-		return jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error(), "code": "database_error"})
+		return jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrDatabase, ""))
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
 }

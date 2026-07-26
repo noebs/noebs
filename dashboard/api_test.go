@@ -125,6 +125,16 @@ func TestDashboardTransactionsDefaultOmittedPageAtBoundary(t *testing.T) {
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
 	}
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["code"] != "internal_error" || payload["message"] != "internal server error" {
+		t.Fatalf("payload = %#v", payload)
+	}
+	if strings.Contains(payload["message"].(string), "nil db") {
+		t.Fatalf("response leaked database detail: %#v", payload)
+	}
 }
 
 func TestDashboardTransactionQueryRejectsInvalidFieldsBeforeDB(t *testing.T) {
@@ -269,6 +279,13 @@ func TestMerchantTransactionsEndpointReturnsQueryErrors(t *testing.T) {
 
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["code"] != "internal_error" || payload["message"] != "internal server error" {
+		t.Fatalf("payload = %#v", payload)
 	}
 }
 

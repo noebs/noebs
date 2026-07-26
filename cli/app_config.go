@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/transactionauth"
 	"github.com/adonese/noebs/store"
@@ -102,10 +103,7 @@ func validateTenantID(tenantID string) (string, error) {
 func appConfigHandler(c *fiber.Ctx) error {
 	cfg, err := publicAppConfig(noebsConfig)
 	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"code":    "invalid_tenant_id",
-			"message": err.Error(),
-		})
+		return apperr.Wrap(err, apperr.ErrInternal, "")
 	}
 	return c.Status(http.StatusOK).JSON(cfg)
 }

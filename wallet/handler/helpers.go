@@ -72,7 +72,7 @@ func mapWalletError(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, wallet.ErrMissingStore):
-		return apperr.Wrap(err, apperr.ErrUnavailable, err.Error())
+		return apperr.Wrap(err, apperr.ErrUnavailable, "")
 	case errors.Is(err, walletstore.ErrConversionQuoteLimitExceeded):
 		return apperr.Wrap(err, apperr.ErrRateLimited, err.Error())
 	case errors.Is(err, walletstore.ErrInvalidStatusTransition):
@@ -165,7 +165,7 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrCurrencyMismatch):
 		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
 	default:
-		return apperr.Wrap(err, apperr.ErrInternal, err.Error())
+		return apperr.Wrap(err, apperr.ErrInternal, "")
 	}
 }
 
@@ -182,7 +182,7 @@ func renderComponent(c *fiber.Ctx, status int, component templ.Component) error 
 	}
 	var buf bytes.Buffer
 	if err := component.Render(ctx, &buf); err != nil {
-		return jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, err.Error()))
+		return jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, ""))
 	}
 	c.Set(fiber.HeaderContentType, "text/html; charset=utf-8")
 	return c.Status(status).Send(buf.Bytes())

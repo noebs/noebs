@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -18,18 +19,21 @@ func TestRequestLoggerUsesEffectiveErrorStatus(t *testing.T) {
 		handlerErr error
 		wantStatus int
 		wantLevel  string
+		wantClass  string
 	}{
 		{
 			name:       "typed client error",
 			handlerErr: fiber.NewError(http.StatusBadRequest, "bad request"),
 			wantStatus: http.StatusBadRequest,
 			wantLevel:  "warning",
+			wantClass:  "http_error",
 		},
 		{
 			name:       "unhandled error",
-			handlerErr: errors.New("handler failed"),
+			handlerErr: errors.New("handler failed with secret"),
 			wantStatus: http.StatusInternalServerError,
 			wantLevel:  "error",
+			wantClass:  "handler_error",
 		},
 	}
 
@@ -64,6 +68,15 @@ func TestRequestLoggerUsesEffectiveErrorStatus(t *testing.T) {
 			}
 			if got := entry["level"]; got != test.wantLevel {
 				t.Fatalf("logged level = %v, want %s", got, test.wantLevel)
+			}
+			if got := entry["error_class"]; got != test.wantClass {
+				t.Fatalf("error_class = %v, want %s", got, test.wantClass)
+			}
+			if _, ok := entry["error"]; ok {
+				t.Fatalf("log entry exposed raw handler error: %#v", entry)
+			}
+			if strings.Contains(output.String(), "secret") {
+				t.Fatalf("log output exposed handler cause: %s", output.String())
 			}
 		})
 	}

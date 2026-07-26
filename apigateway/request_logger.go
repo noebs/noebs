@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/adonese/noebs/apperr"
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
 )
@@ -82,7 +83,10 @@ func RequestLogger(logger *logrus.Logger, cfg LogSamplingConfig) fiber.Handler {
 			entry = entry.WithField("user_agent", userAgent)
 		}
 		if err != nil {
-			entry = entry.WithField("error", err.Error())
+			entry = entry.WithField("error_class", requestErrorClass(err))
+			if appErr, ok := apperr.As(err); ok {
+				entry = entry.WithField("error_code", appErr.Code)
+			}
 		}
 
 		switch {
@@ -98,9 +102,23 @@ func RequestLogger(logger *logrus.Logger, cfg LogSamplingConfig) fiber.Handler {
 	}
 }
 
+func requestErrorClass(err error) string {
+	if _, ok := apperr.As(err); ok {
+		return "application_error"
+	}
+	var fiberErr *fiber.Error
+	if errors.As(err, &fiberErr) {
+		return "http_error"
+	}
+	return "handler_error"
+}
+
 func effectiveHTTPStatus(responseStatus int, err error) int {
 	if err == nil {
 		return responseStatus
+	}
+	if appErr, ok := apperr.As(err); ok && appErr.Status > 0 {
+		return appErr.Status
 	}
 	var fiberErr *fiber.Error
 	if errors.As(err, &fiberErr) && fiberErr.Code > 0 {

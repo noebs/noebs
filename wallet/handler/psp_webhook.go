@@ -71,9 +71,9 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		case errors.Is(err, walletpsp.ErrPSPNotRegistered), errors.Is(err, walletpsp.ErrPSPConfigInvalid):
 			return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(err, apperr.ErrBadRequest, err.Error()))
 		case errors.Is(err, walletpsp.ErrPSPSecretMissing):
-			return jsonResponse(c, http.StatusServiceUnavailable, apperr.Wrap(err, apperr.ErrUnavailable, err.Error()))
+			return jsonResponse(c, http.StatusServiceUnavailable, apperr.Wrap(err, apperr.ErrUnavailable, ""))
 		default:
-			return jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, err.Error()))
+			return jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, ""))
 		}
 	}
 	fields, err := mappedPSPWebhookFields(payloadMap, cfg.WebhookResponseMapping)

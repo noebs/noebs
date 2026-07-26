@@ -11,10 +11,7 @@ import (
 	"github.com/adonese/noebs/parsing"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
-	"github.com/sirupsen/logrus"
 )
-
-var log = logrus.New()
 
 var (
 	ErrInvalidPagination     = errors.New("invalid pagination")
@@ -59,7 +56,7 @@ func rejectInvalidDashboardQuery(c *fiber.Ctx, err error) {
 func (s *Service) TransactionsCount(c *fiber.Ctx) {
 	db, err := s.ensureDB()
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 	tenantID, ok := s.requireTenantID(c)
@@ -69,8 +66,7 @@ func (s *Service) TransactionsCount(c *fiber.Ctx) {
 	var count int64
 	stmt := db.Rebind("SELECT COUNT(*) FROM transactions WHERE tenant_id = ?")
 	if err := db.GetContext(c.UserContext(), &count, stmt, tenantID); err != nil {
-		log.WithFields(logrus.Fields{"code": err.Error(), "details": "error in database"}).Info("error in database")
-		c.SendStatus(404)
+		rejectInternalError(c, err)
 		return
 	}
 
@@ -80,7 +76,7 @@ func (s *Service) TransactionsCount(c *fiber.Ctx) {
 func (s *Service) TransactionByTid(c *fiber.Ctx) {
 	db, err := s.ensureDB()
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 	tenantID, ok := s.requireTenantID(c)
@@ -103,7 +99,7 @@ func (s *Service) TransactionByTid(c *fiber.Ctx) {
 		tid+"%",
 	)
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 
@@ -142,7 +138,7 @@ func (s *Service) GetAll(c *fiber.Ctx) {
 
 	db, err := s.ensureDB()
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 	tenantID, ok := s.requireTenantID(c)
@@ -155,7 +151,7 @@ func (s *Service) GetAll(c *fiber.Ctx) {
 			rejectInvalidDashboardQuery(c, err)
 			return
 		}
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 
@@ -172,7 +168,7 @@ func (s *Service) GetID(c *fiber.Ctx) {
 	id := c.Params("id")
 	db, err := s.ensureDB()
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 	tenantID, ok := s.requireTenantID(c)
@@ -187,7 +183,7 @@ func (s *Service) GetID(c *fiber.Ctx) {
 		id,
 	)
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 	if len(tran) == 0 {
@@ -210,7 +206,7 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 	}
 	db, err := s.ensureDB()
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 
@@ -226,7 +222,7 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 		COALESCE(SUM(CASE WHEN response_code = 0 THEN 0 ELSE 1 END), 0) AS failed_transactions
 		FROM transactions WHERE ` + where
 	if err := db.GetContext(c.UserContext(), &statsRow, db.Rebind(statsQuery), args...); err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 	stats := DashboardStatsView{
@@ -241,7 +237,7 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 	rowArgs := append(append([]any{}, args...), pageSize, offset)
 	tran, err := fetchTransactions(c.UserContext(), db, db.Rebind(rowsQuery), rowArgs...)
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 
@@ -304,7 +300,7 @@ func (s *Service) Stream(c *fiber.Ctx) {
 
 	db, err := s.ensureDB()
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 	tenantID, ok := s.requireTenantID(c)
@@ -319,18 +315,18 @@ func (s *Service) Stream(c *fiber.Ctx) {
 		args...,
 	)
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 	if err := json.NewEncoder(&stream).Encode(trans); err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 
 	c.Set("Content-Disposition", `attachment; filename="transactions.json"`)
 	c.Set("Content-Type", fiber.MIMEApplicationJSONCharsetUTF8)
 	if err := c.SendStream(&stream); err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 
@@ -346,7 +342,7 @@ func (s *Service) MerchantTransactionsEndpoint(c *fiber.Ctx) {
 	}
 	db, err := s.ensureDB()
 	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 	tenantID, ok := s.requireTenantID(c)
@@ -355,7 +351,7 @@ func (s *Service) MerchantTransactionsEndpoint(c *fiber.Ctx) {
 	}
 	var stats MerchantTransactionCounts
 	if err := db.GetContext(c.UserContext(), &stats, db.Rebind(merchantTransactionCountsQuery), tenantID, tid); err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 	jsonResponse(c, http.StatusOK, fiber.Map{"result": stats})

@@ -89,6 +89,15 @@ func Code(err error) string {
 
 func Message(err error) string {
 	if e, ok := As(err); ok {
+		if e.Status >= http.StatusInternalServerError {
+			if e.Status == http.StatusServiceUnavailable {
+				return "service unavailable"
+			}
+			if e.Status == http.StatusBadGateway {
+				return "upstream service unavailable"
+			}
+			return "internal server error"
+		}
 		if e.Message != "" {
 			return e.Message
 		}
@@ -98,7 +107,7 @@ func Message(err error) string {
 		return e.Code
 	}
 	if err != nil {
-		return err.Error()
+		return "internal server error"
 	}
 	return ""
 }
@@ -112,14 +121,14 @@ func Payload(err error) map[string]any {
 			"code":    Code(e),
 			"message": Message(e),
 		}
-		if len(e.Fields) > 0 {
+		if e.Status < http.StatusInternalServerError && len(e.Fields) > 0 {
 			payload["fields"] = e.Fields
 		}
 		return payload
 	}
 	return map[string]any{
 		"code":    "internal_error",
-		"message": err.Error(),
+		"message": "internal server error",
 	}
 }
 
@@ -132,6 +141,7 @@ var (
 	ErrNotFound     = New("not_found", http.StatusNotFound, "")
 	ErrConflict     = New("conflict", http.StatusConflict, "")
 	ErrRateLimited  = New("rate_limited", http.StatusTooManyRequests, "")
+	ErrBadGateway   = New("upstream_unavailable", http.StatusBadGateway, "")
 	ErrInternal     = New("internal_error", http.StatusInternalServerError, "")
 	ErrUnavailable  = New("service_unavailable", http.StatusServiceUnavailable, "")
 	ErrMarshal      = New("marshal_error", http.StatusInternalServerError, "")

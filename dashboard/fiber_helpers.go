@@ -26,6 +26,10 @@ func jsonResponse(c *fiber.Ctx, code int, payload interface{}) {
 	_ = c.Status(code).JSON(payload)
 }
 
+func rejectInternalError(c *fiber.Ctx, err error) {
+	jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, ""))
+}
+
 func parseJSON(c *fiber.Ctx, dst interface{}) error {
 	if len(c.Body()) == 0 {
 		return apperr.ErrEmptyBody
@@ -53,7 +57,7 @@ func renderComponent(c *fiber.Ctx, status int, component templ.Component) {
 	}
 	var buf bytes.Buffer
 	if err := component.Render(ctx, &buf); err != nil {
-		jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, err.Error()))
+		rejectInternalError(c, err)
 		return
 	}
 	c.Set(fiber.HeaderContentType, "text/html; charset=utf-8")

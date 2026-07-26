@@ -81,8 +81,6 @@ func sortTable(db *sqlx.DB, tenantID, searchField, search, sortField, sortCase s
 	if err != nil {
 		return nil, 0, err
 	}
-	log.Printf("the search field and sort fields are: %s, %s", searchField, sortField)
-
 	if db == nil {
 		return nil, 0, fmt.Errorf("nil db")
 	}

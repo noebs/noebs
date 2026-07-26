@@ -14,6 +14,7 @@ import (
 	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/backofficeauth"
 	"github.com/adonese/noebs/internal/tenantauth"
@@ -298,7 +299,7 @@ func gatewayProxyHandler(endpoint string, tlsConfig *tls.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		target := endpoint + string(c.Context().RequestURI())
 		if err := proxy.Do(c, target, client); err != nil {
-			return fiber.NewError(http.StatusBadGateway, err.Error())
+			return apperr.Wrap(err, apperr.ErrBadGateway, "")
 		}
 		return nil
 	}

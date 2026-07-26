@@ -1,16 +1,62 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/tenantcatalog"
 	"github.com/adonese/noebs/internal/transactionauth"
 	"github.com/adonese/noebs/internal/workloadauth"
 	"github.com/gofiber/fiber/v2"
 )
+
+func TestGatewayProxyKeepsTransportCausePrivate(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Errorf("hijack upstream connection: %v", err)
+			return
+		}
+		_ = conn.Close()
+	}))
+	t.Cleanup(upstream.Close)
+
+	app := fiber.New(fiber.Config{
+		DisableStartupMessage: true,
+		ErrorHandler:          gateway.JSONErrorHandler,
+	})
+	app.Use(gateway.RequestID())
+	app.Get("/consumer/status", gatewayProxyHandler(upstream.URL, nil))
+
+	request := httptest.NewRequest(http.MethodGet, "/consumer/status", nil)
+	request.Header.Set(gateway.RequestIDHeader, "proxy-request-123")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("request error = %v", err)
+	}
+	t.Cleanup(func() { _ = response.Body.Close() })
+	if response.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusBadGateway)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["code"] != "upstream_unavailable" ||
+		payload["message"] != "upstream service unavailable" ||
+		payload["request_id"] != "proxy-request-123" {
+		t.Fatalf("payload = %#v", payload)
+	}
+	if strings.Contains(payload["message"].(string), upstream.URL) {
+		t.Fatalf("response leaked upstream endpoint: %#v", payload)
+	}
+}
 
 func TestAPIGatewayRequiresOIDCVerifier(t *testing.T) {
 	previous := oidcVerifier

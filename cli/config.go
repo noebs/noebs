@@ -545,7 +545,7 @@ func GetMainEngine() *fiber.App {
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)
 	}
-	route := fiber.New(fiber.Config{})
+	route := fiber.New(fiber.Config{ErrorHandler: gateway.JSONErrorHandler})
 	route.Use(gateway.RequestID())
 	tenantIdentity := gateway.InternalTenantIdentityMiddleware()
 	principalIdentity := gateway.InternalPrincipalIdentityMiddleware()
