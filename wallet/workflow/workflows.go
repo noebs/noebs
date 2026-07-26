@@ -1494,8 +1494,8 @@ func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
 	if len(missing) > 0 {
 		meta, err := auditMetadata(map[string]any{
 			"status":             params.Status,
-			"start_time":         params.StartTime.Format(time.RFC3339),
-			"end_time":           params.EndTime.Format(time.RFC3339),
+			"start_time":         startTime.Format(time.RFC3339),
+			"end_time":           endTime.Format(time.RFC3339),
 			"missing_count":      len(missing),
 			"missing_references": missing,
 		})
