@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -48,7 +49,7 @@ func RequestLogger(logger *logrus.Logger, cfg LogSamplingConfig) fiber.Handler {
 		err := c.Next()
 		duration := time.Since(start)
 
-		status := c.Response().StatusCode()
+		status := effectiveHTTPStatus(c.Response().StatusCode(), err)
 		routePath := c.Path()
 		if r := c.Route(); r != nil && r.Path != "" {
 			routePath = r.Path
@@ -85,7 +86,7 @@ func RequestLogger(logger *logrus.Logger, cfg LogSamplingConfig) fiber.Handler {
 		}
 
 		switch {
-		case status >= fiber.StatusInternalServerError || err != nil:
+		case status >= fiber.StatusInternalServerError:
 			entry.Error("http_request")
 		case status >= fiber.StatusBadRequest:
 			entry.Warn("http_request")
@@ -95,4 +96,15 @@ func RequestLogger(logger *logrus.Logger, cfg LogSamplingConfig) fiber.Handler {
 
 		return err
 	}
+}
+
+func effectiveHTTPStatus(responseStatus int, err error) int {
+	if err == nil {
+		return responseStatus
+	}
+	var fiberErr *fiber.Error
+	if errors.As(err, &fiberErr) && fiberErr.Code > 0 {
+		return fiberErr.Code
+	}
+	return fiber.StatusInternalServerError
 }
