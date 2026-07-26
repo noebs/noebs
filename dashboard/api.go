@@ -265,7 +265,7 @@ func (s *Service) QRStatus(c *fiber.Ctx) {
 	}
 	data, err := s.getLastTransactions(c.UserContext(), tenantID, q)
 	if err != nil {
-		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error()})
+		rejectInternalError(c, err)
 		return
 	}
 

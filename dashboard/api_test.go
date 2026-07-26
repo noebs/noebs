@@ -187,6 +187,33 @@ func TestBrowserDashboardIgnoresGETBodyAtBoundary(t *testing.T) {
 	}
 }
 
+func TestQRStatusReturnsInternalDatabaseFailures(t *testing.T) {
+	service := Service{}
+	app := fiber.New()
+	app.Get("/qr", gateway.InternalTenantIdentityMiddleware(), func(c *fiber.Ctx) error {
+		service.QRStatus(c)
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/qr?id=merchant-1", nil)
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant-1")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["code"] != "internal_error" || payload["message"] != "internal server error" {
+		t.Fatalf("payload = %#v", payload)
+	}
+}
+
 func TestResolveTenantIDDoesNotDefaultFromServiceConfig(t *testing.T) {
 	s := Service{
 		NoebsConfig: ebs_fields.NoebsConfig{DefaultTenantID: "test-tenant"},

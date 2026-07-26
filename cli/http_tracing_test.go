@@ -1,15 +1,74 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/apperr"
 	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/fiber/v2"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
+
+func TestHTTPTracingRedactsReturnedErrorCause(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	t.Cleanup(func() { _ = provider.Shutdown(t.Context()) })
+
+	const secret = "dial tcp database.internal:5432 with password secret"
+	cause := errors.New(secret)
+	app := fiber.New(fiber.Config{
+		DisableStartupMessage: true,
+		ErrorHandler:          gateway.JSONErrorHandler,
+	})
+	app.Use(gateway.RequestID())
+	app.Use(httpTracingMiddleware("test", otelfiber.WithTracerProvider(provider)))
+	app.Use(gateway.RedactReturnedErrors)
+	app.Get("/failure", func(*fiber.Ctx) error {
+		return apperr.Wrap(cause, apperr.ErrDatabase, cause.Error())
+	})
+
+	response, err := app.Test(newTracingTestRequest(t, "/failure"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = response.Body.Close() })
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusInternalServerError)
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["message"] != "internal server error" {
+		t.Fatalf("payload = %#v", payload)
+	}
+
+	spans := recorder.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("ended spans = %d, want 1", len(spans))
+	}
+	foundErrorCode := false
+	for _, event := range spans[0].Events() {
+		for _, attr := range event.Attributes {
+			value := attr.Value.Emit()
+			if strings.Contains(value, secret) {
+				t.Fatalf("trace event exposed error cause in %s=%q", attr.Key, value)
+			}
+			if string(attr.Key) == "exception.message" && value == "database_error" {
+				foundErrorCode = true
+			}
+		}
+	}
+	if !foundErrorCode {
+		t.Fatalf("trace did not retain stable application error code: %#v", spans[0].Events())
+	}
+}
 
 func TestHTTPTracingSkipsCredentialBearingAuthLifecycleURLs(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()

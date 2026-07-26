@@ -554,6 +554,7 @@ func GetMainEngine() *fiber.App {
 	if otelEnabled {
 		route.Use(httpTracingMiddleware(noebsConfig.OtelServiceName))
 	}
+	route.Use(gateway.RedactReturnedErrors)
 	route.Use(gateway.Instrumentation())
 	route.Use(gateway.RequestLogger(logrusLogger, logSampling))
 	route.Use(gateway.NoebsCors(noebsConfig.Cors))

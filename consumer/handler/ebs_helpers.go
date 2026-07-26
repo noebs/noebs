@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gofiber/fiber/v2"
@@ -27,11 +28,25 @@ func authenticatedEBS(next fiber.Handler) fiber.Handler {
 	}
 }
 
+type publicEBSErrorDetails struct {
+	UUID            string `json:"UUID,omitempty"`
+	ResponseMessage string `json:"responseMessage,omitempty"`
+	ResponseStatus  string `json:"responseStatus,omitempty"`
+	ResponseCode    int    `json:"responseCode"`
+	TranDateTime    string `json:"tranDateTime,omitempty"`
+}
+
 func ebsErrorDetails(res ebs_fields.EBSParserFields) ebs_fields.ErrorDetails {
 	return ebs_fields.ErrorDetails{
-		Code:    res.ResponseCode,
-		Status:  ebs_fields.EBSError,
-		Details: res,
+		Code:   res.ResponseCode,
+		Status: ebs_fields.EBSError,
+		Details: publicEBSErrorDetails{
+			UUID:            res.UUID,
+			ResponseMessage: res.ResponseMessage,
+			ResponseStatus:  res.ResponseStatus,
+			ResponseCode:    res.ResponseCode,
+			TranDateTime:    res.TranDateTime,
+		},
 		Message: ebs_fields.EBSError,
 	}
 }
@@ -102,9 +117,22 @@ func completeEBS[Req any](
 	if callErr != nil {
 		var ebsCallErr *ebs_fields.CallError
 		if errors.As(callErr, &ebsCallErr) && ebsCallErr != nil {
+			if ebsCallErr.Response.ResponseCode == 0 && ebsCallErr.Response.ResponseMessage == "" {
+				return jsonResponse(c, statusForError(callErr), apperr.Wrap(callErr, apperr.ErrBadGateway, ""))
+			}
 			return jsonResponse(c, statusForError(callErr), ebsErrorDetails(ebsCallErr.Response))
 		}
-		return jsonResponse(c, statusForError(callErr), fiber.Map{"code": "bad_request", "message": callErr.Error()})
+		status := statusForError(callErr)
+		if status >= http.StatusInternalServerError {
+			base := apperr.ErrInternal
+			if status == http.StatusBadGateway {
+				base = apperr.ErrBadGateway
+			} else if status == http.StatusServiceUnavailable {
+				base = apperr.ErrUnavailable
+			}
+			return jsonResponse(c, status, apperr.Wrap(callErr, base, ""))
+		}
+		return jsonResponse(c, status, fiber.Map{"code": "bad_request", "message": callErr.Error()})
 	}
 	if successPayload != nil {
 		return jsonResponse(c, http.StatusOK, successPayload(res))

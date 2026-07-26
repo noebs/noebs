@@ -51,6 +51,7 @@ func TestJSONErrorHandlerKeepsInternalCausesPrivate(t *testing.T) {
 				ErrorHandler:          JSONErrorHandler,
 			})
 			app.Use(RequestID())
+			app.Use(RedactReturnedErrors)
 			app.Get("/result", func(*fiber.Ctx) error { return test.err })
 
 			request := httptest.NewRequest(http.MethodGet, "/result", nil)
@@ -102,5 +103,18 @@ func TestJSONErrorHandlerPreservesClientErrorMessage(t *testing.T) {
 	}
 	if payload["code"] != "request_error" || payload["message"] != "currency is required" {
 		t.Fatalf("payload = %#v", payload)
+	}
+}
+
+func TestReturnedHTTPErrorPreservesCauseWithStableMessage(t *testing.T) {
+	cause := errors.New("private transport detail")
+	err := &returnedHTTPError{
+		err: apperr.Wrap(cause, apperr.ErrBadGateway, ""),
+	}
+	if !errors.Is(err, cause) {
+		t.Fatal("returned error no longer preserves its cause")
+	}
+	if got := err.Error(); got != "upstream_unavailable" {
+		t.Fatalf("Error() = %q, want upstream_unavailable", got)
 	}
 }

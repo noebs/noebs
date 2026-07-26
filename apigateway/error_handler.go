@@ -39,3 +39,37 @@ func JSONErrorHandler(c *fiber.Ctx, err error) error {
 	}
 	return c.Status(status).JSON(payload)
 }
+
+type returnedHTTPError struct {
+	err error
+}
+
+func (e *returnedHTTPError) Error() string {
+	if appErr, ok := apperr.As(e.err); ok {
+		return apperr.Code(appErr)
+	}
+	var fiberErr *fiber.Error
+	if errors.As(e.err, &fiberErr) {
+		switch fiberErr.Code {
+		case http.StatusBadGateway:
+			return "upstream_unavailable"
+		case http.StatusServiceUnavailable:
+			return "service_unavailable"
+		default:
+			return "request_error"
+		}
+	}
+	return "internal_error"
+}
+
+func (e *returnedHTTPError) Unwrap() error {
+	return e.err
+}
+
+func RedactReturnedErrors(c *fiber.Ctx) error {
+	err := c.Next()
+	if err == nil {
+		return nil
+	}
+	return &returnedHTTPError{err: err}
+}
