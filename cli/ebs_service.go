@@ -15,7 +15,6 @@ import (
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/eventing"
-	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
@@ -34,7 +33,6 @@ var dataConfigs ebs_fields.Configs
 var service consumer.Service
 var adminReportingService adminreporting.Service
 var dashService dashboard.Service
-var merchantServices = merchant.Service{}
 var walletService *wallet.Service
 var pspWebhookStore *walletstore.Store
 var walletWorker *walletworker.Runner

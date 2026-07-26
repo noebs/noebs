@@ -13,7 +13,6 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/transactionauth"
 	"github.com/adonese/noebs/internal/workloadauth"
-	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/wallet"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -76,7 +75,6 @@ type roleServicesSnapshot struct {
 	consumerService   consumer.Service
 	adminReporting    adminreporting.Service
 	dashService       dashboard.Service
-	merchantServices  merchant.Service
 	walletService     *wallet.Service
 	pspWebhookStore   *walletstore.Store
 	walletPSPRegistry *walletpsp.Registry
@@ -88,7 +86,6 @@ func captureRoleServices() roleServicesSnapshot {
 		consumerService:   consumerService,
 		adminReporting:    adminReportingService,
 		dashService:       dashService,
-		merchantServices:  merchantServices,
 		walletService:     walletService,
 		pspWebhookStore:   pspWebhookStore,
 		walletPSPRegistry: walletPSPRegistry,
@@ -100,7 +97,6 @@ func (s roleServicesSnapshot) restore() {
 	consumerService = s.consumerService
 	adminReportingService = s.adminReporting
 	dashService = s.dashService
-	merchantServices = s.merchantServices
 	walletService = s.walletService
 	pspWebhookStore = s.pspWebhookStore
 	walletPSPRegistry = s.walletPSPRegistry

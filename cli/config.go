@@ -21,7 +21,6 @@ import (
 	"github.com/adonese/noebs/internal/eventing"
 	"github.com/adonese/noebs/internal/httpclient"
 	"github.com/adonese/noebs/internal/tenantcatalog"
-	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
 	walletactivity "github.com/adonese/noebs/wallet/activity"
@@ -333,13 +332,12 @@ func initRoleServices(role serviceRole) error {
 	consumerService = consumer.Service{}
 	adminReportingService = adminreporting.Service{}
 	dashService = dashboard.Service{}
-	merchantServices = merchant.Service{}
 	walletService = nil
 	pspWebhookStore = nil
 	walletPSPRegistry = nil
 	walletPSPLoader = nil
 
-	if roleNeedsConsumerService(role) || roleNeedsAdminReportingService(role) || roleNeedsDashboardService(role) || roleNeedsMerchantService(role) {
+	if roleNeedsConsumerService(role) || roleNeedsAdminReportingService(role) || roleNeedsDashboardService(role) {
 		if storeSvc == nil {
 			return fmt.Errorf("%w: %s", errRoleDatabaseNotInitialized, role)
 		}
@@ -366,9 +364,6 @@ func initRoleServices(role serviceRole) error {
 	}
 	if roleNeedsDashboardService(role) {
 		dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
-	}
-	if roleNeedsMerchantService(role) {
-		merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig, HTTPClient: httpclient.Default()}
 	}
 	if roleNeedsWalletService(role) {
 		walletService = wallet.NewService(database, noebsConfig)
@@ -402,10 +397,6 @@ func roleNeedsDashboardService(role serviceRole) bool {
 
 func roleNeedsAdminReportingService(role serviceRole) bool {
 	return role == serviceRoleAdminReporting || role == serviceRoleAdminReportingProjector
-}
-
-func roleNeedsMerchantService(role serviceRole) bool {
-	return role == serviceRoleEBSAdapter
 }
 
 func roleNeedsWalletService(role serviceRole) bool {

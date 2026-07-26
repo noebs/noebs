@@ -682,7 +682,6 @@ func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
 		consumer      bool
 		adminReports  bool
 		dashboard     bool
-		merchant      bool
 		wallet        bool
 		pspStore      bool
 		walletPSPDeps bool
@@ -690,7 +689,7 @@ func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
 		{role: serviceRoleAPIGateway},
 		{role: serviceRoleIdentityAuth, consumer: true},
 		{role: serviceRoleCardVault, consumer: true},
-		{role: serviceRoleEBSAdapter, consumer: true, merchant: true},
+		{role: serviceRoleEBSAdapter, consumer: true},
 		{role: serviceRoleEBSAdapterEvents},
 		{role: serviceRolePSPWebhook, pspStore: true, walletPSPDeps: true},
 		{role: serviceRoleAdminReporting, adminReports: true, dashboard: true},
@@ -716,9 +715,6 @@ func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
 			}
 			if got := dashService.Store != nil; got != tt.dashboard {
 				t.Fatalf("dashService initialized = %t, want %t", got, tt.dashboard)
-			}
-			if got := merchantServices.Store != nil; got != tt.merchant {
-				t.Fatalf("merchantServices initialized = %t, want %t", got, tt.merchant)
 			}
 			if got := walletService != nil; got != tt.wallet {
 				t.Fatalf("walletService initialized = %t, want %t", got, tt.wallet)
