@@ -1,7 +1,9 @@
 package ebs_fields
 
 import (
+	"context"
 	"crypto/tls"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +30,7 @@ func TestEBSHTTPClientRejectsNumericTranDateTime(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	code, res, err := EBSHttpClient(server.URL, []byte(`{}`))
+	code, res, err := EBSHttpClient(context.Background(), server.URL, []byte(`{}`))
 	if err == nil {
 		t.Fatalf("EBSHttpClient() error = nil, status=%d response=%+v; want strict decode error", code, res)
 	}
@@ -44,7 +46,7 @@ func TestEBSHTTPClientRejectsMalformedTranDateTime(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	code, res, err := EBSHttpClient(server.URL, []byte(`{}`))
+	code, res, err := EBSHttpClient(context.Background(), server.URL, []byte(`{}`))
 	if err == nil {
 		t.Fatalf("EBSHttpClient() error = nil, status=%d response=%+v; want strict decode error", code, res)
 	}
@@ -60,7 +62,7 @@ func TestEBSHTTPClientRejectsNonzeroResponseCode(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	code, _, err := EBSHttpClient(server.URL, []byte(`{}`))
+	code, _, err := EBSHttpClient(context.Background(), server.URL, []byte(`{}`))
 	if err == nil || err.Error() != "Success text is not authoritative" {
 		t.Fatalf("EBSHttpClient() error = %v, want provider rejection", err)
 	}
@@ -71,9 +73,14 @@ func TestEBSHTTPClientRejectsNonzeroResponseCode(t *testing.T) {
 
 func TestEBSHTTPClientWithClientUsesProvidedClient(t *testing.T) {
 	var called bool
+	type contextKey struct{}
+	ctx := context.WithValue(context.Background(), contextKey{}, "request-context")
 	client := &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			called = true
+			if req.Context().Value(contextKey{}) != "request-context" {
+				t.Fatal("request did not preserve the caller context")
+			}
 			if req.URL.String() != "https://ebs.example/purchase" {
 				t.Fatalf("request URL = %q, want configured target", req.URL.String())
 			}
@@ -86,7 +93,7 @@ func TestEBSHTTPClientWithClientUsesProvidedClient(t *testing.T) {
 		}),
 	}
 
-	code, res, err := EBSHttpClientWithClient(client, "https://ebs.example/purchase", []byte(`{"amount":100}`))
+	code, res, err := EBSHttpClientWithClient(ctx, client, "https://ebs.example/purchase", []byte(`{"amount":100}`))
 	if err != nil {
 		t.Fatalf("EBSHttpClientWithClient() error = %v", err)
 	}
@@ -98,8 +105,67 @@ func TestEBSHTTPClientWithClientUsesProvidedClient(t *testing.T) {
 	}
 }
 
+func TestEBSHTTPClientPreservesCancellationCause(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			cancel()
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		}),
+	}
+
+	code, _, err := EBSHttpClientWithClient(ctx, client, "https://ebs.example/purchase", []byte(`{}`))
+	if code != http.StatusGatewayTimeout {
+		t.Fatalf("status = %d, want %d", code, http.StatusGatewayTimeout)
+	}
+	if !errors.Is(err, EbsGatewayConnectivityErr) {
+		t.Fatalf("error = %v, want EBS connectivity category", err)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context cancellation cause", err)
+	}
+}
+
+func TestEBSHTTPClientPreservesResponseReadCause(t *testing.T) {
+	readErr := errors.New("response read failed")
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       errorReadCloser{err: readErr},
+				Request:    req,
+			}, nil
+		}),
+	}
+
+	code, _, err := EBSHttpClientWithClient(context.Background(), client, "https://ebs.example/purchase", []byte(`{}`))
+	if code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", code, http.StatusInternalServerError)
+	}
+	if !errors.Is(err, EbsGatewayConnectivityErr) {
+		t.Fatalf("error = %v, want EBS connectivity category", err)
+	}
+	if !errors.Is(err, readErr) {
+		t.Fatalf("error = %v, want response read cause", err)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
+}
+
+type errorReadCloser struct {
+	err error
+}
+
+func (r errorReadCloser) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+func (errorReadCloser) Close() error {
+	return nil
 }

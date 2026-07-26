@@ -2,9 +2,11 @@ package ebs_fields
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -27,12 +29,12 @@ var ebsHTTPClient = &http.Client{
 }
 
 // EBSHttpClient the client to interact with EBS
-func EBSHttpClient(targetURL string, req []byte) (code int, ebsGenericResponse EBSParserFields, err error) {
-	return EBSHttpClientWithClient(ebsHTTPClient, targetURL, req)
+func EBSHttpClient(ctx context.Context, targetURL string, req []byte) (code int, ebsGenericResponse EBSParserFields, err error) {
+	return EBSHttpClientWithClient(ctx, ebsHTTPClient, targetURL, req)
 }
 
 // EBSHttpClientWithClient sends an EBS request using the caller-provided HTTP client.
-func EBSHttpClientWithClient(client *http.Client, targetURL string, req []byte) (code int, ebsGenericResponse EBSParserFields, err error) {
+func EBSHttpClientWithClient(ctx context.Context, client *http.Client, targetURL string, req []byte) (code int, ebsGenericResponse EBSParserFields, err error) {
 	initEBSMetrics()
 	start := time.Now()
 	reqSize := len(req)
@@ -59,7 +61,7 @@ func EBSHttpClientWithClient(client *http.Client, targetURL string, req []byte) 
 	log.WithFields(logrus.Fields{"url": targetURL, "bytes": reqSize}).Debug("EBS request")
 	reqBuffer := bytes.NewBuffer(req)
 
-	reqHandler, err := http.NewRequest(http.MethodPost, targetURL, reqBuffer)
+	reqHandler, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, reqBuffer)
 
 	if err != nil {
 		code = http.StatusInternalServerError
@@ -76,7 +78,7 @@ func EBSHttpClientWithClient(client *http.Client, targetURL string, req []byte) 
 		log.WithFields(logrus.Fields{
 			"code": err.Error(),
 		}).Error("Error in establishing connection to the host")
-		return code, ebsGenericResponse, EbsGatewayConnectivityErr
+		return code, ebsGenericResponse, fmt.Errorf("%w: %w", EbsGatewayConnectivityErr, err)
 	}
 
 	defer ebsResponse.Body.Close()
@@ -86,7 +88,7 @@ func EBSHttpClientWithClient(client *http.Client, targetURL string, req []byte) 
 		log.WithFields(logrus.Fields{
 			"code": err.Error(),
 		}).Error("Error reading ebs response")
-		return code, ebsGenericResponse, EbsGatewayConnectivityErr
+		return code, ebsGenericResponse, fmt.Errorf("%w: %w", EbsGatewayConnectivityErr, err)
 	}
 	respSize = len(responseBody)
 

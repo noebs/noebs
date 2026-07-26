@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -87,7 +88,7 @@ func TestEBSHttpClient(t *testing.T) {
 		t.Cleanup(server.Close)
 
 		payload := getSuccessfulPurchasePayload(t)
-		_, _, err := ebs_fields.EBSHttpClient(server.URL, payload)
+		_, _, err := ebs_fields.EBSHttpClient(context.Background(), server.URL, payload)
 
 		if err != ebs_fields.ContentTypeErr {
 			t.Fatalf("Returned error is not of the correct type, %v. Wanted %v", err, ebs_fields.ContentTypeErr)
@@ -103,7 +104,7 @@ func TestEBSHttpClient(t *testing.T) {
 		t.Cleanup(server.Close)
 
 		payload := getFailedPurchasePayload(t)
-		status, res, err := ebs_fields.EBSHttpClient(server.URL, payload)
+		status, res, err := ebs_fields.EBSHttpClient(context.Background(), server.URL, payload)
 
 		if err == nil {
 			t.Fatalf("expected error, got nil")

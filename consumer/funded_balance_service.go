@@ -155,7 +155,7 @@ func (s *Service) OpaqueBalance(ctx context.Context, tenantID string, userID int
 	if err != nil {
 		return OpaqueBalanceResult{}, err
 	}
-	code, response, callErr := ebs_fields.EBSHttpClientWithClient(s.HTTPClient, ebsEndpoint, payload)
+	code, response, callErr := ebs_fields.EBSHttpClientWithClient(ctx, s.HTTPClient, ebsEndpoint, payload)
 	if callErr != nil {
 		if response.UUID != operationUUID {
 			return OpaqueBalanceResult{}, ErrFundedOutcomeUnknown
@@ -221,7 +221,7 @@ func (s *Service) reconcileOpaqueBalance(ctx context.Context, tenantID, operatio
 		return OpaqueBalanceResult{}, err
 	}
 	endpoint := strings.TrimRight(s.NoebsConfig.ConsumerIP, "/") + "/" + ebs_fields.ConsumerTransactionStatusEndpoint
-	code, response, callErr := ebs_fields.EBSHttpClientWithClient(s.HTTPClient, endpoint, payload)
+	code, response, callErr := ebs_fields.EBSHttpClientWithClient(ctx, s.HTTPClient, endpoint, payload)
 	if callErr != nil || code != http.StatusOK || response.OriginalTransaction.UUID != operationUUID {
 		return OpaqueBalanceResult{}, ErrFundedOutcomeUnknown
 	}

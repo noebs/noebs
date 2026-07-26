@@ -40,7 +40,7 @@ func (s *Service) callEBSJSONWithOptions(ctx context.Context, tenantID, baseURL,
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}
-	code, res, ebsErr := ebs_fields.EBSHttpClientWithClient(s.HTTPClient, url, payload)
+	code, res, ebsErr := ebs_fields.EBSHttpClientWithClient(ctx, s.HTTPClient, url, payload)
 	return s.finalizeEBSCall(ctx, tenantID, url, endpoint, code, res, ebsErr, mutate, recordTransaction)
 }
 
@@ -60,7 +60,7 @@ func (s *Service) callEBSRawWithMutate(ctx context.Context, tenantID, baseURL, e
 		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
 	}
 	url := baseURL + endpoint
-	code, res, ebsErr := ebs_fields.EBSHttpClientWithClient(s.HTTPClient, url, payload)
+	code, res, ebsErr := ebs_fields.EBSHttpClientWithClient(ctx, s.HTTPClient, url, payload)
 	return s.finalizeEBSCall(ctx, tenantID, url, endpoint, code, res, ebsErr, mutate, true)
 }
 

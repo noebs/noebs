@@ -321,6 +321,7 @@ func (s *Service) verifyCardEnrollmentWithEBS(ctx context.Context, tenantID stri
 		return err
 	}
 	_, response, err := ebs_fields.EBSHttpClientWithClient(
+		ctx,
 		s.HTTPClient,
 		s.NoebsConfig.ConsumerIP+ebs_fields.ConsumerBalanceEndpoint,
 		payload,
@@ -358,6 +359,7 @@ func (s *Service) reconcileCardEnrollmentWithEBS(ctx context.Context, tenantID, 
 		return err
 	}
 	_, response, err := ebs_fields.EBSHttpClientWithClient(
+		ctx,
 		s.HTTPClient,
 		s.NoebsConfig.ConsumerIP+ebs_fields.ConsumerTransactionStatusEndpoint,
 		payload,

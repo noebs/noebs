@@ -257,7 +257,7 @@ func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {
 	if err != nil {
 		return errors.New("missing fields")
 	}
-	code, res, ebsErr := ebs_fields.EBSHttpClientWithClient(s.HTTPClient, url, jsonBuffer)
+	code, res, ebsErr := ebs_fields.EBSHttpClientWithClient(ctx, s.HTTPClient, url, jsonBuffer)
 	res.Name = s.ToDatabasename(url)
 	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
 	if ebsErr != nil {

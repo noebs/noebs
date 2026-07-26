@@ -35,7 +35,7 @@ func (s *Service) callEBSJSON(ctx context.Context, tenantID, endpoint string, re
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}
-	code, res, ebsErr := ebs_fields.EBSHttpClientWithClient(s.HTTPClient, url, payload)
+	code, res, ebsErr := ebs_fields.EBSHttpClientWithClient(ctx, s.HTTPClient, url, payload)
 	return s.finalizeEBSCall(ctx, tenantID, endpoint, code, res, ebsErr)
 }
 
@@ -54,7 +54,7 @@ func (s *Service) callEBSRaw(ctx context.Context, tenantID, endpoint string, pay
 		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
 	}
 	url := s.NoebsConfig.MerchantIP + endpoint
-	code, res, ebsErr := ebs_fields.EBSHttpClientWithClient(s.HTTPClient, url, payload)
+	code, res, ebsErr := ebs_fields.EBSHttpClientWithClient(ctx, s.HTTPClient, url, payload)
 	return s.finalizeEBSCall(ctx, tenantID, endpoint, code, res, ebsErr)
 }
 
