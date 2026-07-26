@@ -459,9 +459,10 @@ func registerAdminReportingRoutes(route *fiber.App, tenantIdentity fiber.Handler
 	dashboardGet("/dashboard/stream", dashService.Stream)
 }
 
-func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, _ fiber.Handler, consumerHandler *consumerhandler.Handler) {
-	route.Get("/ws", userIdentity, chatWebSocketHandler(hub))
-
+func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, chatEnabled bool, consumerHandler *consumerhandler.Handler) {
+	if chatEnabled {
+		route.Get("/ws", userIdentity, chatWebSocketHandler(hub))
+	}
 	consumerhandler.RegisterNotificationAdminInternalRoutes(route.Group("/internal/notification-chat", tenantIdentity), consumerHandler)
 }
 
@@ -509,16 +510,25 @@ func registerIdentityAuthRoutes(route *fiber.App, principalIdentity fiber.Handle
 	consumerhandler.RegisterIdentityAuthedRoutes(route.Group("/consumer", userIdentity), consumerHandler)
 }
 
-func registerCardVaultRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, _ fiber.Handler, consumerHandler *consumerhandler.Handler) {
+func registerCardVaultRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, managementEnabled bool, consumerHandler *consumerhandler.Handler) {
 	cons := route.Group("/consumer")
-	consumerhandler.RegisterCardVaultAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
+	if managementEnabled {
+		consumerhandler.RegisterCardVaultAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
+	}
 	consumerhandler.RegisterCardVaultInternalRoutes(route.Group("/internal/card-vault", userIdentity), consumerHandler)
 	consumerhandler.RegisterCardVaultAdminInternalRoutes(route.Group("/internal/card-vault", tenantIdentity), consumerHandler)
 }
 
-func registerEBSAdapterRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+func registerEBSAdapterRoutes(route *fiber.App, userIdentity fiber.Handler, managementEnabled, balanceEnabled bool, consumerHandler *consumerhandler.Handler) {
 	cons := route.Group("/consumer")
-	consumerhandler.RegisterEBSAdapterAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
+	authed := cons.Group("", userIdentity)
+	consumerhandler.RegisterEBSAdapterAuthedRoutes(authed, consumerHandler)
+	if managementEnabled {
+		consumerhandler.RegisterOpaqueCardEnrollmentRoutes(authed, consumerHandler)
+	}
+	if balanceEnabled {
+		consumerhandler.RegisterOpaqueBalanceRoute(authed, consumerHandler)
+	}
 }
 
 func registerWalletAPIRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler) {
@@ -583,12 +593,12 @@ func GetMainEngine() *fiber.App {
 	}
 	if role == serviceRoleCardVault {
 		consumerHandler := buildConsumerHandler()
-		registerCardVaultRoutes(route, tenantIdentity, userIdentity, adminIdentity, consumerHandler)
+		registerCardVaultRoutes(route, tenantIdentity, userIdentity, noebsConfig.OpaqueCardManagementEnabled, consumerHandler)
 		return route
 	}
 	if role == serviceRoleEBSAdapter {
 		consumerHandler := buildConsumerHandler()
-		registerEBSAdapterRoutes(route, userIdentity, consumerHandler)
+		registerEBSAdapterRoutes(route, userIdentity, noebsConfig.OpaqueCardManagementEnabled, noebsConfig.OpaqueBalanceEnabled, consumerHandler)
 		return route
 	}
 	if role == serviceRoleAdminReporting {
@@ -597,7 +607,7 @@ func GetMainEngine() *fiber.App {
 	}
 	if role == serviceRoleNotification {
 		consumerHandler := buildConsumerHandler()
-		registerNotificationChatRoutes(route, tenantIdentity, userIdentity, adminIdentity, consumerHandler)
+		registerNotificationChatRoutes(route, tenantIdentity, userIdentity, noebsConfig.ChatEnabled, consumerHandler)
 		return route
 	}
 	if role == serviceRoleWalletAPI {
@@ -773,14 +783,14 @@ func initConfig() {
 	// 	// We recommend adjusting this value in production,
 	// 	TracesSampleRate: 1.0,
 	// })
-	if role.startsChat() && database != nil && database.DB != nil {
+	if role.startsChat() && noebsConfig.ChatEnabled && database != nil && database.DB != nil {
 		chatCfg := chat.DefaultHubConfig()
 		chatCfg.MaxUnreadMessages = 1000
 		chatCfg.UnreadBatchSize = 200
 		chatCfg.ClientIdentityFromRequest = chatClientIdentityFromGatewayIdentity
 		hub = chat.NewHubWithConfig(database.DB, chatCfg)
 	}
-	if role.startsChat() && (database == nil || database.DB == nil) {
+	if role.startsChat() && noebsConfig.ChatEnabled && (database == nil || database.DB == nil) {
 		logrusLogger.Fatalf("%s role requires an initialized database", role)
 	}
 	if err := initRoleServices(role); err != nil {

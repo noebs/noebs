@@ -83,7 +83,7 @@ func registerAPIGatewayProxyRoutes(
 		return fmt.Errorf("configure PSP webhook routes: %w", err)
 	}
 	proxies := map[serviceRole]fiber.Handler{}
-	for _, spec := range gatewayProxyRouteSpecs() {
+	for _, spec := range enabledGatewayProxyRouteSpecs(cfg) {
 		handler, ok := proxies[spec.role]
 		if !ok {
 			target, err := serviceDiscoveryEndpoint(cfg, spec.role)
@@ -552,4 +552,31 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 
 		{method: fiber.MethodGet, path: "/backoffice/assets/*", upstreamPath: "/dashboard/assets/*", role: serviceRoleAdminReporting, auth: gatewayAuthPublic},
 	}
+}
+
+func enabledGatewayProxyRouteSpecs(cfg ebs_fields.NoebsConfig) []gatewayRouteSpec {
+	specs := gatewayProxyRouteSpecs()
+	enabled := make([]gatewayRouteSpec, 0, len(specs))
+	for _, spec := range specs {
+		switch spec.path {
+		case "/consumer/cards",
+			"/consumer/cards/:card_id",
+			"/consumer/cards/:card_id/main",
+			"/consumer/cards/enrollment-intents",
+			"/consumer/cards/enrollment-intents/:enrollment_id/confirm":
+			if !cfg.OpaqueCardManagementEnabled {
+				continue
+			}
+		case "/consumer/balance":
+			if !cfg.OpaqueBalanceEnabled {
+				continue
+			}
+		case "/ws":
+			if !cfg.ChatEnabled {
+				continue
+			}
+		}
+		enabled = append(enabled, spec)
+	}
+	return enabled
 }

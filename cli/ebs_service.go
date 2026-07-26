@@ -225,7 +225,7 @@ func main() {
 		closeWalletLedgerPublicClient()
 	}()
 
-	if role.startsChat() {
+	if role.startsChat() && noebsConfig.ChatEnabled {
 		if hub == nil {
 			logrusLogger.Fatal("notification-chat role requires an initialized chat hub")
 		}

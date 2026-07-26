@@ -3,13 +3,7 @@ package handler
 import "github.com/gofiber/fiber/v2"
 
 func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
-	// Opaque card enrollment is verified by the EBS adapter and persisted only
-	// through authenticated Card Vault commands.
-	router.Post("/cards/enrollment-intents", h.CreateOpaqueCardEnrollmentIntent)
-	router.Post("/cards/enrollment-intents/:enrollment_id/confirm", h.ConfirmOpaqueCardEnrollment)
-
 	// Card and account operations
-	router.Post("/balance", authenticatedEBS(h.OpaqueBalance))
 	router.Post("/status", authenticatedEBS(h.TransactionStatus))
 	router.Post("/is_alive", authenticatedEBS(h.IsAlive))
 	router.Get("/biller", authenticatedEBS(h.GetBiller))
@@ -25,6 +19,15 @@ func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
 	// Transactions
 	router.Get("/transaction", authenticatedEBS(h.TransactionByUUID))
 	router.Get("/transactions", authenticatedEBS(h.GetTransactions))
+}
+
+func RegisterOpaqueCardEnrollmentRoutes(router fiber.Router, h *Handler) {
+	router.Post("/cards/enrollment-intents", h.CreateOpaqueCardEnrollmentIntent)
+	router.Post("/cards/enrollment-intents/:enrollment_id/confirm", h.ConfirmOpaqueCardEnrollment)
+}
+
+func RegisterOpaqueBalanceRoute(router fiber.Router, h *Handler) {
+	router.Post("/balance", authenticatedEBS(h.OpaqueBalance))
 }
 
 func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {

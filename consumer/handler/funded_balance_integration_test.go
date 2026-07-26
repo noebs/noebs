@@ -125,7 +125,9 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 		c.Locals("user_id", userID)
 		return c.Next()
 	})
-	RegisterEBSAdapterAuthedRoutes(publicApp.Group("/consumer"), &Handler{Service: ebsService})
+	router := publicApp.Group("/consumer")
+	RegisterEBSAdapterAuthedRoutes(router, &Handler{Service: ebsService})
+	RegisterOpaqueBalanceRoute(router, &Handler{Service: ebsService})
 	publicHTTP := httptest.NewServer(adaptor.FiberApp(publicApp))
 	t.Cleanup(publicHTTP.Close)
 	client := &http.Client{Timeout: 15 * time.Second}

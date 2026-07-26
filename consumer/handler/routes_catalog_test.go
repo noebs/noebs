@@ -36,7 +36,10 @@ func assertRouteCatalogExact(t *testing.T, app *fiber.App, expected []registered
 
 func TestEBSAdapterRouteCatalogIsExact(t *testing.T) {
 	app := fiber.New()
-	RegisterEBSAdapterAuthedRoutes(app.Group("/consumer"), &Handler{})
+	router := app.Group("/consumer")
+	RegisterEBSAdapterAuthedRoutes(router, &Handler{})
+	RegisterOpaqueCardEnrollmentRoutes(router, &Handler{})
+	RegisterOpaqueBalanceRoute(router, &Handler{})
 
 	assertRouteCatalogExact(t, app, []registeredRoute{
 		{method: http.MethodPost, path: "/consumer/cards/enrollment-intents"},
