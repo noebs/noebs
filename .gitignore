@@ -9,6 +9,7 @@ test1.db
 /noebs
 *.exe
 *.db
+/database
 ebs_fields/.secrets.json
 __debug_bin
 test.db-*
