@@ -141,7 +141,15 @@ unido.noebs.sd {
 
 iptv.2t.sd {
 	import common_headers
-	reverse_proxy 100.102.164.34:8088
+
+	@openiptv_account path /account /account/*
+	handle @openiptv_account {
+		reverse_proxy 127.0.0.1:8090
+	}
+
+	handle {
+		reverse_proxy 100.102.164.34:8088
+	}
 
 	log {
 		output stdout
