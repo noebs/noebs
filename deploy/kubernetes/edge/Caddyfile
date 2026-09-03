@@ -156,3 +156,11 @@ iptv.2t.sd {
 		format json
 	}
 }
+
+watch.2t.sd {
+	import common_headers
+
+	reverse_proxy 127.0.0.1:8091 {
+		flush_interval -1
+	}
+}
