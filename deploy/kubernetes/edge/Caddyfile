@@ -159,6 +159,9 @@ iptv.2t.sd {
 
 watch.2t.sd {
 	import common_headers
+	# Preserve a concrete Origin for native CSRF-protected forms without
+	# forwarding callback paths or query values as referrers.
+	header Referrer-Policy strict-origin
 
 	reverse_proxy 127.0.0.1:8091 {
 		flush_interval -1
