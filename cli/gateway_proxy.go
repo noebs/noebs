@@ -540,6 +540,7 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodGet, path: "/wallet/interop", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPost, path: "/wallet/interop/quotes", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/wallet/interop/quotes/:id", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/wallet/interop/quotes/:id/close", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPost, path: "/wallet/interop/transfers", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser, transaction: transactionauth.OperationWalletInterop},
 		{method: fiber.MethodGet, path: "/wallet/interop/transfers", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/wallet/interop/transfers/:id", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},

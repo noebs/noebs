@@ -352,8 +352,25 @@ func (s *Store) RequestInteropTransfer(ctx context.Context, tenantID, ownerID st
 	if err != nil {
 		return nil, err
 	}
+	// Admission and closure share an advisory transaction lock. A closure
+	// response proves that no in-flight admission can subsequently commit.
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "interop-admission:"+tenantID+":"+quoteID.String()); err != nil {
+		return nil, err
+	}
+	var closed bool
+	if err = tx.GetContext(ctx, &closed, `SELECT EXISTS(SELECT 1 FROM interop_quote_closures WHERE tenant_id=$1 AND quote_id=$2)`, tenantID, quoteID); err != nil {
+		return nil, err
+	}
+	if closed {
+		return nil, ErrInteropState
+	}
 	var t InteropTransfer
-	err = db.GetContext(ctx, &t, db.Rebind(`INSERT INTO interop_transfers(id,tenant_id,quote_id,owner_id,idempotency_key)
+	err = tx.GetContext(ctx, &t, db.Rebind(`INSERT INTO interop_transfers(id,tenant_id,quote_id,owner_id,idempotency_key)
 		SELECT transfer_id,tenant_id,id,owner_id,? FROM interop_quotes WHERE tenant_id=? AND id=? AND direction='OUT' AND status='READY' AND expires_at>clock_timestamp()+interval '5 seconds'
 		ON CONFLICT DO NOTHING RETURNING *`), key, tenantID, quoteID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -366,7 +383,52 @@ func (s *Store) RequestInteropTransfer(ctx context.Context, tenantID, ownerID st
 		}
 		return nil, ErrInteropConflict
 	}
-	return &t, err
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// CloseInteropQuote records a permanent no-admission proof, or returns the
+// existing command for recovery. It cannot abort an admitted transfer.
+func (s *Store) CloseInteropQuote(ctx context.Context, tenantID, ownerID string, quoteID uuid.UUID) (bool, uuid.UUID, error) {
+	if _, err := ValidateTenantID(tenantID); err != nil {
+		return false, uuid.Nil, err
+	}
+	if ownerID == "" || quoteID == uuid.Nil {
+		return false, uuid.Nil, ErrInteropInvalid
+	}
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return false, uuid.Nil, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "interop-admission:"+tenantID+":"+quoteID.String()); err != nil {
+		return false, uuid.Nil, err
+	}
+	var exists bool
+	if err = tx.GetContext(ctx, &exists, `SELECT EXISTS(SELECT 1 FROM interop_quotes WHERE tenant_id=$1 AND id=$2 AND owner_id=$3 AND direction='OUT')`, tenantID, quoteID, ownerID); err != nil {
+		return false, uuid.Nil, err
+	}
+	if !exists {
+		return false, uuid.Nil, ErrInteropNotFound
+	}
+	var transferID uuid.UUID
+	err = tx.GetContext(ctx, &transferID, `SELECT id FROM interop_transfers WHERE tenant_id=$1 AND quote_id=$2`, tenantID, quoteID)
+	if err == nil {
+		return false, transferID, tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return false, uuid.Nil, err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO interop_quote_closures(tenant_id,quote_id,owner_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, tenantID, quoteID, ownerID)
+	if err != nil {
+		return false, uuid.Nil, err
+	}
+	return true, uuid.Nil, tx.Commit()
 }
 
 func (s *Store) ClaimInteropQuote(ctx context.Context, tenantID string, token uuid.UUID) (*InteropQuote, error) {

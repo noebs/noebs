@@ -22,6 +22,7 @@ const (
 	WalletPublicService_GetInteropCapability_FullMethodName            = "/noebs.wallet.v1.WalletPublicService/GetInteropCapability"
 	WalletPublicService_CreateInteropQuote_FullMethodName              = "/noebs.wallet.v1.WalletPublicService/CreateInteropQuote"
 	WalletPublicService_GetInteropQuote_FullMethodName                 = "/noebs.wallet.v1.WalletPublicService/GetInteropQuote"
+	WalletPublicService_CloseInteropQuote_FullMethodName               = "/noebs.wallet.v1.WalletPublicService/CloseInteropQuote"
 	WalletPublicService_RequestInteropTransfer_FullMethodName          = "/noebs.wallet.v1.WalletPublicService/RequestInteropTransfer"
 	WalletPublicService_GetInteropTransfer_FullMethodName              = "/noebs.wallet.v1.WalletPublicService/GetInteropTransfer"
 	WalletPublicService_GetWalletPublic_FullMethodName                 = "/noebs.wallet.v1.WalletPublicService/GetWalletPublic"
@@ -51,6 +52,7 @@ type WalletPublicServiceClient interface {
 	GetInteropCapability(ctx context.Context, in *GetInteropCapabilityRequest, opts ...grpc.CallOption) (*InteropCapability, error)
 	CreateInteropQuote(ctx context.Context, in *CreateInteropQuoteRequest, opts ...grpc.CallOption) (*InteropQuote, error)
 	GetInteropQuote(ctx context.Context, in *GetInteropQuoteRequest, opts ...grpc.CallOption) (*InteropQuote, error)
+	CloseInteropQuote(ctx context.Context, in *GetInteropQuoteRequest, opts ...grpc.CallOption) (*CloseInteropQuoteResponse, error)
 	RequestInteropTransfer(ctx context.Context, in *RequestInteropTransferRequest, opts ...grpc.CallOption) (*InteropTransfer, error)
 	GetInteropTransfer(ctx context.Context, in *GetInteropTransferRequest, opts ...grpc.CallOption) (*InteropTransfer, error)
 	GetWalletPublic(ctx context.Context, in *GetWalletPublicRequest, opts ...grpc.CallOption) (*GetWalletPublicResponse, error)
@@ -105,6 +107,16 @@ func (c *walletPublicServiceClient) GetInteropQuote(ctx context.Context, in *Get
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(InteropQuote)
 	err := c.cc.Invoke(ctx, WalletPublicService_GetInteropQuote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) CloseInteropQuote(ctx context.Context, in *GetInteropQuoteRequest, opts ...grpc.CallOption) (*CloseInteropQuoteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CloseInteropQuoteResponse)
+	err := c.cc.Invoke(ctx, WalletPublicService_CloseInteropQuote_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -318,6 +330,7 @@ type WalletPublicServiceServer interface {
 	GetInteropCapability(context.Context, *GetInteropCapabilityRequest) (*InteropCapability, error)
 	CreateInteropQuote(context.Context, *CreateInteropQuoteRequest) (*InteropQuote, error)
 	GetInteropQuote(context.Context, *GetInteropQuoteRequest) (*InteropQuote, error)
+	CloseInteropQuote(context.Context, *GetInteropQuoteRequest) (*CloseInteropQuoteResponse, error)
 	RequestInteropTransfer(context.Context, *RequestInteropTransferRequest) (*InteropTransfer, error)
 	GetInteropTransfer(context.Context, *GetInteropTransferRequest) (*InteropTransfer, error)
 	GetWalletPublic(context.Context, *GetWalletPublicRequest) (*GetWalletPublicResponse, error)
@@ -356,6 +369,9 @@ func (UnimplementedWalletPublicServiceServer) CreateInteropQuote(context.Context
 }
 func (UnimplementedWalletPublicServiceServer) GetInteropQuote(context.Context, *GetInteropQuoteRequest) (*InteropQuote, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetInteropQuote not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) CloseInteropQuote(context.Context, *GetInteropQuoteRequest) (*CloseInteropQuoteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CloseInteropQuote not implemented")
 }
 func (UnimplementedWalletPublicServiceServer) RequestInteropTransfer(context.Context, *RequestInteropTransferRequest) (*InteropTransfer, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestInteropTransfer not implemented")
@@ -488,6 +504,24 @@ func _WalletPublicService_GetInteropQuote_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WalletPublicServiceServer).GetInteropQuote(ctx, req.(*GetInteropQuoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_CloseInteropQuote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInteropQuoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).CloseInteropQuote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_CloseInteropQuote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).CloseInteropQuote(ctx, req.(*GetInteropQuoteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -870,6 +904,10 @@ var WalletPublicService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetInteropQuote",
 			Handler:    _WalletPublicService_GetInteropQuote_Handler,
+		},
+		{
+			MethodName: "CloseInteropQuote",
+			Handler:    _WalletPublicService_CloseInteropQuote_Handler,
 		},
 		{
 			MethodName: "RequestInteropTransfer",

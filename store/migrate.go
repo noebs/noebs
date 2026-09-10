@@ -359,6 +359,8 @@ func walletAuthorityGrants() []string {
 	return []string{
 		`GRANT SELECT ON TABLE public.interop_bindings, public.interop_aliases TO wallet_ledger_runtime, wallet_ledger_worker`,
 		`GRANT SELECT ON TABLE public.interop_quotes, public.interop_transfers TO wallet_ledger_runtime`,
+		`GRANT SELECT ON TABLE public.interop_quote_closures TO wallet_ledger_runtime, wallet_ledger_worker`,
+		`GRANT INSERT (tenant_id, quote_id, owner_id) ON TABLE public.interop_quote_closures TO wallet_ledger_runtime`,
 		`GRANT INSERT (id, transfer_id, tenant_id, owner_id, wallet_id, idempotency_key, amount, currency, currency_unit_version_id, request) ON TABLE public.interop_quotes TO wallet_ledger_runtime`,
 		`GRANT INSERT (id, tenant_id, quote_id, owner_id, idempotency_key) ON TABLE public.interop_transfers TO wallet_ledger_runtime`,
 		`GRANT SELECT, INSERT ON TABLE public.interop_quotes, public.interop_transfers TO wallet_ledger_worker`,

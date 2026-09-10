@@ -425,6 +425,103 @@ func TestInteropLedgerRegression(t *testing.T) {
 	})
 }
 
+func TestInteropDemoSeedIdempotency(t *testing.T) {
+	for _, input := range []struct{ tenant, fsp string }{{"", "noebs"}, {"tenant-cutover", "noebs"}, {"tenant-mojaloop", "walletone"}} {
+		interopError(t, (&Store{}).SeedInteropDemo(t.Context(), input.tenant, input.fsp), ErrInteropInvalid)
+	}
+	f := newInteropFixture(t)
+	other := f.tenant(t, "seed-isolation", false)
+	f.tenants = append(f.tenants, tenantcatalog.Tenant{ID: "tenant-mojaloop", Name: "Synthetic Mojaloop demo"})
+	slices.SortFunc(f.tenants, func(a, b tenantcatalog.Tenant) int { return cmp.Compare(a.ID, b.ID) })
+	catalog, err := tenantcatalog.New(f.tenants)
+	interopMust(t, err)
+	interopMust(t, basestore.New(f.migrate).ProvisionTenantCatalog(f.ctx, catalog))
+	operator := New(f.migrate)
+	const tenant = "tenant-mojaloop"
+	for _, err := range interopConcurrent(8, func(int) error { return operator.SeedInteropDemo(f.ctx, tenant, "noebs") }) {
+		interopMust(t, err)
+	}
+	binding, err := f.runtime.GetInteropBinding(f.ctx, tenant)
+	interopMust(t, err)
+	if binding.Enabled || binding.FSPID != "noebs" || binding.Currency != "SDG" {
+		t.Fatalf("first seed did not leave isolated admission disabled: %+v", binding)
+	}
+	alice, err := f.runtime.GetWalletByOwner(f.ctx, tenant, OwnerTypeUser, "900000001", "SDG")
+	interopMust(t, err)
+	bob, err := f.runtime.GetWalletByOwner(f.ctx, tenant, OwnerTypeUser, "900000002", "SDG")
+	interopMust(t, err)
+	treasury, err := f.runtime.GetWalletByOwner(f.ctx, tenant, OwnerTypeSystem, SystemTreasury, "SDG")
+	interopMust(t, err)
+	demo := &interopTenant{f: f, id: tenant}
+	demo.balance(t, alice.ID, 100000, 100000)
+	demo.balance(t, bob.ID, 0, 0)
+	demo.balance(t, treasury.ID, -100000, -100000)
+	demo.balance(t, binding.ClearingWalletID, 0, 0)
+	demo.balance(t, binding.SuspenseWalletID, 0, 0)
+	demo.count(t, `SELECT count(*) FROM wallets WHERE tenant_id=$1`, 5)
+	demo.count(t, `SELECT count(*) FROM interop_aliases WHERE tenant_id=$1`, 2)
+	demo.count(t, `SELECT count(*) FROM ledger_transactions WHERE tenant_id=$1`, 1)
+	demo.count(t, `SELECT count(*) FROM ledger_entries WHERE tenant_id=$1`, 2)
+	demo.count(t, `SELECT count(*) FROM transaction_limits WHERE tenant_id=$1`, 2)
+	for _, expected := range []struct {
+		wallet *Wallet
+		alias  string
+	}{{alice, "249900000021"}, {bob, "249900000022"}} {
+		alias, err := f.runtime.GetInteropAlias(f.ctx, tenant, uuid.Nil, expected.alias)
+		interopMust(t, err)
+		if alias.WalletID != expected.wallet.ID || expected.wallet.CurrencyUnitID != binding.CurrencyUnitID {
+			t.Fatal("synthetic alias or money unit is bound to another wallet")
+		}
+	}
+	// Runtime and worker identities cannot act as the demo provisioner.
+	interopSQLState(t, f.runtime.SeedInteropDemo(f.ctx, tenant, "noebs"), "42501")
+	interopSQLState(t, f.worker.SeedInteropDemo(f.ctx, tenant, "noebs"), "42501")
+	_, err = f.migrate.ExecContext(f.ctx, `UPDATE interop_bindings SET enabled=true WHERE tenant_id=$1`, tenant)
+	interopMust(t, err)
+	_, err = f.migrate.ExecContext(f.ctx, `UPDATE transaction_limits SET per_transaction_limit=32123 WHERE tenant_id=$1 AND transaction_type='interop_out'`, tenant)
+	interopMust(t, err)
+	_, err = f.worker.PostDoubleEntry(f.ctx, DoubleEntryParams{TenantID: tenant, DebitWalletID: alice.ID, CreditWalletID: bob.ID, Amount: 25000, Currency: "SDG", IdempotencyKey: "synthetic-spend-after-seed", ReferenceType: "synthetic-review", ReferenceID: "spent-demo-funds"})
+	interopMust(t, err)
+	for _, err := range interopConcurrent(8, func(int) error { return operator.SeedInteropDemo(f.ctx, tenant, "noebs") }) {
+		interopMust(t, err)
+	}
+	repeated, err := f.runtime.GetInteropBinding(f.ctx, tenant)
+	interopMust(t, err)
+	if !repeated.Enabled || repeated.ClearingWalletID != binding.ClearingWalletID || repeated.SuspenseWalletID != binding.SuspenseWalletID {
+		t.Fatal("reseed changed participant identity, accounting wallets or admission switch")
+	}
+	var limit int64
+	interopMust(t, f.runtime.DB.GetContext(f.ctx, &limit, `SELECT per_transaction_limit FROM transaction_limits WHERE tenant_id=$1 AND transaction_type='interop_out'`, tenant))
+	if limit != 32123 {
+		t.Fatalf("reseed overwrote operator limit: %d", limit)
+	}
+	demo.balance(t, alice.ID, 75000, 75000)
+	demo.balance(t, bob.ID, 25000, 25000)
+	demo.balance(t, treasury.ID, -100000, -100000)
+	demo.count(t, `SELECT count(*) FROM ledger_transactions WHERE tenant_id=$1 AND idempotency_key='mojaloop-demo-opening-v1'`, 1)
+	demo.count(t, `SELECT COALESCE(sum(CASE WHEN entry_type='credit' THEN amount ELSE -amount END),0) FROM ledger_entries WHERE tenant_id=$1`, 0)
+	other.balance(t, other.user.ID, 10000, 10000)
+	other.count(t, `SELECT count(*) FROM ledger_transactions WHERE tenant_id=$1`, 1)
+	other.count(t, `SELECT count(*) FROM interop_aliases WHERE tenant_id=$1`, 0)
+	// A completed opening journal must remain a no-op after an operator freezes
+	// the demo account. Otherwise a later release's migration hook cannot run.
+	_, err = f.migrate.ExecContext(f.ctx, `UPDATE interop_bindings SET enabled=false WHERE tenant_id=$1`, tenant)
+	interopMust(t, err)
+	_, err = f.migrate.ExecContext(f.ctx, `UPDATE wallets SET status='frozen' WHERE tenant_id=$1 AND id=$2`, tenant, alice.ID)
+	interopMust(t, err)
+	interopMust(t, operator.SeedInteropDemo(f.ctx, tenant, "noebs"))
+	frozen, err := f.runtime.GetWallet(f.ctx, tenant, alice.ID)
+	interopMust(t, err)
+	if frozen.Status != "frozen" || frozen.Balance != 75000 || frozen.AvailableBalance != 75000 {
+		t.Fatal("reseed changed a frozen account or refilled spent funds")
+	}
+	repeated, err = f.runtime.GetInteropBinding(f.ctx, tenant)
+	interopMust(t, err)
+	if repeated.Enabled {
+		t.Fatal("reseed re-enabled operator-disabled admission")
+	}
+}
+
 type interopFixture struct {
 	ctx     context.Context
 	pg      *testdb.PostgresContainer

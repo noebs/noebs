@@ -697,6 +697,17 @@
       ],
       "default": "ADMIN_WALLET_ACTION_UNSPECIFIED"
     },
+    "v1CloseInteropQuoteResponse": {
+      "type": "object",
+      "properties": {
+        "closed": {
+          "type": "boolean"
+        },
+        "transferId": {
+          "type": "string"
+        }
+      }
+    },
     "v1ConversionQuote": {
       "type": "object",
       "properties": {

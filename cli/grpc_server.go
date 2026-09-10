@@ -132,6 +132,7 @@ func walletMethodAuthRequirement(fullMethod string) walletAuthRequirement {
 		walletv1.WalletPublicService_GetInteropCapability_FullMethodName,
 		walletv1.WalletPublicService_CreateInteropQuote_FullMethodName,
 		walletv1.WalletPublicService_GetInteropQuote_FullMethodName,
+		walletv1.WalletPublicService_CloseInteropQuote_FullMethodName,
 		walletv1.WalletPublicService_RequestInteropTransfer_FullMethodName,
 		walletv1.WalletPublicService_GetInteropTransfer_FullMethodName,
 		walletv1.WalletPublicService_EnsureWalletPublic_FullMethodName,

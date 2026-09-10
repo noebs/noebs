@@ -17,6 +17,7 @@ func registerInteropRoutes(router fiber.Router, h *GRPCUserHandler) {
 	router.Get("/interop", h.interopCapability)
 	router.Post("/interop/quotes", h.interopCreateQuote)
 	router.Get("/interop/quotes/:id", h.interopGetQuote)
+	router.Post("/interop/quotes/:id/close", h.interopCloseQuote)
 	router.Post("/interop/transfers", h.interopRequestTransfer)
 	router.Get("/interop/transfers", h.interopGetTransfer)
 	router.Get("/interop/transfers/:id", h.interopGetTransfer)
@@ -74,6 +75,14 @@ func (h *GRPCUserHandler) interopGetQuote(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, err)
 	}
 	response, err := h.Client.GetInteropQuote(ctx, &walletv1.GetInteropQuoteRequest{TenantId: tenant, QuoteId: c.Params("id")})
+	return interopHTTPResponse(c, response, err, http.StatusOK)
+}
+func (h *GRPCUserHandler) interopCloseQuote(c *fiber.Ctx) error {
+	ctx, tenant, err := h.interopContext(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	response, err := h.Client.CloseInteropQuote(ctx, &walletv1.GetInteropQuoteRequest{TenantId: tenant, QuoteId: c.Params("id")})
 	return interopHTTPResponse(c, response, err, http.StatusOK)
 }
 func (h *GRPCUserHandler) interopRequestTransfer(c *fiber.Ctx) error {

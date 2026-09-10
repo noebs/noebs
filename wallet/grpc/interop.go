@@ -81,6 +81,28 @@ func (s *Server) GetInteropQuote(ctx context.Context, r *walletv1.GetInteropQuot
 	}
 	return interopQuoteProto(q), nil
 }
+func (s *Server) CloseInteropQuote(ctx context.Context, r *walletv1.GetInteropQuoteRequest) (*walletv1.CloseInteropQuoteResponse, error) {
+	if r == nil {
+		return nil, status.Error(codes.InvalidArgument, "missing request")
+	}
+	tenant, owner, err := s.interopIdentity(ctx, r.TenantId)
+	if err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(r.QuoteId)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid quote_id")
+	}
+	closed, transferID, err := s.Service.Store.CloseInteropQuote(ctx, tenant, owner, id)
+	if err != nil {
+		return nil, interopError(err)
+	}
+	response := &walletv1.CloseInteropQuoteResponse{Closed: closed}
+	if transferID != uuid.Nil {
+		response.TransferId = transferID.String()
+	}
+	return response, nil
+}
 func (s *Server) RequestInteropTransfer(ctx context.Context, r *walletv1.RequestInteropTransferRequest) (*walletv1.InteropTransfer, error) {
 	if r == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")

@@ -11,6 +11,7 @@ service WalletPublicService {
   rpc GetInteropCapability(GetInteropCapabilityRequest) returns (InteropCapability) {}
   rpc CreateInteropQuote(CreateInteropQuoteRequest) returns (InteropQuote) {}
   rpc GetInteropQuote(GetInteropQuoteRequest) returns (InteropQuote) {}
+  rpc CloseInteropQuote(GetInteropQuoteRequest) returns (CloseInteropQuoteResponse) {}
   rpc RequestInteropTransfer(RequestInteropTransferRequest) returns (InteropTransfer) {}
   rpc GetInteropTransfer(GetInteropTransferRequest) returns (InteropTransfer) {}
   rpc GetWalletPublic(GetWalletPublicRequest) returns (GetWalletPublicResponse) {
@@ -534,6 +535,7 @@ message CreateInteropQuoteRequest {
  string idempotency_key = 7;
 }
 message GetInteropQuoteRequest { string tenant_id = 1; string quote_id = 2; }
+message CloseInteropQuoteResponse { bool closed = 1; string transfer_id = 2; }
 message InteropQuote {
  string quote_id = 1; string transfer_id = 2; string status = 3;
  string wallet_id = 4; string amount_minor = 5; string currency = 6;
