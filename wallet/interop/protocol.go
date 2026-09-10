@@ -157,6 +157,11 @@ func moneyMatches(m Money, amount int64, currency string) bool {
 }
 func zeroFee(m *Money, currency string) bool { return m == nil || moneyMatches(*m, 0, currency) }
 
+// FSP IDs are case-sensitive. The deployed native hub is configured as "Hub";
+// retain the explicit lower-case profile identities without folding arbitrary
+// participant IDs or rewriting the original callback headers.
+func isHubSource(source string) bool { return source == "Hub" || source == "hub" || source == "switch" }
+
 func ValidateQuote(q *walletstore.InteropQuote, s SDKState, fsp string, now time.Time) error {
 	var intent QuoteIntent
 	if err := json.Unmarshal(q.Request, &intent); err != nil {
@@ -235,7 +240,7 @@ func ValidateOutcome(q *walletstore.InteropQuote, t *walletstore.InteropTransfer
 	}
 	var terminal Fulfil
 	if authority == "sdk-loopback" && q.Direction == "IN" {
-		if state.FinalNotification == nil || (state.FinalNotificationSource != "switch" && state.FinalNotificationSource != "hub") {
+		if state.FinalNotification == nil || !isHubSource(state.FinalNotificationSource) {
 			return "", ErrProtocol
 		}
 		terminal = *state.FinalNotification
@@ -244,7 +249,7 @@ func ValidateOutcome(q *walletstore.InteropQuote, t *walletstore.InteropTransfer
 	} else {
 		terminal = state.Fulfil.Body
 		source := state.Fulfil.Headers["fspiop-source"]
-		if source != "switch" && source != "hub" && source != expected.PayeeFSP {
+		if !isHubSource(source) && source != expected.PayeeFSP {
 			return "", ErrProtocol
 		}
 		if state.Fulfil.Headers["fspiop-destination"] != "" && state.Fulfil.Headers["fspiop-destination"] != fsp {

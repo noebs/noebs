@@ -117,7 +117,7 @@ func TestProtocolReviewIncomingFinalityRequiresHubProvenance(t *testing.T) {
 	original.Protocol.Prepare = prepare
 	transfer := &walletstore.InteropTransfer{ID: q.TransferID, OriginalPrepare: reviewJSON(t, original), OriginalResponse: []byte(`{"transferState":"RESERVED"}`)}
 	for _, terminal := range []string{"COMMITTED", "ABORTED"} {
-		for _, source := range []string{"", "noebs", "bankone", "walletone", "switch", "hub"} {
+		for _, source := range []string{"", "noebs", "bankone", "walletone", "switch", "hub", "Hub", "HUB", "Switch"} {
 			t.Run(terminal+"/source="+source, func(t *testing.T) {
 				// The pinned SDK patch retains authenticated ingress source after
 				// the original SDK handler would otherwise discard its headers.
@@ -127,7 +127,7 @@ func TestProtocolReviewIncomingFinalityRequiresHubProvenance(t *testing.T) {
 					t.Fatal(err)
 				}
 				outcome, err := ValidateOutcome(q, transfer, state, "sdk-loopback", "bankone")
-				if source == "switch" || source == "hub" {
+				if source == "switch" || source == "hub" || source == "Hub" {
 					if err != nil || outcome != terminal {
 						t.Fatalf("correlated hub notification returned %q: %v", outcome, err)
 					}
