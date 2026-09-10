@@ -27,7 +27,8 @@ spec:
             - {name: RESERVE_NOTIFICATION, value: "true"}
             - {name: SEND_FINAL_NOTIFICATION_IF_REQUESTED, value: "false"}
             - {name: JWS_SIGN, value: "false"}
-            - {name: JWS_VALIDATE, value: "false"}
+            - {name: VALIDATE_INBOUND_JWS, value: "false"}
+            - {name: SUPPORTED_CURRENCIES, value: SDG}
             - {name: TEST_LISTEN_PORT, value: "4003"}
             - {name: ENABLE_BACKEND_EVENT_HANDLER, value: "false"}
             - {name: ENABLE_FSPIOP_EVENT_HANDLER, value: "false"}

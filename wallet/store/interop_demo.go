@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -66,7 +68,7 @@ func (s *Store) SeedInteropDemo(ctx context.Context, tenant, fsp string) error {
 			return ErrInteropConflict
 		}
 		if i == 0 {
-			_, err = s.PostSystemDebitDoubleEntry(ctx, DoubleEntryParams{TenantID: tenant, IdempotencyKey: "mojaloop-demo-opening-v1", DebitWalletID: treasury.ID, CreditWalletID: wallet.ID, Amount: 100000, Currency: "SDG", ReferenceType: "synthetic-opening", ReferenceID: "noebs-mojaloop-demo-v1", Description: "One-time synthetic SDG demonstration funds"})
+			err = s.ensureInteropDemoOpening(ctx, DoubleEntryParams{TenantID: tenant, IdempotencyKey: "mojaloop-demo-opening-v1", DebitWalletID: treasury.ID, CreditWalletID: wallet.ID, Amount: 100000, Currency: "SDG", ReferenceType: "synthetic-opening", ReferenceID: "noebs-mojaloop-demo-v1", Description: "One-time synthetic SDG demonstration funds"}, unit.ID)
 			if err != nil {
 				return err
 			}
@@ -79,4 +81,27 @@ func (s *Store) SeedInteropDemo(ctx context.Context, tenant, fsp string) error {
 		}
 	}
 	return nil
+}
+
+func (s *Store) ensureInteropDemoOpening(ctx context.Context, entry DoubleEntryParams, unitID int64) error {
+	tx, err := s.DB.BeginTxx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	existing, err := s.loadExistingEntries(ctx, tx, entry)
+	if err == nil {
+		if existing.DebitEntry.CurrencyUnitID != unitID || existing.CreditEntry.CurrencyUnitID != unitID {
+			return ErrInteropConflict
+		}
+		return tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err = tx.Rollback(); err != nil {
+		return err
+	}
+	_, err = s.PostSystemDebitDoubleEntry(ctx, entry)
+	return err
 }
