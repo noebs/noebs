@@ -1,0 +1,131 @@
+{
+  "homeTransactionId": "a3df9909-c694-40b8-ac1f-17852466f78c",
+  "transferId": "a3df9909-c694-40b8-ac1f-17852466f78c",
+  "from": {
+    "idType": "MSISDN",
+    "idValue": "249900000021",
+    "fspId": "noebs",
+    "displayName": "Synthetic noebs wallet 1"
+  },
+  "to": {
+    "idType": "MSISDN",
+    "idValue": "249900000001",
+    "fspId": "bankone"
+  },
+  "amount": "1.23",
+  "currency": "SDG",
+  "amountType": "SEND",
+  "transactionType": "TRANSFER",
+  "currentState": "WAITING_FOR_QUOTE_ACCEPTANCE",
+  "initiatedTimestamp": "2026-09-10T21:38:07.695Z",
+  "direction": "OUTBOUND",
+  "getPartiesRequest": {
+    "withCredentials": false,
+    "transitional": {
+      "clarifyTimeoutError": true
+    },
+    "method": "GET",
+    "baseURL": "http://172.30.250.1:4040",
+    "url": "/parties/MSISDN/249900000001",
+    "headers": {
+      "content-type": "application/vnd.interoperability.parties+json;version=2.0",
+      "date": "Thu, 10 Sep 2026 21:38:07 GMT",
+      "fspiop-source": "noebs",
+      "accept": "application/vnd.interoperability.parties+json;version=2",
+      "traceparent": "00-cc75e82289eef9e9b19aa40cbb08ff74-6b6b9a2edd422483-01"
+    },
+    "httpAgent": "[REDACTED]"
+  },
+  "getPartiesResponse": {
+    "body": {
+      "party": {
+        "name": "Synthetic bank customer",
+        "partyIdInfo": {
+          "fspId": "bankone",
+          "partyIdType": "MSISDN",
+          "partyIdentifier": "249900000001"
+        }
+      }
+    },
+    "headers": {
+      "host": "10.43.163.73:4000",
+      "accept-encoding": "gzip, deflate",
+      "user-agent": "python-httpx/0.28.1",
+      "content-type": "application/vnd.interoperability.parties+json;version=1.1",
+      "date": "Thu, 10 Sep 2026 21:38:09 GMT",
+      "fspiop-source": "bankone",
+      "fspiop-destination": "noebs",
+      "content-length": 134
+    }
+  },
+  "quoteId": "01a08d41-b992-7e96-befb-7c2f86fb53e9",
+  "quoteRequest": {
+    "body": {
+      "quoteId": "01a08d41-b992-7e96-befb-7c2f86fb53e9",
+      "transactionId": "a3df9909-c694-40b8-ac1f-17852466f78c",
+      "amountType": "SEND",
+      "amount": {
+        "currency": "SDG",
+        "amount": "1.23"
+      },
+      "expiration": "2026-09-10T21:43:09.938Z",
+      "payer": {
+        "partyIdInfo": {
+          "partyIdType": "MSISDN",
+          "partyIdentifier": "249900000021",
+          "fspId": "noebs"
+        },
+        "name": "Synthetic noebs wallet 1"
+      },
+      "payee": {
+        "partyIdInfo": {
+          "partyIdType": "MSISDN",
+          "partyIdentifier": "249900000001",
+          "fspId": "bankone"
+        }
+      },
+      "transactionType": {
+        "scenario": "TRANSFER",
+        "initiator": "PAYER",
+        "initiatorType": "CONSUMER"
+      }
+    },
+    "headers": {
+      "content-type": "application/vnd.interoperability.quotes+json;version=2.0",
+      "date": "Thu, 10 Sep 2026 21:38:09 GMT",
+      "fspiop-source": "noebs",
+      "fspiop-destination": "bankone",
+      "accept": "application/vnd.interoperability.quotes+json;version=2",
+      "traceparent": "00-fbf68bd8a0141e3a252a075077057ac8-cee3a98b5639de42-01"
+    }
+  },
+  "quoteResponse": {
+    "headers": {
+      "host": "10.43.163.73:4000",
+      "content-type": "application/vnd.interoperability.quotes+json;version=1.1",
+      "date": "Thu, 10 Sep 2026 21:38:11 GMT",
+      "fspiop-source": "bankone",
+      "fspiop-destination": "noebs",
+      "traceparent": "00-6f0947c65ab0fdba3d2b688a42a300e7-a4c3972244b32bbd-00",
+      "tracestate": "mojaloop=eyJzcGFuSWQiOiJhNGMzOTcyMjQ0YjMyYmJkIn0=",
+      "user-agent": "axios/1.13.5",
+      "accept-encoding": "gzip, compress, deflate, br",
+      "content-length": 1190
+    },
+    "body": {
+      "condition": "bBSX1cLma9Z9cT1cS6DIi43WLcdCnlUuDQ3DvjHdmSA",
+      "expiration": "2026-09-10T21:40:11.203Z",
+      "ilpPacket": "AYIC0gAAAAAAAAB7HWcuYmFua29uZS5tc2lzZG4uMjQ5OTAwMDAwMDAxggKoZXlKaGJXOTFiblFpT25zaVlXMXZkVzUwSWpvaU1TNHlNeUlzSW1OMWNuSmxibU41SWpvaVUwUkhJbjBzSW1WNGNHbHlZWFJwYjI0aU9pSXlNREkyTFRBNUxURXdWREl4T2pRd09qRXhMakl3TTFvaUxDSndZWGxsWlNJNmV5SndZWEowZVVsa1NXNW1ieUk2ZXlKbWMzQkpaQ0k2SW1KaGJtdHZibVVpTENKd1lYSjBlVWxrVkhsd1pTSTZJazFUU1ZORVRpSXNJbkJoY25SNVNXUmxiblJwWm1sbGNpSTZJakkwT1Rrd01EQXdNREF3TVNKOWZTd2ljR0Y1WlhJaU9uc2libUZ0WlNJNklsTjViblJvWlhScFl5QnViMlZpY3lCM1lXeHNaWFFnTVNJc0luQmhjblI1U1dSSmJtWnZJanA3SW1aemNFbGtJam9pYm05bFluTWlMQ0p3WVhKMGVVbGtWSGx3WlNJNklrMVRTVk5FVGlJc0luQmhjblI1U1dSbGJuUnBabWxsY2lJNklqSTBPVGt3TURBd01EQXlNU0o5ZlN3aWNYVnZkR1ZKWkNJNklqQXhZVEE0WkRReExXSTVPVEl0TjJVNU5pMWlaV1ppTFRkak1tWTRObVppTlRObE9TSXNJblJ5WVc1ellXTjBhVzl1U1dRaU9pSmhNMlJtT1Rrd09TMWpOamswTFRRd1lqZ3RZV014WmkweE56ZzFNalEyTm1ZM09HTWlMQ0owY21GdWMyRmpkR2x2YmxSNWNHVWlPbnNpYVc1cGRHbGhkRzl5SWpvaVVFRlpSVklpTENKcGJtbDBhV0YwYjNKVWVYQmxJam9pUTA5T1UxVk5SVklpTENKelkyVnVZWEpwYnlJNklsUlNRVTVUUmtWU0luMTkA",
+      "payeeReceiveAmount": {
+        "amount": "1.23",
+        "currency": "SDG"
+      },
+      "transferAmount": {
+        "amount": "1.23",
+        "currency": "SDG"
+      }
+    },
+    "originalIso20022QuoteResponse": {}
+  },
+  "quoteResponseSource": "bankone"
+}

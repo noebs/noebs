@@ -12,6 +12,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - {name: DFSP_ID, value: noebs}
+            - {name: RESOURCE_VERSIONS, value: "parties=1.1,participants=1.1,quotes=1.1,transfers=1.1,bulkTransfers=1.1,bulkQuotes=1.1,transactionRequests=1.1,authorizations=1.1,fxQuotes=2.0,fxTransfers=2.0"}
             - {name: ID_GENERATOR, value: '{"type":"uuid"}'}
             - {name: PEER_ENDPOINT, value: "172.30.250.1:4040"}
             - {name: BACKEND_ENDPOINT, value: "127.0.0.1:4002"}

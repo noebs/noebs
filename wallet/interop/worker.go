@@ -147,6 +147,9 @@ func (w *Worker) quote(ctx context.Context, q *walletstore.InteropQuote) {
 		return
 	}
 	fields["transferId"], _ = json.Marshal(q.TransferID.String())
+	// The pinned SDK requires the DFSP correlation ID as well as transferId.
+	// Both derive from the immutable SQL obligation, including all retries.
+	fields["homeTransactionId"] = fields["transferId"]
 	raw, _ := json.Marshal(fields)
 	state, response, err := w.sdk(ctx, http.MethodPost, "/transfers", raw)
 	if err == nil {
@@ -268,6 +271,7 @@ func (w *Worker) replayReservation(ctx context.Context, q *walletstore.InteropQu
 	r.Header.Set("FSPIOP-Source", original.Protocol.Prepare.PayerFSP)
 	r.Header.Set("FSPIOP-Destination", w.FSPID)
 	r.Header.Set("Accept", "application/vnd.interoperability.transfers+json;version=1.1")
+	r.Header.Set("Content-Type", "application/vnd.interoperability.transfers+json;version=1.1")
 	r.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
 	response, err := w.client.Do(r)
 	if err != nil {

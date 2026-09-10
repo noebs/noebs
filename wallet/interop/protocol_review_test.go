@@ -35,7 +35,7 @@ func reviewQuoteFixture(t *testing.T, copiedDisplayName bool) (*walletstore.Inte
 	response := QuoteResponse{TransferAmount: Money{Amount: "1.01", Currency: "SDG"}, PayeeReceiveAmount: &Money{Amount: "1.01", Currency: "SDG"}, Expiration: "2030-01-01T00:05:00.000Z", ILPPacket: reviewILPPacket, Condition: reviewCondition}
 	id := uuid.MustParse("00000000-0000-4000-8000-000000000001")
 	wire := map[string]any{
-		"transferId": id.String(), "quoteId": "00000000-0000-4000-8000-000000000002", "currentState": "WAITING_FOR_QUOTE_ACCEPTANCE",
+		"homeTransactionId": id.String(), "transferId": id.String(), "quoteId": "00000000-0000-4000-8000-000000000002", "currentState": "WAITING_FOR_QUOTE_ACCEPTANCE",
 		"from": from, "to": to,
 		"quoteRequest":  Envelope[json.RawMessage]{Headers: map[string]string{"fspiop-source": "noebs", "fspiop-destination": "bankone"}, Body: json.RawMessage(reviewNativeQuote)},
 		"quoteResponse": Envelope[QuoteResponse]{Headers: map[string]string{"fspiop-source": "bankone", "fspiop-destination": "noebs"}, Body: response},
@@ -82,6 +82,7 @@ func TestProtocolReviewQuoteIdentityBinding(t *testing.T) {
 	}{
 		{"different payer alias", func(s *SDKState) { s.From.IDValue = "249910000099" }},
 		{"different payer participant", func(s *SDKState) { s.From.FSPID = "walletone" }},
+		{"different DFSP correlation identifier", func(s *SDKState) { s.HomeTransactionID = uuid.NewString() }},
 		{"different native quote identifier", func(s *SDKState) { s.QuoteID = uuid.NewString() }},
 		{"native quote from another transaction", func(s *SDKState) {
 			var fields map[string]any

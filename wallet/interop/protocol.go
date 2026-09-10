@@ -93,8 +93,8 @@ type Fulfil struct {
 	CompletedTimestamp string `json:"completedTimestamp,omitempty"`
 }
 type Envelope[T any] struct {
-	Headers map[string]string `json:"headers"`
-	Body    T                 `json:"body"`
+	Headers ProtocolHeaders `json:"headers"`
+	Body    T               `json:"body"`
 }
 type NativeParty struct {
 	Name string `json:"name"`
@@ -113,6 +113,7 @@ type PartiesResponse struct {
 	Party NativeParty `json:"party"`
 }
 type SDKState struct {
+	HomeTransactionID       string                    `json:"homeTransactionId"`
 	TransferID              string                    `json:"transferId"`
 	QuoteID                 string                    `json:"quoteId"`
 	CurrentState            string                    `json:"currentState"`
@@ -151,7 +152,7 @@ func ValidateQuote(q *walletstore.InteropQuote, s SDKState, fsp string, now time
 	if err := json.Unmarshal(q.Request, &intent); err != nil {
 		return ErrProtocol
 	}
-	if s.TransferID != q.TransferID.String() || s.CurrentState != "WAITING_FOR_QUOTE_ACCEPTANCE" || s.To.IDType != "MSISDN" || s.To.IDValue != intent.To.IDValue || s.To.FSPID == "" || s.To.FSPID == fsp || s.From != intent.From || intent.From.FSPID != fsp {
+	if s.HomeTransactionID != q.TransferID.String() || s.TransferID != q.TransferID.String() || s.CurrentState != "WAITING_FOR_QUOTE_ACCEPTANCE" || s.To.IDType != "MSISDN" || s.To.IDValue != intent.To.IDValue || s.To.FSPID == "" || s.To.FSPID == fsp || s.From != intent.From || intent.From.FSPID != fsp {
 		return ErrProtocol
 	}
 	party := s.GetPartiesResponse

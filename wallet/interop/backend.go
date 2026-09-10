@@ -44,9 +44,9 @@ type IncomingQuote struct {
 type IncomingPrepare struct {
 	TransferID string `json:"transferId"`
 	Protocol   struct {
-		Source  string            `json:"source"`
-		Headers map[string]string `json:"headers"`
-		Prepare Prepare           `json:"prepare"`
+		Source  string          `json:"source"`
+		Headers ProtocolHeaders `json:"headers"`
+		Prepare Prepare         `json:"prepare"`
 		Quote   struct {
 			Request    json.RawMessage `json:"request"`
 			Response   QuoteResponse   `json:"mojaloopResponse"`
@@ -101,21 +101,26 @@ func writeJSON(rw http.ResponseWriter, code int, value any) {
 func backendError(rw http.ResponseWriter, err error) {
 	code := http.StatusServiceUnavailable
 	description := "backend_unavailable"
+	schemeCode := "2001"
 	switch {
 	case errors.Is(err, ErrProtocol), errors.Is(err, walletstore.ErrInteropInvalid):
 		code = http.StatusBadRequest
 		description = "invalid_transfer"
+		schemeCode = "3100"
 	case errors.Is(err, walletstore.ErrInteropNotFound), errors.Is(err, walletstore.ErrWalletNotFound):
 		code = http.StatusNotFound
 		description = "party_or_transfer_not_found"
+		schemeCode = "3204"
 	case errors.Is(err, walletstore.ErrInteropConflict):
 		code = http.StatusConflict
 		description = "conflicting_transfer"
+		schemeCode = "3100"
 	case errors.Is(err, walletstore.ErrInteropQuoteExpired), errors.Is(err, walletstore.ErrInteropDisabled), errors.Is(err, walletstore.ErrWalletInactive), errors.Is(err, walletstore.ErrTransactionLimitNotFound):
 		code = http.StatusUnprocessableEntity
 		description = "transfer_not_eligible"
+		schemeCode = "3100"
 	}
-	writeJSON(rw, code, map[string]string{"message": description})
+	writeJSON(rw, code, map[string]string{"statusCode": schemeCode, "message": description})
 }
 func (w *Worker) party(rw http.ResponseWriter, r *http.Request) {
 	if r.PathValue("type") != "MSISDN" || !msisdn.MatchString(r.PathValue("identifier")) {
