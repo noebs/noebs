@@ -71,6 +71,7 @@ func publicAppConfig(cfg ebs_fields.NoebsConfig) (appConfigResponse, error) {
 			Operations: []appTransactionAuthorizationOperationConfig{
 				{Operation: transactionauth.OperationWalletP2P, Method: http.MethodPost, Path: "/wallet/p2p"},
 				{Operation: transactionauth.OperationWalletWithdrawal, Method: http.MethodPost, Path: "/wallet/withdrawals"},
+				{Operation: transactionauth.OperationWalletInterop, Method: http.MethodPost, Path: "/wallet/interop/transfers"},
 			},
 		}
 	}

@@ -121,6 +121,21 @@ func parse(
 	var message proto.Message
 	var idempotencyKey string
 	switch operation {
+	case transactionauth.OperationWalletInterop:
+		request := &walletv1.RequestInteropTransferRequest{}
+		if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(body, request); err != nil {
+			return Canonical{}, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+		}
+		request.QuoteId, err = canonicalUUID(request.QuoteId)
+		if err != nil {
+			return Canonical{}, err
+		}
+		if request.IdempotencyKey == "" || len(request.IdempotencyKey) > 256 || strings.TrimSpace(request.IdempotencyKey) != request.IdempotencyKey {
+			return Canonical{}, ErrInvalidIdempotencyKey
+		}
+		request.TenantId = tenantID
+		idempotencyKey = request.IdempotencyKey
+		message = request
 	case transactionauth.OperationWalletP2P:
 		if hasAny(fields, "from_owner_type", "fromOwnerType", "from_owner_id", "fromOwnerId") {
 			return Canonical{}, ErrForbiddenIdentityField
@@ -155,6 +170,8 @@ func parse(
 	digest := sha256.Sum256(encoded)
 	publicMessage := proto.Clone(message)
 	switch request := publicMessage.(type) {
+	case *walletv1.RequestInteropTransferRequest:
+		request.TenantId = ""
 	case *walletv1.RequestP2PTransferRequest:
 		request.TenantId = ""
 	case *walletv1.RequestWithdrawalRequest:

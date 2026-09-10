@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: noebs-config}
+data:
+  wallet-worker.service.yaml: |
+    noebs:
+      service_role: wallet-worker
+      otel_service_name: wallet-worker
+      db_driver: pgx
+      temporal_client_id: noebs-temporal-wallet-worker
+      interop_tenant: tenant-mojaloop
+      interop_fsp_id: noebs
+  wallet-ledger-migrate.service.yaml: |
+    noebs:
+      service_role: wallet-ledger-migrate
+      otel_service_name: wallet-ledger-migrate
+      db_driver: pgx
+      interop_tenant: tenant-mojaloop
+      interop_fsp_id: noebs
+      interop_demo_seed: true

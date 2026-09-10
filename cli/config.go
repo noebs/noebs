@@ -734,6 +734,11 @@ func initConfig() {
 				if err := storeSvc.ProvisionTenantCatalog(migrateCtx, catalog); err != nil {
 					logrusLogger.Fatalf("error provisioning tenant catalog: %v", err)
 				}
+				if noebsConfig.InteropDemoSeed {
+					if err := walletstore.New(database).SeedInteropDemo(migrateCtx, noebsConfig.InteropTenant, noebsConfig.InteropFSPID); err != nil {
+						logrusLogger.Fatalf("error seeding isolated Mojaloop demo: %v", err)
+					}
+				}
 			}
 		} else {
 			logrusLogger.Printf("Migrations are owned by service-specific migration roles; current role is %s", role)

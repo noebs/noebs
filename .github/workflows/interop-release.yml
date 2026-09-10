@@ -1,0 +1,34 @@
+name: Immutable interop release
+on:
+  push:
+    branches: [feat/mojaloop-interop]
+    paths-ignore: [docs/**, deploy/kubernetes/**]
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: noebs-interop-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Authenticate registry
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Publish immutable noebs image
+        run: scripts/publish-alpha-image.sh "$GITHUB_SHA" "$RUNNER_TEMP/noebs-receipt.json"
+      - name: Publish pinned Mojaloop SDK profile
+        run: scripts/publish-interop-sdk.sh "$GITHUB_SHA" "$RUNNER_TEMP/sdk-receipt.json"
+      - name: Preserve release receipts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: interop-release-${{ github.sha }}
+          path: ${{ runner.temp }}/*-receipt.json
+          if-no-files-found: error
+      - name: Remove registry credentials
+        if: always()
+        run: docker logout ghcr.io

@@ -33,6 +33,7 @@ func NewGRPCUserHandler(client walletv1.WalletPublicServiceClient, cfg ebs_field
 }
 
 func RegisterGRPCUserRoutes(router fiber.Router, handler *GRPCUserHandler) {
+	registerInteropRoutes(router, handler)
 	router.Get("/methods", handler.ListPaymentMethods)
 	router.Get("/currencies", handler.ListCurrencies)
 	router.Get("/currencies/:code", handler.GetCurrency)

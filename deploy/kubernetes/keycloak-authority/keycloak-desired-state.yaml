@@ -166,6 +166,36 @@ organizations:
           - wallet:rates:write
           - wallet:workflow:approve
           - wallet:workflow:reject
+  - alias: tenant-mojaloop
+    name: Mojaloop Synthetic Demo
+    attributes: {}
+    groups:
+      - name: user
+        description: Tenant users
+        attributes: {}
+        client_roles:
+          - user
+      - name: backoffice
+        description: Tenant back-office operators
+        attributes: {}
+        client_roles:
+          - backoffice
+          - reporting:read
+          - wallet:read
+          - wallet:audit:read
+      - name: tenant-admin
+        description: Tenant administrators
+        attributes: {}
+        client_roles:
+          - tenant-admin
+          - reporting:read
+          - wallet:read
+          - wallet:audit:read
+          - wallet:manual:create
+          - wallet:fees:write
+          - wallet:rates:write
+          - wallet:workflow:approve
+          - wallet:workflow:reject
   - alias: tenant-sandbox
     name: Tenant Sandbox
     attributes: {}

@@ -154,6 +154,12 @@ func TestAPIGatewayCatalogIsExactOIDCCutoverSurface(t *testing.T) {
 		gatewayRouteKey(http.MethodPost, "/wallet/p2p"):                                               gatewayAuthMobileUser,
 		gatewayRouteKey(http.MethodPost, "/wallet/withdrawals"):                                       gatewayAuthMobileUser,
 		gatewayRouteKey(http.MethodGet, "/backoffice/assets/*"):                                       gatewayAuthPublic,
+		gatewayRouteKey(http.MethodGet, "/wallet/interop"):                                            gatewayAuthMobileUser,
+		gatewayRouteKey(http.MethodPost, "/wallet/interop/quotes"):                                    gatewayAuthMobileUser,
+		gatewayRouteKey(http.MethodGet, "/wallet/interop/quotes/:id"):                                 gatewayAuthMobileUser,
+		gatewayRouteKey(http.MethodPost, "/wallet/interop/transfers"):                                 gatewayAuthMobileUser,
+		gatewayRouteKey(http.MethodGet, "/wallet/interop/transfers"):                                  gatewayAuthMobileUser,
+		gatewayRouteKey(http.MethodGet, "/wallet/interop/transfers/:id"):                              gatewayAuthMobileUser,
 	}
 
 	for _, spec := range gatewayProxyRouteSpecs() {
@@ -167,8 +173,9 @@ func TestAPIGatewayCatalogIsExactOIDCCutoverSurface(t *testing.T) {
 			t.Errorf("%s auth = %d, want %d", key, spec.auth, want)
 		}
 		wantTransaction := map[string]transactionauth.Operation{
-			gatewayRouteKey(http.MethodPost, "/wallet/p2p"):         transactionauth.OperationWalletP2P,
-			gatewayRouteKey(http.MethodPost, "/wallet/withdrawals"): transactionauth.OperationWalletWithdrawal,
+			gatewayRouteKey(http.MethodPost, "/wallet/p2p"):               transactionauth.OperationWalletP2P,
+			gatewayRouteKey(http.MethodPost, "/wallet/withdrawals"):       transactionauth.OperationWalletWithdrawal,
+			gatewayRouteKey(http.MethodPost, "/wallet/interop/transfers"): transactionauth.OperationWalletInterop,
 		}[key]
 		if spec.transaction != wantTransaction {
 			t.Errorf("%s transaction = %q, want %q", key, spec.transaction, wantTransaction)

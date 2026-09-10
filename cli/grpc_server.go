@@ -129,6 +129,11 @@ func walletMethodAuthRequirement(fullMethod string) walletAuthRequirement {
 	case walletv1.WalletAdminService_RenderWalletAdmin_FullMethodName:
 		return walletAuthAdmin
 	case walletv1.WalletPublicService_GetWalletPublic_FullMethodName,
+		walletv1.WalletPublicService_GetInteropCapability_FullMethodName,
+		walletv1.WalletPublicService_CreateInteropQuote_FullMethodName,
+		walletv1.WalletPublicService_GetInteropQuote_FullMethodName,
+		walletv1.WalletPublicService_RequestInteropTransfer_FullMethodName,
+		walletv1.WalletPublicService_GetInteropTransfer_FullMethodName,
 		walletv1.WalletPublicService_EnsureWalletPublic_FullMethodName,
 		walletv1.WalletPublicService_ListPaymentMethodsPublic_FullMethodName,
 		walletv1.WalletPublicService_ListWalletTransactionsPublic_FullMethodName,

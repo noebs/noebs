@@ -17,6 +17,7 @@ import (
 	"github.com/adonese/noebs/internal/eventing"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
+	walletinterop "github.com/adonese/noebs/wallet/interop"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletworker "github.com/adonese/noebs/wallet/worker"
@@ -36,6 +37,7 @@ var dashService dashboard.Service
 var walletService *wallet.Service
 var pspWebhookStore *walletstore.Store
 var walletWorker *walletworker.Runner
+var interopWorker *walletinterop.Worker
 var ebsEventPublisher *eventing.OutboxPublisher
 var adminReportingProjector *eventing.AdminReportingProjector
 var walletPSPRegistry *walletpsp.Registry
@@ -173,6 +175,16 @@ func runMain() error {
 }
 
 func runService(ctx context.Context, role serviceRole) error {
+	if role == serviceRoleWalletWorker && noebsConfig.InteropTenant != "" {
+		var err error
+		interopWorker, err = walletinterop.NewWorker(ctx, walletService.Store, noebsConfig.InteropTenant, noebsConfig.InteropFSPID)
+		if err != nil {
+			return fmt.Errorf("configure interop worker: %w", err)
+		}
+		if _, err = interopWorker.Start(ctx); err != nil {
+			return fmt.Errorf("start interop worker: %w", err)
+		}
+	}
 	if role.startsBackgroundHealth() {
 		if _, err := startBackgroundHealthServer(ctx, role, noebsConfig.Port); err != nil {
 			return fmt.Errorf("start background health server: %w", err)

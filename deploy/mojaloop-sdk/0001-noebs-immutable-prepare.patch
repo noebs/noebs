@@ -1,0 +1,126 @@
+diff --git a/modules/api-svc/src/InboundServer/handlers.js b/modules/api-svc/src/InboundServer/handlers.js
+index 2e4d51d..09503e8 100644
+--- a/modules/api-svc/src/InboundServer/handlers.js
++++ b/modules/api-svc/src/InboundServer/handlers.js
+@@ -735,7 +735,7 @@ const patchTransfersById = async (ctx) => {
+     (async () => {
+         try {
+             // sends notification to the payee fsp
+-            const response = await model.sendNotificationToPayee(req.data, idValue);
++            const response = await model.sendNotificationToPayee(req.data, idValue, req.headers);
+ 
+             // log the result
+             ctx.state.logger.isDebugEnabled && ctx.state.logger.push({ response }).
+diff --git a/modules/api-svc/src/OutboundServer/index.js b/modules/api-svc/src/OutboundServer/index.js
+index e6f1fc6..2ed6040 100644
+--- a/modules/api-svc/src/OutboundServer/index.js
++++ b/modules/api-svc/src/OutboundServer/index.js
+@@ -145,7 +145,7 @@ class OutboundServer extends EventEmitter {
+         await this._eventProducer?.init();
+         await _initialize;
+         await this._api.start();
+-        await new Promise((resolve) => this._server.listen(port, resolve));
++        await new Promise((resolve) => this._server.listen(port, '127.0.0.1', resolve));
+         this._logger.isInfoEnabled && this._logger.info(`Serving outbound API on port ${this._conf.outbound.port}`);
+     }
+ 
+diff --git a/modules/api-svc/src/lib/model/InboundTransfersModel.js b/modules/api-svc/src/lib/model/InboundTransfersModel.js
+index 99ab64f..ee8236f 100644
+--- a/modules/api-svc/src/lib/model/InboundTransfersModel.js
++++ b/modules/api-svc/src/lib/model/InboundTransfersModel.js
+@@ -234,6 +234,7 @@ class InboundTransfersModel {
+ 
+         try {
+             const internalForm = shared.mojaloopQuoteRequestToInternal(quoteRequest);
++            internalForm.noebsProtocol = { source: sourceFspId, request: quoteRequest };
+ 
+             // Check the transactionRequestId exists in cache
+             if(quoteRequest.transactionRequestId) {
+@@ -468,6 +469,7 @@ class InboundTransfersModel {
+ 
+             // project the incoming transfer prepare into an internal transfer request
+             const internalForm = shared.mojaloopPrepareToInternalTransfer(prepareRequest, quote, this._ilp, this._checkIlp);
++            internalForm.noebsProtocol = { source: sourceFspId, headers, prepare: prepareRequest, quote };
+ 
+             // make a call to the backend to inform it of the incoming transfer
+             const response = await this._backendRequests.postTransfers(internalForm);
+@@ -542,7 +544,7 @@ class InboundTransfersModel {
+                                         await this._cache.set(cacheKey, true, 60);
+                                         // Send notification to payee
+                                         this._logger.isInfoEnabled && this._logger.push({ transferId }).info('Received transfer callback for GET /transfers/{ID} request, sending notification to payee');
+-                                        await this.sendNotificationToPayee(message.data.body, transferId);
++                                        await this.sendNotificationToPayee(message.data.body, transferId, message.data.headers);
+                                         break;
+                                     }
+                                 } catch (err) {
+@@ -598,8 +600,8 @@ class InboundTransfersModel {
+                 note: response.note,
+             };
+ 
+-            let fulfilment;
+-            if (this._dfspId === response.to.fspId) {
++            let fulfilment = response.fulfilment;
++            if (!fulfilment && this._dfspId === response.to.fspId) {
+                 fulfilment = this._ilp.getResponseIlp(ilpPaymentData).fulfilment;
+             }
+ 
+@@ -1107,7 +1109,7 @@ class InboundTransfersModel {
+     /**
+     * Forwards Switch notification for fulfiled transfer to the DFSP backend, when acting as a payee
+     */
+-    async sendNotificationToPayee(body, transferId) {
++    async sendNotificationToPayee(body, transferId, headers) {
+         const log = this._logger.child({ transferId });
+         try {
+             // load any cached state for this transfer e.g. quote request/response etc...
+@@ -1118,6 +1120,9 @@ class InboundTransfersModel {
+                 this.data = {};
+             }
+ 
++            // noebs: retain provenance passed by the restricted native ingress.
++            this.data.transferId = transferId;
++            this.data.finalNotificationSource = headers?.['fspiop-source'];
+             // tag the final notification body on to the state
+             // According to the backend api it expects extensionList to be an array (see CSI-1680)
+             this.data.finalNotification = {
+diff --git a/modules/api-svc/src/lib/model/OutboundTransfersModel.js b/modules/api-svc/src/lib/model/OutboundTransfersModel.js
+index 447ba50..e660602 100644
+--- a/modules/api-svc/src/lib/model/OutboundTransfersModel.js
++++ b/modules/api-svc/src/lib/model/OutboundTransfersModel.js
+@@ -1024,6 +1024,14 @@ class OutboundTransfersModel {
+                 latencyTimerDone = this.metrics.transferLatency.startTimer();
+                 const headers = this.#createOtelHeaders();
+ 
++                // noebs profile: bind and durably save the exact immutable
++                // prepare before sending any bytes. Recheck after persistence.
++                const profile = require('./lib/noebs-profile');
++                profile.guardPrepare(this.data, prepare);
++                this.data.noebsPrepare = prepare;
++                await this._save();
++                profile.guardPrepare(this.data, prepare);
++
+                 let res;
+                 if (this._apiType  === API_TYPES.iso20022) {
+                     // Pass in quote request as context if needed for ISO20022 message generation
+@@ -1161,7 +1169,7 @@ class OutboundTransfersModel {
+             },
+             ilpPacket: this.data.quoteResponse.body.ilpPacket,
+             condition: this.data.quoteResponse.body.condition,
+-            expiration: this._getExpirationTimestamp(this.data.prepareExpirySeconds || this._expirySeconds),
++            expiration: this.data.quoteResponse.body.expiration,
+         };
+ 
+         if(this._useQuoteSourceFSPAsTransferPayeeFSP) {
+diff --git a/modules/api-svc/src/lib/model/TransfersModel.js b/modules/api-svc/src/lib/model/TransfersModel.js
+index 97a16ec..596836d 100644
+--- a/modules/api-svc/src/lib/model/TransfersModel.js
++++ b/modules/api-svc/src/lib/model/TransfersModel.js
+@@ -60,6 +60,8 @@ function requestAction(requests, { /* transferId - is not used here */ fspId, tr
+     if ( !(transfer  && typeof(transfer) === 'object') ) {
+         throw new Error('TransfersModel.requestAction args requires \'transfer\' to be specified');
+     }
++    // noebs: last guard at the actual native send, including exact replays.
++    require('./lib/noebs-profile').guardNativePrepare(transfer, fspId);
+     return requests.postTransfers(transfer, fspId);
+ }
+ 

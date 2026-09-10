@@ -171,6 +171,17 @@ func validateRoleDatabaseConfig(role serviceRole, dbURL, driver string) error {
 }
 
 func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	if cfg.InteropDemoSeed && (role != serviceRoleWalletLedgerMigrate || cfg.InteropTenant != "tenant-mojaloop" || cfg.InteropFSPID != "noebs") {
+		return errors.New("interop demo seed requires the isolated tenant-mojaloop migration role and noebs participant")
+	}
+	if cfg.InteropTenant != "" || cfg.InteropFSPID != "" {
+		if (role != serviceRoleWalletWorker && !cfg.InteropDemoSeed) || cfg.InteropTenant == "" || cfg.InteropFSPID == "" {
+			return errors.New("interop requires explicit tenant and FSP on wallet-worker only")
+		}
+		if _, err := store.ValidateTenantID(cfg.InteropTenant); err != nil {
+			return err
+		}
+	}
 	if err := validateDatabaseTransportRuntimeConfig(role, cfg); err != nil {
 		return err
 	}

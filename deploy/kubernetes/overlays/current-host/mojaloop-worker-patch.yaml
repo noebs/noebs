@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: wallet-worker}
+spec:
+  strategy: {type: Recreate}
+  template:
+    spec:
+      containers:
+        - name: wallet-worker
+        - name: mojaloop-sdk
+          image: noebs-mojaloop-sdk:profile
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: DFSP_ID, value: noebs}
+            - {name: ID_GENERATOR, value: '{"type":"uuid"}'}
+            - {name: PEER_ENDPOINT, value: "172.30.250.1:4040"}
+            - {name: BACKEND_ENDPOINT, value: "127.0.0.1:4002"}
+            - {name: CACHE_URL, value: "redis://noebs-mojaloop-redis:6379"}
+            - name: ILP_SECRET
+              valueFrom: {secretKeyRef: {name: noebs-mojaloop-sdk, key: ilp-secret}}
+            - {name: AUTO_ACCEPT_QUOTES, value: "false"}
+            - {name: AUTO_ACCEPT_PARTY, value: "true"}
+            - {name: CHECK_ILP, value: "true"}
+            - {name: ALLOW_TRANSFER_WITHOUT_QUOTE, value: "false"}
+            - {name: REJECT_TRANSFERS_ON_EXPIRED_QUOTES, value: "true"}
+            - {name: EXPIRY_SECONDS, value: "300"}
+            - {name: RESERVE_NOTIFICATION, value: "true"}
+            - {name: SEND_FINAL_NOTIFICATION_IF_REQUESTED, value: "false"}
+            - {name: JWS_SIGN, value: "false"}
+            - {name: JWS_VALIDATE, value: "false"}
+            - {name: TEST_LISTEN_PORT, value: "4003"}
+            - {name: ENABLE_BACKEND_EVENT_HANDLER, value: "false"}
+            - {name: ENABLE_FSPIOP_EVENT_HANDLER, value: "false"}
+            - {name: LOG_LEVEL, value: error}
+          ports: [{name: fspiop, containerPort: 4000}]
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          readinessProbe:
+            exec:
+              command: [node, -e, "require('http').get('http://127.0.0.1:4001/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}

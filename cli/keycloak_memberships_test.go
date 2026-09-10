@@ -466,6 +466,7 @@ func (f *cliMembershipFake) writeCount() int {
 func cliMembershipOrganizations() []map[string]any {
 	return []map[string]any{
 		{"id": "org-tenant-cutover", "alias": "tenant-cutover", "name": "Tenant Cutover", "enabled": true, "attributes": map[string][]string{"noebs.managed": {"true"}}},
+		{"id": "org-tenant-mojaloop", "alias": "tenant-mojaloop", "name": "Mojaloop Synthetic Demo", "enabled": true, "attributes": map[string][]string{"noebs.managed": {"true"}}},
 		{"id": "org-tenant-sandbox", "alias": "tenant-sandbox", "name": "Tenant Sandbox", "enabled": true, "attributes": map[string][]string{"noebs.managed": {"true"}}},
 	}
 }

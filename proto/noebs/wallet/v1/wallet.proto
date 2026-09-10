@@ -8,6 +8,11 @@ import "google/protobuf/struct.proto";
 option go_package = "github.com/adonese/noebs/gen/proto/noebs/wallet/v1;walletv1";
 
 service WalletPublicService {
+  rpc GetInteropCapability(GetInteropCapabilityRequest) returns (InteropCapability) {}
+  rpc CreateInteropQuote(CreateInteropQuoteRequest) returns (InteropQuote) {}
+  rpc GetInteropQuote(GetInteropQuoteRequest) returns (InteropQuote) {}
+  rpc RequestInteropTransfer(RequestInteropTransferRequest) returns (InteropTransfer) {}
+  rpc GetInteropTransfer(GetInteropTransferRequest) returns (InteropTransfer) {}
   rpc GetWalletPublic(GetWalletPublicRequest) returns (GetWalletPublicResponse) {
     option (google.api.http) = {get: "/wallet/{wallet_id}"};
   }
@@ -517,4 +522,30 @@ message ListFXSourcesPublicRequest {
 
 message ListFXSourcesPublicResponse {
   repeated FXSource sources = 1;
+}
+
+// Exact money is serialized as decimal strings. No binary floating point crosses
+// this boundary. Unit versions identify the scale agreed by the wallet ledger.
+message GetInteropCapabilityRequest { string tenant_id = 1; }
+message InteropCapability { bool enabled = 1; string fsp_id = 2; string currency = 3; string currency_unit_version = 4; }
+message CreateInteropQuoteRequest {
+ string tenant_id = 1; string wallet_id = 2; string recipient = 3;
+ string amount_minor = 4; string currency = 5; string currency_unit_version = 6;
+ string idempotency_key = 7;
+}
+message GetInteropQuoteRequest { string tenant_id = 1; string quote_id = 2; }
+message InteropQuote {
+ string quote_id = 1; string transfer_id = 2; string status = 3;
+ string wallet_id = 4; string amount_minor = 5; string currency = 6;
+ string currency_unit_version = 7; string recipient = 8;
+ string recipient_name = 9; string recipient_fsp = 10; string expires_at = 11;
+ string error_code = 12;
+}
+message RequestInteropTransferRequest { string tenant_id = 1; string quote_id = 2; string idempotency_key = 3; }
+message GetInteropTransferRequest { string tenant_id = 1; string transfer_id = 2; string idempotency_key = 3; }
+message InteropTransfer {
+ string transfer_id = 1; string quote_id = 2; string status = 3;
+ string hub_state = 4; string amount_minor = 5; string currency = 6;
+ string currency_unit_version = 7; string ledger_transaction_id = 8;
+ string error_code = 9; string created_at = 10; string updated_at = 11;
 }

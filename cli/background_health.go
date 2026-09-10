@@ -56,6 +56,10 @@ func backgroundHealthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if interopWorker != nil && !interopWorker.Ready(r.Context()) {
+		http.Error(w, "interop_unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	if err := json.NewEncoder(w).Encode(map[string]bool{"message": true}); err != nil {
 		logrusLogger.WithError(err).Warn("background health response failed")
 	}

@@ -19,6 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	WalletPublicService_GetInteropCapability_FullMethodName            = "/noebs.wallet.v1.WalletPublicService/GetInteropCapability"
+	WalletPublicService_CreateInteropQuote_FullMethodName              = "/noebs.wallet.v1.WalletPublicService/CreateInteropQuote"
+	WalletPublicService_GetInteropQuote_FullMethodName                 = "/noebs.wallet.v1.WalletPublicService/GetInteropQuote"
+	WalletPublicService_RequestInteropTransfer_FullMethodName          = "/noebs.wallet.v1.WalletPublicService/RequestInteropTransfer"
+	WalletPublicService_GetInteropTransfer_FullMethodName              = "/noebs.wallet.v1.WalletPublicService/GetInteropTransfer"
 	WalletPublicService_GetWalletPublic_FullMethodName                 = "/noebs.wallet.v1.WalletPublicService/GetWalletPublic"
 	WalletPublicService_EnsureWalletPublic_FullMethodName              = "/noebs.wallet.v1.WalletPublicService/EnsureWalletPublic"
 	WalletPublicService_ListPaymentMethodsPublic_FullMethodName        = "/noebs.wallet.v1.WalletPublicService/ListPaymentMethodsPublic"
@@ -43,6 +48,11 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type WalletPublicServiceClient interface {
+	GetInteropCapability(ctx context.Context, in *GetInteropCapabilityRequest, opts ...grpc.CallOption) (*InteropCapability, error)
+	CreateInteropQuote(ctx context.Context, in *CreateInteropQuoteRequest, opts ...grpc.CallOption) (*InteropQuote, error)
+	GetInteropQuote(ctx context.Context, in *GetInteropQuoteRequest, opts ...grpc.CallOption) (*InteropQuote, error)
+	RequestInteropTransfer(ctx context.Context, in *RequestInteropTransferRequest, opts ...grpc.CallOption) (*InteropTransfer, error)
+	GetInteropTransfer(ctx context.Context, in *GetInteropTransferRequest, opts ...grpc.CallOption) (*InteropTransfer, error)
 	GetWalletPublic(ctx context.Context, in *GetWalletPublicRequest, opts ...grpc.CallOption) (*GetWalletPublicResponse, error)
 	EnsureWalletPublic(ctx context.Context, in *EnsureWalletPublicRequest, opts ...grpc.CallOption) (*EnsureWalletPublicResponse, error)
 	ListPaymentMethodsPublic(ctx context.Context, in *ListPaymentMethodsPublicRequest, opts ...grpc.CallOption) (*ListPaymentMethodsPublicResponse, error)
@@ -69,6 +79,56 @@ type walletPublicServiceClient struct {
 
 func NewWalletPublicServiceClient(cc grpc.ClientConnInterface) WalletPublicServiceClient {
 	return &walletPublicServiceClient{cc}
+}
+
+func (c *walletPublicServiceClient) GetInteropCapability(ctx context.Context, in *GetInteropCapabilityRequest, opts ...grpc.CallOption) (*InteropCapability, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InteropCapability)
+	err := c.cc.Invoke(ctx, WalletPublicService_GetInteropCapability_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) CreateInteropQuote(ctx context.Context, in *CreateInteropQuoteRequest, opts ...grpc.CallOption) (*InteropQuote, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InteropQuote)
+	err := c.cc.Invoke(ctx, WalletPublicService_CreateInteropQuote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) GetInteropQuote(ctx context.Context, in *GetInteropQuoteRequest, opts ...grpc.CallOption) (*InteropQuote, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InteropQuote)
+	err := c.cc.Invoke(ctx, WalletPublicService_GetInteropQuote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) RequestInteropTransfer(ctx context.Context, in *RequestInteropTransferRequest, opts ...grpc.CallOption) (*InteropTransfer, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InteropTransfer)
+	err := c.cc.Invoke(ctx, WalletPublicService_RequestInteropTransfer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) GetInteropTransfer(ctx context.Context, in *GetInteropTransferRequest, opts ...grpc.CallOption) (*InteropTransfer, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InteropTransfer)
+	err := c.cc.Invoke(ctx, WalletPublicService_GetInteropTransfer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *walletPublicServiceClient) GetWalletPublic(ctx context.Context, in *GetWalletPublicRequest, opts ...grpc.CallOption) (*GetWalletPublicResponse, error) {
@@ -255,6 +315,11 @@ func (c *walletPublicServiceClient) ListFXSourcesPublic(ctx context.Context, in 
 // All implementations must embed UnimplementedWalletPublicServiceServer
 // for forward compatibility.
 type WalletPublicServiceServer interface {
+	GetInteropCapability(context.Context, *GetInteropCapabilityRequest) (*InteropCapability, error)
+	CreateInteropQuote(context.Context, *CreateInteropQuoteRequest) (*InteropQuote, error)
+	GetInteropQuote(context.Context, *GetInteropQuoteRequest) (*InteropQuote, error)
+	RequestInteropTransfer(context.Context, *RequestInteropTransferRequest) (*InteropTransfer, error)
+	GetInteropTransfer(context.Context, *GetInteropTransferRequest) (*InteropTransfer, error)
 	GetWalletPublic(context.Context, *GetWalletPublicRequest) (*GetWalletPublicResponse, error)
 	EnsureWalletPublic(context.Context, *EnsureWalletPublicRequest) (*EnsureWalletPublicResponse, error)
 	ListPaymentMethodsPublic(context.Context, *ListPaymentMethodsPublicRequest) (*ListPaymentMethodsPublicResponse, error)
@@ -283,6 +348,21 @@ type WalletPublicServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedWalletPublicServiceServer struct{}
 
+func (UnimplementedWalletPublicServiceServer) GetInteropCapability(context.Context, *GetInteropCapabilityRequest) (*InteropCapability, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInteropCapability not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) CreateInteropQuote(context.Context, *CreateInteropQuoteRequest) (*InteropQuote, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateInteropQuote not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) GetInteropQuote(context.Context, *GetInteropQuoteRequest) (*InteropQuote, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInteropQuote not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) RequestInteropTransfer(context.Context, *RequestInteropTransferRequest) (*InteropTransfer, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RequestInteropTransfer not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) GetInteropTransfer(context.Context, *GetInteropTransferRequest) (*InteropTransfer, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInteropTransfer not implemented")
+}
 func (UnimplementedWalletPublicServiceServer) GetWalletPublic(context.Context, *GetWalletPublicRequest) (*GetWalletPublicResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWalletPublic not implemented")
 }
@@ -356,6 +436,96 @@ func RegisterWalletPublicServiceServer(s grpc.ServiceRegistrar, srv WalletPublic
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&WalletPublicService_ServiceDesc, srv)
+}
+
+func _WalletPublicService_GetInteropCapability_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInteropCapabilityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).GetInteropCapability(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_GetInteropCapability_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).GetInteropCapability(ctx, req.(*GetInteropCapabilityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_CreateInteropQuote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateInteropQuoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).CreateInteropQuote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_CreateInteropQuote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).CreateInteropQuote(ctx, req.(*CreateInteropQuoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_GetInteropQuote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInteropQuoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).GetInteropQuote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_GetInteropQuote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).GetInteropQuote(ctx, req.(*GetInteropQuoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_RequestInteropTransfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestInteropTransferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).RequestInteropTransfer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_RequestInteropTransfer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).RequestInteropTransfer(ctx, req.(*RequestInteropTransferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_GetInteropTransfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInteropTransferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).GetInteropTransfer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_GetInteropTransfer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).GetInteropTransfer(ctx, req.(*GetInteropTransferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _WalletPublicService_GetWalletPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -689,6 +859,26 @@ var WalletPublicService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "noebs.wallet.v1.WalletPublicService",
 	HandlerType: (*WalletPublicServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetInteropCapability",
+			Handler:    _WalletPublicService_GetInteropCapability_Handler,
+		},
+		{
+			MethodName: "CreateInteropQuote",
+			Handler:    _WalletPublicService_CreateInteropQuote_Handler,
+		},
+		{
+			MethodName: "GetInteropQuote",
+			Handler:    _WalletPublicService_GetInteropQuote_Handler,
+		},
+		{
+			MethodName: "RequestInteropTransfer",
+			Handler:    _WalletPublicService_RequestInteropTransfer_Handler,
+		},
+		{
+			MethodName: "GetInteropTransfer",
+			Handler:    _WalletPublicService_GetInteropTransfer_Handler,
+		},
 		{
 			MethodName: "GetWalletPublic",
 			Handler:    _WalletPublicService_GetWalletPublic_Handler,

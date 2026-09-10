@@ -1015,6 +1015,9 @@ type NoebsConfig struct {
 	TemporalClientSecret  string `json:"temporal_client_secret"`
 
 	// Wallet
+	InteropTenant                              string `json:"interop_tenant"`
+	InteropFSPID                               string `json:"interop_fsp_id"`
+	InteropDemoSeed                            bool   `json:"interop_demo_seed"`
 	WalletEnabled                              bool   `json:"wallet_enabled"`
 	WalletApprovalThreshold                    int64  `json:"wallet_approval_threshold"`
 	WalletDefaultCurrency                      string `json:"wallet_default_currency"`

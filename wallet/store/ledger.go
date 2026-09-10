@@ -41,6 +41,9 @@ type HeldDoubleEntryParams struct {
 type doubleEntryMode struct {
 	DebitHoldID               int64
 	AllowSystemDebitOverdraft bool
+	// Only the atomic interop COMMITTED transition may discharge a previously
+	// committed hold after its customer wallet has been frozen.
+	SettleCommittedInteropHold bool
 }
 
 func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (*DoubleEntryResult, error) {
@@ -64,22 +67,31 @@ func (s *Store) PostSystemDebitDoubleEntry(ctx context.Context, params DoubleEnt
 	return s.postDoubleEntry(ctx, params, doubleEntryMode{AllowSystemDebitOverdraft: true})
 }
 
-func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, mode doubleEntryMode) (result *DoubleEntryResult, err error) {
+// postDoubleEntry owns the transaction for existing callers. Interop settlement
+// uses the same posting logic in its transaction with the transfer and usage rows.
+func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, mode doubleEntryMode) (*DoubleEntryResult, error) {
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
 	}
-
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
+	defer tx.Rollback()
+	result, err := s.postDoubleEntryInTx(ctx, tx, params, mode)
+	if err != nil && !errors.Is(err, ErrHoldExpired) {
+		return nil, err
+	}
+	// Preserve the existing public contract: an expired active hold is released
+	// durably even though attempting to capture it returns ErrHoldExpired.
+	if commitErr := tx.Commit(); commitErr != nil {
+		return nil, commitErr
+	}
+	return result, err
+}
 
+func (s *Store) postDoubleEntryInTx(ctx context.Context, tx *sqlx.Tx, params DoubleEntryParams, mode doubleEntryMode) (result *DoubleEntryResult, err error) {
 	var debitHold *BalanceHold
 	if mode.DebitHoldID > 0 {
 		existing, found, err := s.loadExistingEntriesIfPresent(ctx, tx, params)
@@ -87,9 +99,6 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 			return nil, err
 		}
 		if found {
-			if err := tx.Commit(); err != nil {
-				return nil, err
-			}
 			return existing, nil
 		}
 
@@ -105,9 +114,6 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 			if err := s.expireLockedHold(ctx, tx, debitHold, now); err != nil {
 				return nil, err
 			}
-			if err := tx.Commit(); err != nil {
-				return nil, err
-			}
 			return nil, ErrHoldExpired
 		}
 		if err := validateDebitHold(debitHold, params); err != nil {
@@ -116,9 +122,6 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 				return nil, loadErr
 			}
 			if found {
-				if commitErr := tx.Commit(); commitErr != nil {
-					return nil, commitErr
-				}
 				return existing, nil
 			}
 			return nil, err
@@ -139,7 +142,7 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 	refID := sql.NullString{String: params.ReferenceID, Valid: params.ReferenceID != ""}
 
 	var txID int64
-	insertTx := db.Rebind(`INSERT INTO ledger_transactions(
+	insertTx := s.DB.Rebind(`INSERT INTO ledger_transactions(
 		tenant_id, idempotency_key, currency, currency_unit_version_id,
 		reference_type, reference_id, status, metadata, created_at
 	) VALUES(?, ?, ?, ?, ?, ?, 'completed', ?, ?)
@@ -159,9 +162,6 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 		if errors.Is(err, sql.ErrNoRows) {
 			existing, err := s.loadExistingEntries(ctx, tx, params)
 			if err != nil {
-				return nil, err
-			}
-			if err := tx.Commit(); err != nil {
 				return nil, err
 			}
 			return existing, nil
@@ -199,7 +199,7 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 	creditWallet.Balance = creditBalance
 	creditWallet.AvailableBalance = creditAvailable
 
-	updateWallet := db.Rebind(`UPDATE wallets
+	updateWallet := s.DB.Rebind(`UPDATE wallets
 		SET balance = ?, available_balance = ?, version = version + 1, updated_at = ?
 		WHERE tenant_id = ? AND id = ?`)
 	if _, err := tx.ExecContext(ctx, updateWallet, debitWallet.Balance, debitWallet.AvailableBalance, now, params.TenantID, debitWallet.ID); err != nil {
@@ -274,9 +274,6 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 		CreditWallet:  creditWallet,
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
 	return result, nil
 }
 
@@ -313,8 +310,11 @@ func validateDoubleEntryWalletTargets(debitWallet, creditWallet *Wallet, params 
 		creditWallet.ID != params.CreditWalletID {
 		return ErrWalletNotFound
 	}
-	if debitWallet.Status != WalletStatusActive || creditWallet.Status != WalletStatusActive {
+	if (debitWallet.Status != WalletStatusActive && !mode.SettleCommittedInteropHold) || creditWallet.Status != WalletStatusActive {
 		return ErrWalletInactive
+	}
+	if mode.SettleCommittedInteropHold && (mode.DebitHoldID <= 0 || params.ReferenceType != "mojaloop" || debitWallet.OwnerType != OwnerTypeUser || creditWallet.OwnerType != OwnerTypeSystem || creditWallet.OwnerID != SystemMojaloopClearing) {
+		return ErrInteropState
 	}
 	if debitWallet.Currency != params.Currency || creditWallet.Currency != params.Currency {
 		return ErrCurrencyMismatch

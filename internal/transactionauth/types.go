@@ -27,10 +27,11 @@ type Operation string
 const (
 	OperationWalletP2P        Operation = "wallet.p2p"
 	OperationWalletWithdrawal Operation = "wallet.withdrawal"
+	OperationWalletInterop    Operation = "wallet.interop.transfer"
 )
 
 func (o Operation) Valid() bool {
-	return o == OperationWalletP2P || o == OperationWalletWithdrawal
+	return o == OperationWalletP2P || o == OperationWalletWithdrawal || o == OperationWalletInterop
 }
 
 type Binding struct {

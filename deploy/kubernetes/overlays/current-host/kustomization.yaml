@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - ../../base
+  - mojaloop.yaml
 
 images:
   - name: ghcr.io/noebs/noebs
@@ -22,6 +23,8 @@ images:
     digest: sha256:f14912b699cf73015ad5c4fc18d522d4b014db90e794039214dfb7c022c2644f
 
 patches:
+  - path: mojaloop-worker-patch.yaml
+  - path: mojaloop-config-patch.yaml
   - target:
       group: apps
       version: v1

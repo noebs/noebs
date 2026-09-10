@@ -537,6 +537,12 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/psp/webhooks/:callback_id", capabilityPath: "/psp/webhooks/:provider", role: serviceRolePSPWebhook, auth: gatewayAuthTenantWebhook},
 
 		{method: fiber.MethodGet, path: "/wallet/methods", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/wallet/interop", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/wallet/interop/quotes", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/wallet/interop/quotes/:id", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/wallet/interop/transfers", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser, transaction: transactionauth.OperationWalletInterop},
+		{method: fiber.MethodGet, path: "/wallet/interop/transfers", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/wallet/interop/transfers/:id", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/wallet/currencies", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/wallet/currencies/:code", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPost, path: "/wallet/money/parse", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},

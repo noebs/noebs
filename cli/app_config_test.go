@@ -66,6 +66,7 @@ func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 		!slices.Equal(transactionAuthorization.Operations, []appTransactionAuthorizationOperationConfig{
 			{Operation: transactionauth.OperationWalletP2P, Method: http.MethodPost, Path: "/wallet/p2p"},
 			{Operation: transactionauth.OperationWalletWithdrawal, Method: http.MethodPost, Path: "/wallet/withdrawals"},
+			{Operation: transactionauth.OperationWalletInterop, Method: http.MethodPost, Path: "/wallet/interop/transfers"},
 		}) {
 		t.Fatalf("wallet.transaction_authorization = %+v", transactionAuthorization)
 	}

@@ -1037,6 +1037,102 @@
         }
       }
     },
+    "v1InteropCapability": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "fspId": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "currencyUnitVersion": {
+          "type": "string"
+        }
+      }
+    },
+    "v1InteropQuote": {
+      "type": "object",
+      "properties": {
+        "quoteId": {
+          "type": "string"
+        },
+        "transferId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "walletId": {
+          "type": "string"
+        },
+        "amountMinor": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "currencyUnitVersion": {
+          "type": "string"
+        },
+        "recipient": {
+          "type": "string"
+        },
+        "recipientName": {
+          "type": "string"
+        },
+        "recipientFsp": {
+          "type": "string"
+        },
+        "expiresAt": {
+          "type": "string"
+        },
+        "errorCode": {
+          "type": "string"
+        }
+      }
+    },
+    "v1InteropTransfer": {
+      "type": "object",
+      "properties": {
+        "transferId": {
+          "type": "string"
+        },
+        "quoteId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "hubState": {
+          "type": "string"
+        },
+        "amountMinor": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "currencyUnitVersion": {
+          "type": "string"
+        },
+        "ledgerTransactionId": {
+          "type": "string"
+        },
+        "errorCode": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      }
+    },
     "v1ListCurrenciesPublicResponse": {
       "type": "object",
       "properties": {
