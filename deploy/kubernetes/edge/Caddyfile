@@ -25,7 +25,7 @@ api.noebs.sd {
 		@assetlinks path /.well-known/assetlinks.json
 		header @assetlinks Content-Type application/json
 		header @assetlinks Cache-Control "public, max-age=3600"
-		respond @assetlinks `[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.tutipay.app.alpha","sha256_cert_fingerprints":["B4:45:C2:79:FE:FB:B0:95:AA:33:4F:67:42:4D:EA:6B:52:77:38:EA:FF:A5:EF:FB:80:B5:E2:F5:9B:66:1C:AE"]}}]` 200
+		respond @assetlinks `[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.tutipay.app.alpha","sha256_cert_fingerprints":["B4:45:C2:79:FE:FB:B0:95:AA:33:4F:67:42:4D:EA:6B:52:77:38:EA:FF:A5:EF:FB:80:B5:E2:F5:9B:66:1C:AE","BB:1F:DB:0B:76:AE:89:D6:B6:BD:7A:D4:A1:5F:85:59:60:16:55:48:73:8E:E4:B8:DC:89:4A:8F:BC:1A:AE:F5"]}}]` 200
 
 		@keycloak_metadata {
 			method GET HEAD
@@ -42,7 +42,7 @@ api.noebs.sd {
 
 		@keycloak_browser_get {
 			method GET
-			path /auth/realms/noebs/protocol/openid-connect/auth /auth/realms/noebs/protocol/openid-connect/logout /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/restart /auth/realms/noebs/login-actions/first-broker-login /auth/realms/noebs/login-actions/post-broker-login /auth/realms/noebs/broker/google/login /auth/realms/noebs/broker/google/endpoint /auth/realms/noebs/broker/after-first-broker-login /auth/realms/noebs/broker/after-post-broker-login
+			path /auth/realms/noebs/protocol/openid-connect/userinfo /auth/realms/noebs/protocol/openid-connect/auth /auth/realms/noebs/protocol/openid-connect/logout /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/restart /auth/realms/noebs/login-actions/first-broker-login /auth/realms/noebs/login-actions/post-broker-login /auth/realms/noebs/broker/google/login /auth/realms/noebs/broker/google/endpoint /auth/realms/noebs/broker/after-first-broker-login /auth/realms/noebs/broker/after-post-broker-login
 		}
 		reverse_proxy @keycloak_browser_get https://keycloak.noebs.svc.cluster.local:8443 {
 			transport http {

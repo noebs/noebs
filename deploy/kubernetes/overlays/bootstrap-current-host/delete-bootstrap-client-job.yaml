@@ -27,7 +27,7 @@ spec:
         fsGroup: 10001
       initContainers:
         - name: wait-for-keycloak
-          image: ghcr.io/noebs/noebs:master
+          image: noebs-bootstrap:release
           imagePullPolicy: IfNotPresent
           command: [/bin/sh, -ec]
           args:
@@ -55,7 +55,7 @@ spec:
               readOnly: true
       containers:
         - name: delete-bootstrap-client
-          image: ghcr.io/noebs/noebs:master
+          image: noebs-bootstrap:release
           imagePullPolicy: IfNotPresent
           command:
             - /usr/local/bin/noebs

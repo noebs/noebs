@@ -660,7 +660,7 @@ func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 	}
 }
 
-func TestKubernetesNoebsImageReleaseIsLocalAndImmutable(t *testing.T) {
+func TestKubernetesNoebsImageReleaseIsBoundedAndImmutable(t *testing.T) {
 	workflowPath := filepath.Join("..", ".github", "workflows", "main.yml")
 	if _, err := os.Stat(workflowPath); err == nil {
 		t.Fatalf("%s must not define test or release authority", workflowPath)
@@ -674,7 +674,7 @@ func TestKubernetesNoebsImageReleaseIsLocalAndImmutable(t *testing.T) {
 		t.Fatalf("read %s: %v", documentPath, err)
 	}
 	for _, required := range []string{
-		"without relying on GitHub Actions",
+		"same bounded publisher on GitHub Actions",
 		"`git archive`",
 		"write-once",
 		"full-SHA tag",
@@ -1941,7 +1941,7 @@ func applyKustomizationImagesForTest(value interface{}, images []testKustomizati
 					if colon := strings.LastIndex(base, ":"); colon > strings.LastIndex(base, "/") {
 						base = base[:colon]
 					}
-					if base == image.Name || base == image.NewName {
+					if base == image.Name {
 						typed[key] = image.NewName + "@" + image.Digest
 						break
 					}
@@ -2818,7 +2818,7 @@ func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 
 	caddyfile := read("Caddyfile")
 	const keycloakMetadataMatcher = "@keycloak_metadata {\n\t\t\tmethod GET HEAD\n\t\t\tpath /auth/realms/noebs/.well-known/openid-configuration /auth/realms/noebs/protocol/openid-connect/certs /auth/resources/*\n\t\t}"
-	const keycloakBrowserGETMatcher = "@keycloak_browser_get {\n\t\t\tmethod GET\n\t\t\tpath /auth/realms/noebs/protocol/openid-connect/auth /auth/realms/noebs/protocol/openid-connect/logout /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/restart /auth/realms/noebs/login-actions/first-broker-login /auth/realms/noebs/login-actions/post-broker-login /auth/realms/noebs/broker/google/login /auth/realms/noebs/broker/google/endpoint /auth/realms/noebs/broker/after-first-broker-login /auth/realms/noebs/broker/after-post-broker-login\n\t\t}"
+	const keycloakBrowserGETMatcher = "@keycloak_browser_get {\n\t\t\tmethod GET\n\t\t\tpath /auth/realms/noebs/protocol/openid-connect/userinfo /auth/realms/noebs/protocol/openid-connect/auth /auth/realms/noebs/protocol/openid-connect/logout /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/restart /auth/realms/noebs/login-actions/first-broker-login /auth/realms/noebs/login-actions/post-broker-login /auth/realms/noebs/broker/google/login /auth/realms/noebs/broker/google/endpoint /auth/realms/noebs/broker/after-first-broker-login /auth/realms/noebs/broker/after-post-broker-login\n\t\t}"
 	const keycloakBrowserPOSTMatcher = "@keycloak_browser_post {\n\t\t\tmethod POST\n\t\t\tpath /auth/realms/noebs/protocol/openid-connect/token /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/first-broker-login /auth/realms/noebs/login-actions/post-broker-login /auth/realms/noebs/broker/after-post-broker-login\n\t\t}"
 	for _, required := range []string{
 		`api.noebs.sd`,
@@ -2879,7 +2879,6 @@ func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 		`/auth/realms/noebs/broker/*`,
 		`/auth/realms/noebs/clients-registrations`,
 		`/auth/realms/noebs/protocol/saml`,
-		`/auth/realms/noebs/protocol/openid-connect/userinfo`,
 		`/auth/realms/noebs/protocol/openid-connect/introspect`,
 		`/auth/realms/noebs/protocol/openid-connect/revoke`,
 		`/auth/realms/noebs/protocol/openid-connect/auth/device`,

@@ -115,8 +115,7 @@ runtime and hook pods must render with both requests and limits; a
 
 ## Immutable alpha release
 
-Release evidence is produced locally; GitHub automation is not part of the
-test, build, or publication path. Follow
+The interop workflow publishes both images with the bounded release scripts and retains immutable receipts. Manual publication remains available. Follow
 [`docs/alpha-image-release.md`](../../../../docs/alpha-image-release.md) to
 export one reviewed commit, build it on a trusted Docker host, publish only its
 write-once full-SHA tag, verify the registry manifest, and create the release
@@ -134,11 +133,11 @@ Do not improvise individual PVC or password rotations.
 2. Run `scripts/publish-alpha-image.sh` for that SHA. Retain its JSON receipt
    and verify that the recorded source SHA, source tree, tag, and digest match
    the reviewed commit and registry result.
-3. In a separate commit, change only the four Noebs `digest:` fields in
+3. In a separate commit, update the four application `digest:` fields and the independent SDK digest in
    `overlays/current-host`, `overlays/bootstrap-current-host`,
    `operations/lookup`, and `operations/memberships/base`. Render all four
    workflows and require every Noebs runtime, bootstrap, lookup, and membership
-   image to use the receipt's `ghcr.io/noebs/noebs@sha256:<digest>` reference.
+   image to use the application receipt's `ghcr.io/noebs/noebs@sha256:<digest>` reference. The `mojaloop-sdk` container must use its separate SDK receipt in both current-host and bootstrap-current-host; bootstrap uses a distinct image alias to preserve it.
 4. Retain the tested digest and receipt as the rollback floor, announce the
    cutover window, and push the digest-pin commit. Set
    `noebs_target_revision` to that exact lowercase 40-hex commit and apply the
@@ -275,3 +274,7 @@ Render check:
 ```sh
 kubectl kustomize deploy/kubernetes/overlays/current-host
 ```
+
+## Synthetic Mojaloop participant
+
+The SDG/MSISDN profile is isolated to `tenant-mojaloop` and participant `noebs`. Provision `noebs-mojaloop-sdk` with a stable `ilp-secret` before rollout. The migration seeds synthetic demo accounts once and leaves the interop binding disabled until native onboarding, alias registration and transport validation succeed. Re-running migrations preserves operator limits, freezes, and balances. SDK outbound/backend listeners are loopback-only in the worker pod; native callbacks use port 4000 through the restricted WireGuard relay. Redis retains SDK protocol state; SQL remains the monetary and recovery authority.

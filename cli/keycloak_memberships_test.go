@@ -362,7 +362,7 @@ func readOperationImageDigest(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	for _, image := range kustomization.Images {
-		if image.Name == "ghcr.io/noebs/noebs" {
+		if image.Name == "ghcr.io/noebs/noebs" || image.Name == "noebs-bootstrap" {
 			return image.Digest
 		}
 	}

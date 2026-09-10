@@ -15,7 +15,7 @@ The public Keycloak surface is an exact method-and-path allowlist for OIDC
 discovery, JWKS, authorization-code exchange, logout, login actions, Google
 brokering, and theme assets. A blanket `/auth` denial follows that allowlist;
 admin, account, dynamic-registration, SAML, device, PAR, CIBA, introspection,
-userinfo, revocation, and broker token/link endpoints are not public routes.
+revocation and broker token/link endpoints are not public routes. The exact GET userinfo endpoint is exposed for the mobile OIDC wallet; Keycloak requires a valid bearer access token.
 
 The Caddy image is pinned by digest. Validate it from the repository root:
 
