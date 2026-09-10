@@ -35,6 +35,16 @@ func ParseMinor(value string) (int64, error) {
 	return amount, nil
 }
 func Decimal(amount int64) string { return fmt.Sprintf("%d.%02d", amount/100, amount%100) }
+
+// ProtocolDecimal emits the SDK canonical Amount representation, before any
+// protocol intent is persisted. Received payloads and stored replays keep their
+// original bytes. No rounding or floating point conversion is performed.
+func ProtocolDecimal(amount int64) string {
+	return strings.TrimSuffix(strings.TrimRight(Decimal(amount), "0"), ".")
+}
+
+const protocolTimeFormat = "2006-01-02T15:04:05.000Z"
+
 func ParseDecimal(value string) (int64, error) {
 	if len(value) > 22 || !decimalPattern.MatchString(value) {
 		return 0, ErrProtocol
@@ -190,6 +200,9 @@ func PrepareFromQuote(q *walletstore.InteropQuote, fsp string) (Prepare, error) 
 		return Prepare{}, err
 	}
 	r := state.QuoteResponse.Body
+	if !moneyMatches(r.TransferAmount, q.Amount, q.Currency) {
+		return Prepare{}, ErrProtocol
+	}
 	return Prepare{TransferID: q.TransferID.String(), PayerFSP: fsp, PayeeFSP: state.To.FSPID, Amount: r.TransferAmount, ILPPacket: r.ILPPacket, Condition: r.Condition, Expiration: r.Expiration}, nil
 }
 

@@ -55,11 +55,46 @@ type IncomingPrepare struct {
 	} `json:"noebsProtocol"`
 }
 type BackendQuoteResponse struct {
+	QuoteID         string `json:"quoteId"`
+	TransactionID   string `json:"transactionId"`
 	TransferAmount  string `json:"transferAmount"`
 	Currency        string `json:"transferAmountCurrency"`
 	ReceiveAmount   string `json:"payeeReceiveAmount"`
 	ReceiveCurrency string `json:"payeeReceiveAmountCurrency"`
 	Expiration      string `json:"expiration"`
+}
+
+// The SDG profile offers an incoming quote for two minutes when the native
+// caller omits the optional expiration. Apply this policy only at the HTTP
+// boundary; the store always receives an explicit expiry and retains the first
+// response across retries, including concurrent requests and expired quotes.
+const incomingQuoteTTL = 2 * time.Minute
+
+func incomingQuoteExpiry(request, native string, existing *walletstore.InteropQuote, now time.Time) (time.Time, error) {
+	if request != native {
+		return time.Time{}, ErrProtocol
+	}
+	var expiry time.Time
+	if request == "" {
+		if existing != nil {
+			if !existing.ExpiresAt.Valid {
+				return time.Time{}, ErrProtocol
+			}
+			expiry = existing.ExpiresAt.Time
+		} else {
+			expiry = now.Add(incomingQuoteTTL).UTC().Truncate(time.Millisecond)
+		}
+	} else {
+		var err error
+		expiry, err = time.Parse(time.RFC3339Nano, request)
+		if err != nil {
+			return time.Time{}, ErrProtocol
+		}
+	}
+	if existing == nil && !expiry.After(now.Add(5*time.Second)) {
+		return time.Time{}, walletstore.ErrInteropQuoteExpired
+	}
+	return expiry, nil
 }
 
 func (w *Worker) Handler() http.Handler {
@@ -183,11 +218,6 @@ func (w *Worker) incomingQuote(rw http.ResponseWriter, r *http.Request) {
 		backendError(rw, ErrProtocol)
 		return
 	}
-	expiry, err := time.Parse(time.RFC3339Nano, request.Expiration)
-	if err != nil || native.Expiration != request.Expiration {
-		backendError(rw, ErrProtocol)
-		return
-	}
 	// Existing immutable quote retries recover their original response even when
 	// expired. New admissions still require a live agreement.
 	existing, existingErr := w.Store.GetInteropQuote(r.Context(), w.Tenant, quoteID)
@@ -195,8 +225,9 @@ func (w *Worker) incomingQuote(rw http.ResponseWriter, r *http.Request) {
 		backendError(rw, existingErr)
 		return
 	}
-	if existing == nil && !expiry.After(time.Now().Add(5*time.Second)) {
-		backendError(rw, walletstore.ErrInteropQuoteExpired)
+	expiry, err := incomingQuoteExpiry(request.Expiration, native.Expiration, existing, time.Now())
+	if err != nil {
+		backendError(rw, err)
 		return
 	}
 	alias, err := w.Store.GetInteropAlias(r.Context(), w.Tenant, uuid.Nil, request.To.IDValue)
@@ -209,7 +240,7 @@ func (w *Worker) incomingQuote(rw http.ResponseWriter, r *http.Request) {
 		backendError(rw, err)
 		return
 	}
-	response, err := json.Marshal(BackendQuoteResponse{TransferAmount: Decimal(amount), Currency: "SDG", ReceiveAmount: Decimal(amount), ReceiveCurrency: "SDG", Expiration: expiry.UTC().Format(time.RFC3339Nano)})
+	response, err := json.Marshal(BackendQuoteResponse{QuoteID: quoteID.String(), TransactionID: transferID.String(), TransferAmount: ProtocolDecimal(amount), Currency: "SDG", ReceiveAmount: ProtocolDecimal(amount), ReceiveCurrency: "SDG", Expiration: expiry.UTC().Format(protocolTimeFormat)})
 	if err != nil {
 		backendError(rw, err)
 		return
@@ -242,7 +273,7 @@ func (w *Worker) incomingPrepare(rw http.ResponseWriter, r *http.Request) {
 		backendError(rw, err)
 		return
 	}
-	response, _ := json.Marshal(map[string]string{"homeTransactionId": id.String(), "transferState": "RESERVED", "completedTimestamp": time.Now().UTC().Format(time.RFC3339Nano)})
+	response, _ := json.Marshal(map[string]string{"homeTransactionId": id.String(), "transferState": "RESERVED", "completedTimestamp": time.Now().UTC().Format(protocolTimeFormat)})
 	prepareExpires, _ := time.Parse(time.RFC3339Nano, request.Protocol.Prepare.Expiration)
 	original, err := w.Store.ReserveInteropIncoming(r.Context(), w.Tenant, q.ID, raw, response, prepareExpires)
 	if err != nil {
@@ -330,5 +361,5 @@ func (w *Worker) incomingStatus(rw http.ResponseWriter, r *http.Request) {
 		backendError(rw, ErrProtocol)
 		return
 	}
-	writeJSON(rw, http.StatusOK, map[string]any{"homeTransactionId": id.String(), "transferState": state, "timestamp": response["completedTimestamp"], "from": quote.From, "to": quote.To, "amountType": quote.AmountType, "expiration": original.Protocol.Prepare.Expiration, "currency": q.Currency, "amount": Decimal(q.Amount), "transactionType": quote.TransactionType, "fulfilment": original.Protocol.Quote.Fulfilment})
+	writeJSON(rw, http.StatusOK, map[string]any{"homeTransactionId": id.String(), "transferState": state, "timestamp": response["completedTimestamp"], "from": quote.From, "to": quote.To, "amountType": quote.AmountType, "expiration": original.Protocol.Prepare.Expiration, "currency": q.Currency, "amount": ProtocolDecimal(q.Amount), "transactionType": quote.TransactionType, "fulfilment": original.Protocol.Quote.Fulfilment})
 }

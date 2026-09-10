@@ -150,6 +150,7 @@ func (w *Worker) quote(ctx context.Context, q *walletstore.InteropQuote) {
 	// The pinned SDK requires the DFSP correlation ID as well as transferId.
 	// Both derive from the immutable SQL obligation, including all retries.
 	fields["homeTransactionId"] = fields["transferId"]
+	fields["amount"], _ = json.Marshal(ProtocolDecimal(q.Amount))
 	raw, _ := json.Marshal(fields)
 	state, response, err := w.sdk(ctx, http.MethodPost, "/transfers", raw)
 	if err == nil {
