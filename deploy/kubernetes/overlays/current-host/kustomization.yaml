@@ -9,10 +9,10 @@ resources:
 images:
   - name: ghcr.io/noebs/noebs
     newName: ghcr.io/noebs/noebs
-    digest: sha256:5e3fec8e16849be7bc84b8245fcd40f46df2567799ae9af26b0b2906e67a2508
+    digest: sha256:92dddb74f32dde4afb67251780ace51d6ac5f446dc55d192cbabdc650dc59e92
   - name: noebs-mojaloop-sdk
     newName: ghcr.io/noebs/noebs
-    digest: sha256:e84dd7c6ff535f21cd24056b2547cc14c5fd8ea7834d2fe681d4c1879ac844d2
+    digest: sha256:2d0f7f7775ffd95857ce675ce9647ac6df2fa5b302db9468f9a9910551a007da
   - name: postgres
     newName: docker.io/library/postgres
     digest: sha256:4b7183ac05f8ef417db21fd72d71047a4238340c261d3cc3ddb6d579ab5071ae
