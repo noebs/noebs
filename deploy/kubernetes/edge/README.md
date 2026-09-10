@@ -5,6 +5,12 @@ its complete shared Caddy configuration. It deliberately retains the other
 host routes already served by that process while adding Noebs Android App
 Links.
 
+The `iptv.2t.sd` site sends `/account` and `/account/*` to the host-loopback
+OpenIPTV account service on port `8090`. Its final handle sends every other
+path to the catalog on the host's Tailscale address and port `8088`. Keep the
+account handle before that fallback so Caddy never forwards account bearer
+requests to the catalog service.
+
 The public Keycloak surface is an exact method-and-path allowlist for OIDC
 discovery, JWKS, authorization-code exchange, logout, login actions, Google
 brokering, and theme assets. A blanket `/auth` denial follows that allowlist;
