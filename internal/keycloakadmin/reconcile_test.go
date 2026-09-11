@@ -2501,7 +2501,7 @@ func (f *fakeKeycloak) injectAuthenticationDrift(state DesiredState) {
 	defer f.mu.Unlock()
 	f.realm.BrowserFlow = "browser"
 	f.realm.FirstBrokerLoginFlow = "first broker login"
-	f.realm.OTPPolicyAlgorithm = "HmacSHA1"
+	f.realm.OTPPolicyAlgorithm = "HmacSHA256"
 	f.realm.OTPPolicyCodeReusable = true
 	f.realm.Attributes = cloneStringPointerMap(f.realm.Attributes)
 	hostileACRMap := `{"urn:noebs:acr:google":1,"urn:noebs:acr:google-totp":1}`

@@ -3,9 +3,11 @@ package keycloakadmin
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -104,6 +106,11 @@ func TestRealKeycloak26_7Reconcile(t *testing.T) {
 	}
 	assertRealKeycloakAuthority(t, steady, state)
 	if googleAddress != "" {
+		if !t.Run("FreshMicrosoftCompatibleOTPEnrollment", func(t *testing.T) {
+			assertRealFreshOTPEnrollment(t, baseURL, transport, steady, state)
+		}) {
+			return
+		}
 		seedRealGoogleUser(t, steady, state)
 		assertRealWalletStepUp(t, baseURL, transport, steady.config.ClientCredentials[walletAuthorizerClientID].ClientSecret)
 	}
@@ -208,6 +215,170 @@ const realTestOTPSecret = "noebs-real-keycloak-test-otp-secret"
 
 var otpFormActionPattern = regexp.MustCompile(`<form id="kc-otp-login-form"[^>]+action="([^"]+)"`)
 
+func assertRealFreshOTPEnrollment(t *testing.T, baseURL string, transport http.RoundTripper, reconciler *Reconciler, state DesiredState) {
+	t.Helper()
+	ctx := context.Background()
+	session, err := reconciler.session(ctx)
+	if err != nil {
+		t.Fatal("fresh enrollment: admin session failed")
+	}
+	base := realmPath(state.Realm.Name)
+	lookupPath := base + "/users?exact=true&username=" + url.QueryEscape("wallet-authorizer@example.invalid")
+	var users []userRepresentation
+	if _, err := session.get(ctx, lookupPath, &users); err != nil || len(users) != 0 {
+		t.Fatal("fresh enrollment requires an unused isolated mock Google identity")
+	}
+	// The mock has one fixed identity. Delete only the new test user afterward
+	// so the existing SHA-256 credential fixture can run independently.
+	userPath := ""
+	t.Cleanup(func() {
+		if userPath != "" {
+			if err := session.delete(context.Background(), userPath, nil); err != nil {
+				t.Error("fresh enrollment: isolated test-user cleanup failed")
+			}
+		}
+	})
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal("fresh enrollment: cookie jar initialization failed")
+	}
+	client := &http.Client{Timeout: 30 * time.Second, Transport: transport, Jar: jar,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	authorization, err := url.Parse(realWalletAuthorizationURL(t, baseURL,
+		"noebs-real-keycloak-fresh-enrollment-pkce-verifier-0000000001", "fresh-enrollment-state", "fresh-enrollment-nonce"))
+	if err != nil {
+		t.Fatal("fresh enrollment: authorization URL failed")
+	}
+	query := authorization.Query()
+	query.Set("client_id", "noebs-mobile")
+	query.Set("redirect_uri", "https://api.noebs.sd/mobile/oauth/callback")
+	query.Set("ui_locales", "en")
+	authorization.RawQuery = query.Encode()
+	response, err := client.Get(authorization.String())
+	if err != nil {
+		t.Fatal("fresh enrollment: authorization request failed")
+	}
+	pageURL, body := followRealEnrollment(t, client, response, authorization, true)
+	if _, err := session.get(ctx, lookupPath, &users); err != nil || len(users) != 1 {
+		t.Fatal("fresh enrollment: first broker login did not create exactly one isolated user")
+	}
+	userPath = base + "/users/" + url.PathEscape(users[0].ID)
+	type credential struct {
+		Type string `json:"type"`
+		Data string `json:"credentialData"`
+	}
+	var credentials []credential
+	if _, err := session.get(ctx, userPath+"/credentials", &credentials); err != nil || len(credentials) != 0 {
+		t.Fatal("fresh enrollment: expected no stored credentials before setup")
+	}
+	if !strings.Contains(string(body), `id="kc-totp-secret-qr-code"`) || !strings.Contains(string(body), "Microsoft Authenticator") {
+		t.Fatal("fresh enrollment: QR setup did not advertise Microsoft Authenticator")
+	}
+	manualLink := realOTPSetupMatch(t, body, `<a href="([^"]+)" id="mode-manual"`, "manual setup link")
+	manualURL, err := pageURL.Parse(manualLink)
+	if err != nil || manualURL.Scheme != authorization.Scheme || manualURL.Host != authorization.Host {
+		t.Fatal("fresh enrollment: manual setup link is outside the isolated issuer")
+	}
+	response, err = client.Get(manualURL.String())
+	if err != nil {
+		t.Fatal("fresh enrollment: manual setup request failed")
+	}
+	pageURL, body = followRealEnrollment(t, client, response, authorization, true)
+	for id, expected := range map[string]string{"algorithm": "SHA1", "digits": "6", "period": "30"} {
+		value := realOTPSetupMatch(t, body, `<li id="kc-totp-`+id+`">[^<]*:\s*([^<]+)</li>`, "manual policy "+id)
+		if strings.TrimSpace(value) != expected {
+			t.Fatalf("fresh enrollment: unexpected %s policy", id)
+		}
+	}
+	encoded := realOTPSetupMatch(t, body, `<span id="kc-totp-secret-key">([^<]+)</span>`, "manual setup key")
+	secret, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.Join(strings.Fields(encoded), ""))
+	if err != nil || len(secret) == 0 {
+		t.Fatal("fresh enrollment: invalid manual setup key encoding")
+	}
+	hidden := realOTPSetupMatch(t, body, `<input[^>]*name="totpSecret"[^>]*value="([^"]+)"`, "hidden setup key")
+	if string(secret) != hidden {
+		t.Fatal("fresh enrollment: displayed and submitted setup keys differ")
+	}
+	action := realOTPSetupMatch(t, body, `<form action="([^"]+)"[^>]*id="kc-totp-settings-form"`, "setup form action")
+	actionURL, err := pageURL.Parse(action)
+	if err != nil || actionURL.Scheme != authorization.Scheme || actionURL.Host != authorization.Host {
+		t.Fatal("fresh enrollment: setup action is outside the isolated issuer")
+	}
+	counter := make([]byte, 8)
+	binary.BigEndian.PutUint64(counter, uint64(time.Now().Unix()/30))
+	mac := hmac.New(sha1.New, secret) // Microsoft Authenticator's TOTP profile.
+	_, _ = mac.Write(counter)
+	digest := mac.Sum(nil)
+	offset := digest[len(digest)-1] & 0x0f
+	code := fmt.Sprintf("%06d", (binary.BigEndian.Uint32(digest[offset:offset+4])&0x7fffffff)%1_000_000)
+	response, err = client.PostForm(actionURL.String(), url.Values{
+		"totp": {code}, "totpSecret": {hidden}, "mode": {"manual"}, "userLabel": {"synthetic-microsoft-compatible"},
+	})
+	if err != nil {
+		t.Fatal("fresh enrollment: setup submission failed")
+	}
+	callback, _ := followRealEnrollment(t, client, response, authorization, false)
+	if callback.Query().Get("state") != "fresh-enrollment-state" || callback.Query().Get("code") == "" || callback.Query().Get("error") != "" {
+		t.Fatal("fresh enrollment: authorization did not complete successfully")
+	}
+	credentials = nil
+	if _, err := session.get(ctx, userPath+"/credentials", &credentials); err != nil || len(credentials) != 1 || credentials[0].Type != "otp" {
+		t.Fatal("fresh enrollment: expected exactly one stored OTP credential")
+	}
+	var metadata struct {
+		Algorithm string `json:"algorithm"`
+		SubType   string `json:"subType"`
+		Digits    int    `json:"digits"`
+		Period    int    `json:"period"`
+	}
+	if err := json.Unmarshal([]byte(credentials[0].Data), &metadata); err != nil ||
+		metadata.Algorithm != "HmacSHA1" || metadata.SubType != "totp" || metadata.Digits != 6 || metadata.Period != 30 {
+		t.Fatal("fresh enrollment: stored OTP metadata differs from the Microsoft-compatible profile")
+	}
+}
+
+func realOTPSetupMatch(t *testing.T, body []byte, pattern, field string) string {
+	t.Helper()
+	matches := regexp.MustCompile(pattern).FindAllSubmatch(body, -1)
+	if len(matches) != 1 || len(matches[0]) != 2 {
+		t.Fatalf("fresh enrollment: missing or duplicate %s", field)
+	}
+	return html.UnescapeString(string(matches[0][1]))
+}
+
+func followRealEnrollment(t *testing.T, client *http.Client, response *http.Response, issuer *url.URL, wantSetup bool) (*url.URL, []byte) {
+	t.Helper()
+	for range 16 {
+		body := readRealResponse(t, response)
+		assertNoPasswordBody(t, body)
+		if response.StatusCode == http.StatusOK && wantSetup && strings.Contains(string(body), `id="kc-totp-settings-form"`) {
+			return response.Request.URL, body
+		}
+		if response.StatusCode < 300 || response.StatusCode >= 400 {
+			t.Fatalf("fresh enrollment: unexpected HTTP status %d", response.StatusCode)
+		}
+		next, err := response.Request.URL.Parse(response.Header.Get("Location"))
+		if err != nil || next.Scheme != "https" || next.User != nil {
+			t.Fatal("fresh enrollment: invalid redirect")
+		}
+		if next.Host == "api.noebs.sd" && next.Path == "/mobile/oauth/callback" {
+			if wantSetup {
+				t.Fatal("fresh enrollment: authentication completed without required OTP setup")
+			}
+			return next, nil // Never fetch a public callback or log its query.
+		}
+		if next.Host != issuer.Host && next.Host != "accounts.google.com" {
+			t.Fatal("fresh enrollment: redirect is outside the isolated issuer and Google mock")
+		}
+		response, err = client.Get(next.String())
+		if err != nil {
+			t.Fatal("fresh enrollment: redirect request failed")
+		}
+	}
+	t.Fatal("fresh enrollment: redirect limit exceeded")
+	return nil, nil
+}
+
 func seedRealGoogleUser(t *testing.T, reconciler *Reconciler, state DesiredState) {
 	t.Helper()
 	ctx := context.Background()
@@ -222,6 +393,8 @@ func seedRealGoogleUser(t *testing.T, reconciler *Reconciler, state DesiredState
 		"emailVerified":   true,
 		"enabled":         true,
 		"requiredActions": []string{},
+		// Retain a credential enrolled under the previous SHA-256 policy. Its
+		// successful step-up proves an enrollment-policy change preserves it.
 		"credentials": []map[string]any{{
 			"type":           "otp",
 			"secretData":     `{"value":"` + realTestOTPSecret + `"}`,
@@ -608,7 +781,7 @@ func injectRealAuthenticationDrift(t *testing.T, reconciler *Reconciler, state D
 	realm.BrowserFlow = rogue.Alias
 	realm.FirstBrokerLoginFlow = "first broker login"
 	realm.SSLRequired = "external"
-	realm.OTPPolicyAlgorithm = "HmacSHA1"
+	realm.OTPPolicyAlgorithm = "HmacSHA256"
 	realm.OTPPolicyCodeReusable = true
 	realm.MaxSecondaryAuthFailures = 0
 	hostileACRMap := `{"urn:noebs:acr:google":1,"urn:noebs:acr:google-totp":1}`

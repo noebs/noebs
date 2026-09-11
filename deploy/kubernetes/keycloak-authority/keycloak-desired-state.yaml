@@ -21,7 +21,9 @@ authentication:
       max_age_seconds: 0
   otp:
     type: totp
-    algorithm: HmacSHA256
+    # Microsoft Authenticator requires SHA-1, six digits and a 30-second period.
+    # This sets new enrollment; existing credentials retain their own algorithm.
+    algorithm: HmacSHA1
     initial_counter: 0
     digits: 6
     look_ahead_window: 1

@@ -309,9 +309,9 @@ func (s DesiredState) Validate() error {
 		return fmt.Errorf("%w: authentication.levels must declare reusable LoA1 followed by one-request LoA2 with max age zero", ErrInvalidDesiredState)
 	}
 	otp := s.Authentication.OTP
-	if otp.Type != "totp" || otp.Algorithm != "HmacSHA256" || otp.InitialCounter != 0 ||
+	if otp.Type != "totp" || otp.Algorithm != "HmacSHA1" || otp.InitialCounter != 0 ||
 		otp.Digits != 6 || otp.LookAheadWindow != 1 || otp.PeriodSeconds != 30 || otp.Reusable {
-		return fmt.Errorf("%w: authentication.otp must use the exact non-reusable TOTP SHA-256 policy", ErrInvalidDesiredState)
+		return fmt.Errorf("%w: authentication.otp must use non-reusable TOTP SHA-1, six digits, a 30-second period and look-around window one for Microsoft Authenticator compatibility", ErrInvalidDesiredState)
 	}
 	action := otp.ConfigureRequiredAction
 	if action.Alias != "CONFIGURE_TOTP" || !action.Enabled || !action.DefaultAction || action.Priority != 10 {

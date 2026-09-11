@@ -58,8 +58,12 @@ func TestRepositoryDesiredStateContract(t *testing.T) {
 		!equalStrings(serviceClients[temporalBootstrapClientID].Permissions, []string{"temporal-system:admin"}) {
 		t.Fatalf("Temporal service client permissions = %#v", serviceClients)
 	}
-	if len(state.Organizations) != 2 {
-		t.Fatalf("organizations = %d, want 2", len(state.Organizations))
+	var organizations []string
+	for _, organization := range state.Organizations {
+		organizations = append(organizations, organization.Alias)
+	}
+	if !equalStrings(organizations, []string{"tenant-cutover", "tenant-mojaloop", "tenant-sandbox"}) {
+		t.Fatalf("organizations = %v, want cutover, Mojaloop demo and sandbox", organizations)
 	}
 }
 
@@ -68,6 +72,34 @@ func TestDesiredStateRejectsWildcardRedirect(t *testing.T) {
 	state.InteractiveClients[0].RedirectURIs = []string{"https://api.noebs.sd/*"}
 	if err := state.Validate(); !errors.Is(err, ErrInvalidDesiredState) {
 		t.Fatalf("Validate() error = %v, want ErrInvalidDesiredState", err)
+	}
+}
+
+func TestDesiredStateRejectsUnsupportedOTPEnrollment(t *testing.T) {
+	// Keycloak 26.7's MicrosoftAuthenticatorOTPProvider supports TOTP with
+	// SHA-1, six digits and a 30-second period. Verify the loading boundary
+	// rejects incompatible enrollment settings and disabled replay protection.
+	tests := []struct {
+		name   string
+		mutate func(*OTPPolicy)
+	}{
+		{"missing algorithm", func(p *OTPPolicy) { p.Algorithm = "" }},
+		{"SHA256", func(p *OTPPolicy) { p.Algorithm = "HmacSHA256" }},
+		{"SHA512", func(p *OTPPolicy) { p.Algorithm = "HmacSHA512" }},
+		{"eight digits", func(p *OTPPolicy) { p.Digits = 8 }},
+		{"sixty seconds", func(p *OTPPolicy) { p.PeriodSeconds = 60 }},
+		{"HOTP", func(p *OTPPolicy) { p.Type = "hotp" }},
+		{"reusable", func(p *OTPPolicy) { p.Reusable = true }},
+		{"wide window", func(p *OTPPolicy) { p.LookAheadWindow = 10 }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state := repositoryDesiredState(t)
+			test.mutate(&state.Authentication.OTP)
+			if err := state.Validate(); !errors.Is(err, ErrInvalidDesiredState) {
+				t.Fatalf("Validate() error = %v, want ErrInvalidDesiredState", err)
+			}
+		})
 	}
 }
 
