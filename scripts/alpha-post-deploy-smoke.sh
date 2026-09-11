@@ -392,6 +392,11 @@ required_post = urllib.request.Request(required_action, data=b"", method="POST")
 assert open_without_redirect(opener, required_post).status == 400
 PY
 
+# A redirect to Google alone does not establish a valid Google registration:
+# Google also redirects invalid requests to an HTTP 200 error page.
+python3 "$(dirname -- "${BASH_SOURCE[0]}")/google-broker-preflight.py" "$api_origin" \
+    || die "Google broker registration is rejected or unverified"
+
 http_status() {
     local method="$1"
     local url="$2"
