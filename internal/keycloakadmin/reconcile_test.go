@@ -193,7 +193,7 @@ func TestReconcilePrunesKeycloakStateOutsideExactAuthority(t *testing.T) {
 		"noebs-api":                 {},
 		"noebs-mobile":              {audienceMapperName, subjectMapperName},
 		"noebs-backoffice":          {audienceMapperName, subjectMapperName},
-		walletAuthorizerClientID:    {},
+		walletAuthorizerClientID:    {authTimeMapperName},
 		temporalLedgerClientID:      {audienceMapperName, "temporal-permissions"},
 		temporalWorkerClientID:      {audienceMapperName, "temporal-permissions"},
 		temporalBootstrapClientID:   {audienceMapperName, "temporal-permissions"},
@@ -266,6 +266,64 @@ func TestReconcileOverwritesProtocolMapperConfigDrift(t *testing.T) {
 	wantedGroupMapper.Config[managedAttribute] = "true"
 	if mapper, exists := fake.organizationScopeMapper(state.OrganizationClaim.MapperName); !exists || !mapperMatches(mapper, wantedGroupMapper) {
 		t.Fatalf("organization group mapper = %#v", mapper)
+	}
+}
+
+func TestReconcileRestoresAuthoritativePaymentAuthenticationTime(t *testing.T) {
+	for _, drift := range []string{"missing mapper", "wrong source", "wrong provider", "wrong type", "extra token surfaces", "extra claim"} {
+		t.Run(drift, func(t *testing.T) {
+			fake := newFakeKeycloak()
+			server := httptest.NewTLSServer(fake)
+			defer server.Close()
+			reconciler, err := New(validTestConfig(server.URL), server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			state := repositoryDesiredState(t)
+			if _, err := reconciler.Reconcile(context.Background(), state); err != nil {
+				t.Fatal(err)
+			}
+			client, found := fake.clientByClientID(walletAuthorizerClientID)
+			mapper, hasMapper := fake.clientMapper(walletAuthorizerClientID, authTimeMapperName)
+			if !found || !hasMapper {
+				t.Fatal("payment authentication-time mapper was not admitted")
+			}
+			switch drift {
+			case "missing mapper":
+				fake.mu.Lock()
+				delete(fake.clientMappers[client.ID], mapper.ID)
+				fake.mu.Unlock()
+			case "wrong source":
+				fake.injectClientMapperConfig(walletAuthorizerClientID, authTimeMapperName, "user.session.note", "UNTRUSTED_TIME")
+			case "wrong provider":
+				fake.mu.Lock()
+				mapper.ProtocolMapper = "oidc-hardcoded-claim-mapper"
+				fake.clientMappers[client.ID][mapper.ID] = mapper
+				fake.mu.Unlock()
+			case "wrong type":
+				fake.injectClientMapperConfig(walletAuthorizerClientID, authTimeMapperName, "jsonType.label", "String")
+			case "extra token surfaces":
+				for _, name := range []string{"access.token.claim", "userinfo.token.claim", "introspection.token.claim"} {
+					fake.injectClientMapperConfig(walletAuthorizerClientID, authTimeMapperName, name, "true")
+				}
+			case "extra claim":
+				fake.addClientMapper(walletAuthorizerClientID, "unexpected-payment-profile", "oidc-hardcoded-claim-mapper")
+			}
+			result, err := reconciler.Reconcile(context.Background(), state)
+			if err != nil || !result.Changed() {
+				t.Fatalf("payment claim repair: changed=%v err=%v", result.Changed(), err)
+			}
+			assertWalletAuthorizerExact(t, fake, state)
+			for _, other := range []string{"noebs-mobile", "noebs-backoffice"} {
+				if got := fake.clientMapperNames(other); !equalStrings(got, []string{audienceMapperName, subjectMapperName}) {
+					t.Fatalf("unrelated interactive client %s claim contract changed", other)
+				}
+			}
+			result, err = reconciler.Reconcile(context.Background(), state)
+			if err != nil || result.Changed() {
+				t.Fatalf("payment claim repair did not converge: changed=%v err=%v", result.Changed(), err)
+			}
+		})
 	}
 }
 
@@ -878,8 +936,17 @@ func assertWalletAuthorizerExact(t *testing.T, fake *fakeKeycloak, state Desired
 	if fake.clientSecret(walletAuthorizerClientID) != "wallet-authorizer-secret" {
 		t.Fatal("wallet authorizer secret differs from authority")
 	}
-	if mappers := fake.clientMapperNames(walletAuthorizerClientID); len(mappers) != 0 {
-		t.Fatalf("wallet authorizer protocol mappers = %v, want none", mappers)
+	if mappers := fake.clientMapperNames(walletAuthorizerClientID); !equalStrings(mappers, []string{authTimeMapperName}) {
+		t.Fatalf("wallet authorizer protocol mappers = %v, want only authentication time", mappers)
+	}
+	mapper, found := fake.clientMapper(walletAuthorizerClientID, authTimeMapperName)
+	if !found || mapper.Protocol != "openid-connect" || mapper.ProtocolMapper != "oidc-usersessionmodel-note-mapper" || mapper.ConsentRequired ||
+		!equalStringMap(mapper.Config, map[string]string{
+			"user.session.note": "AUTH_TIME", "claim.name": "auth_time", "jsonType.label": "long",
+			"id.token.claim": "true", "access.token.claim": "false", "userinfo.token.claim": "false",
+			"introspection.token.claim": "false", managedAttribute: "true",
+		}) {
+		t.Fatal("wallet authorizer authentication time must come only from the issuer's AUTH_TIME session note into its ID token")
 	}
 	if scopes := fake.clientScopeNames(walletAuthorizerClientID, "default"); !equalStrings(scopes, []string{"acr"}) {
 		t.Fatalf("wallet authorizer default scopes = %v, want acr", scopes)

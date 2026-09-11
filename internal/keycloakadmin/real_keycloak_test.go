@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/coreos/go-oidc/v3/oidc"
 )
 
 type recordingTransport struct {
@@ -252,6 +254,10 @@ func assertRealFreshOTPEnrollment(t *testing.T, baseURL string, transport http.R
 	query := authorization.Query()
 	query.Set("client_id", "noebs-mobile")
 	query.Set("redirect_uri", "https://api.noebs.sd/mobile/oauth/callback")
+	query.Set("scope", "openid organization:*")
+	query.Set("kc_idp_hint", "google")
+	query.Del("max_age")
+	query.Del("login_hint")
 	query.Set("ui_locales", "en")
 	authorization.RawQuery = query.Encode()
 	response, err := client.Get(authorization.String())
@@ -445,23 +451,49 @@ func assertRealWalletStepUp(t *testing.T, baseURL string, transport http.RoundTr
 		},
 	}
 	verifier := "noebs-real-keycloak-wallet-authorizer-pkce-verifier-0000000001"
+	firstStarted := time.Now().Truncate(time.Second)
 	authorization := realWalletAuthorizationURL(t, baseURL, verifier, "wallet-step-up-1", "wallet-nonce-1")
 	action, sawGoogle, sawPostBroker := reachRealOTP(t, client, authorization)
 	if !sawGoogle || !sawPostBroker {
 		t.Fatalf("first wallet authorization: Google=%v post-broker=%v", sawGoogle, sawPostBroker)
 	}
-	callback := submitRealOTP(t, client, action, realTOTP(realTestOTPSecret, time.Now()))
-	if callback.Hostname() != "api.noebs.sd" || callback.Path != "/wallet/authorizations/oauth/callback" || callback.Query().Get("state") != "wallet-step-up-1" {
-		t.Fatalf("wallet authorization callback = %s", callback.Redacted())
+	firstCodeTime := time.Now()
+	callback := submitRealOTP(t, client, action, realTOTP(realTestOTPSecret, firstCodeTime))
+	if callback.Host != "api.noebs.sd" || callback.Path != "/wallet/authorizations/oauth/callback" ||
+		callback.Query().Get("state") != "wallet-step-up-1" || callback.Query().Get("code") == "" || callback.Query().Get("error") != "" {
+		t.Fatal("first wallet authorization returned an invalid callback")
 	}
-	exchangeRealAuthorizationCode(t, client, baseURL, callback.Query().Get("code"), verifier, clientSecret)
+	firstAuthTime := exchangeRealAuthorizationCode(t, client, baseURL, callback.Query().Get("code"), verifier, clientSecret, "wallet-nonce-1")
+	if firstAuthTime.Before(firstStarted) {
+		t.Fatal("first wallet authorization reused an older authentication time")
+	}
 
-	secondVerifier := "noebs-real-keycloak-wallet-authorizer-pkce-verifier-0000000002"
-	second := realWalletAuthorizationURL(t, baseURL, secondVerifier, "wallet-step-up-2", "wallet-nonce-2")
-	_, sawGoogle, sawPostBroker = reachRealOTP(t, client, second)
-	if sawGoogle || sawPostBroker {
-		t.Fatalf("second wallet authorization unexpectedly brokered: Google=%v post-broker=%v", sawGoogle, sawPostBroker)
+	// Retain the browser session but enter a new current OTP. Code reuse stays
+	// disabled; waiting for its next period takes at most 30 seconds.
+	nextPeriod := time.Unix((firstCodeTime.Unix()/30+1)*30, 0)
+	if delay := time.Until(nextPeriod); delay > 0 {
+		time.Sleep(delay)
 	}
+	secondVerifier := "noebs-real-keycloak-wallet-authorizer-pkce-verifier-0000000002"
+	secondStarted := time.Now().Truncate(time.Second)
+	second := realWalletAuthorizationURL(t, baseURL, secondVerifier, "wallet-step-up-2", "wallet-nonce-2")
+	action, sawGoogle, sawPostBroker = reachRealOTP(t, client, second)
+	// The production max_age=0 request requires full reauthentication. In
+	// Keycloak 26.7 CookieAuthenticator resets LoA when OIDCLoginProtocol finds
+	// auth_time expired, so Google LoA1 and post-broker OTP must run again.
+	if !sawGoogle || !sawPostBroker {
+		t.Fatalf("second wallet authorization skipped required reauthentication: Google=%v post-broker=%v", sawGoogle, sawPostBroker)
+	}
+	callback = submitRealOTP(t, client, action, realTOTP(realTestOTPSecret, time.Now()))
+	if callback.Host != "api.noebs.sd" || callback.Path != "/wallet/authorizations/oauth/callback" ||
+		callback.Query().Get("state") != "wallet-step-up-2" || callback.Query().Get("code") == "" || callback.Query().Get("error") != "" {
+		t.Fatal("second wallet authorization returned an invalid callback")
+	}
+	secondAuthTime := exchangeRealAuthorizationCode(t, client, baseURL, callback.Query().Get("code"), secondVerifier, clientSecret, "wallet-nonce-2")
+	if !secondAuthTime.After(firstAuthTime) || secondAuthTime.Before(secondStarted) {
+		t.Fatal("second wallet authorization retained the previous authentication time instead of the fresh OTP time")
+	}
+	t.Log("legacy SHA256 credential completed two fresh LoA2 authorizations with advancing authentication times and required broker reauthentication")
 }
 
 func realWalletAuthorizationURL(t *testing.T, baseURL, verifier, state, nonce string) string {
@@ -481,6 +513,9 @@ func realWalletAuthorizationURL(t *testing.T, baseURL, verifier, state, nonce st
 	query.Set("code_challenge", base64.RawURLEncoding.EncodeToString(digest[:]))
 	query.Set("code_challenge_method", "S256")
 	query.Set("acr_values", googleACR)
+	// Match the production transaction-authorizer request. OIDC requires
+	// auth_time in the ID token when max_age is supplied.
+	query.Set("max_age", "0")
 	query.Set("login_hint", "wallet-authorizer@example.invalid")
 	authorization.RawQuery = query.Encode()
 	return authorization.String()
@@ -494,26 +529,26 @@ func reachRealOTP(t *testing.T, client *http.Client, start string) (string, bool
 	for range 16 {
 		response, err := client.Get(current)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal("wallet step-up request failed")
 		}
 		body := readRealResponse(t, response)
 		assertNoPasswordBody(t, body)
 		if response.StatusCode == http.StatusOK {
 			match := otpFormActionPattern.FindSubmatch(body)
 			if len(match) != 2 {
-				t.Fatalf("wallet step-up returned a non-OTP page: %s", response.Request.URL.Redacted())
+				t.Fatal("wallet step-up returned a non-OTP page")
 			}
 			return html.UnescapeString(string(match[1])), sawGoogle, sawPostBroker
 		}
 		if response.StatusCode < 300 || response.StatusCode >= 400 {
-			t.Fatalf("wallet step-up status = %d at %s", response.StatusCode, response.Request.URL.Redacted())
+			t.Fatalf("wallet step-up status = %d", response.StatusCode)
 		}
 		next, err := response.Request.URL.Parse(response.Header.Get("Location"))
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal("wallet step-up returned an invalid redirect")
 		}
 		if next.Hostname() == "api.noebs.sd" {
-			t.Fatalf("wallet authorization completed without OTP: %s", next.Redacted())
+			t.Fatal("wallet authorization completed without OTP")
 		}
 		if next.Hostname() == "accounts.google.com" {
 			sawGoogle = true
@@ -531,31 +566,31 @@ func submitRealOTP(t *testing.T, client *http.Client, action, otp string) *url.U
 	t.Helper()
 	response, err := client.PostForm(action, url.Values{"otp": {otp}, "selectedCredentialId": {""}})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("wallet OTP submission request failed")
 	}
 	for range 12 {
 		body := readRealResponse(t, response)
 		assertNoPasswordBody(t, body)
 		if response.StatusCode < 300 || response.StatusCode >= 400 {
-			t.Fatalf("OTP submission status = %d at %s", response.StatusCode, response.Request.URL.Redacted())
+			t.Fatalf("OTP submission status = %d", response.StatusCode)
 		}
 		next, err := response.Request.URL.Parse(response.Header.Get("Location"))
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal("wallet OTP submission returned an invalid redirect")
 		}
 		if next.Hostname() == "api.noebs.sd" {
 			return next
 		}
 		response, err = client.Get(next.String())
 		if err != nil {
-			t.Fatal(err)
+			t.Fatal("wallet OTP completion request failed")
 		}
 	}
 	t.Fatal("OTP submission exceeded redirect limit")
 	return nil
 }
 
-func exchangeRealAuthorizationCode(t *testing.T, client *http.Client, baseURL, code, verifier, clientSecret string) {
+func exchangeRealAuthorizationCode(t *testing.T, client *http.Client, baseURL, code, verifier, clientSecret, expectedNonce string) time.Time {
 	t.Helper()
 	response, err := client.PostForm(baseURL+"/realms/noebs/protocol/openid-connect/token", url.Values{
 		"grant_type":    {"authorization_code"},
@@ -566,44 +601,65 @@ func exchangeRealAuthorizationCode(t *testing.T, client *http.Client, baseURL, c
 		"code_verifier": {verifier},
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("wallet authorization code exchange request failed")
 	}
 	body := readRealResponse(t, response)
 	if response.StatusCode != http.StatusOK {
-		t.Fatalf("authorization code exchange status = %d: %s", response.StatusCode, body)
+		t.Fatalf("authorization code exchange status = %d", response.StatusCode)
 	}
 	var tokens struct {
-		IDToken string `json:"id_token"`
+		IDToken     string `json:"id_token"`
+		AccessToken string `json:"access_token"`
 	}
 	if err := json.Unmarshal(body, &tokens); err != nil {
-		t.Fatal(err)
+		t.Fatal("authorization code exchange returned malformed token JSON")
 	}
-	parts := strings.Split(tokens.IDToken, ".")
-	if len(parts) != 3 {
-		t.Fatal("authorization code exchange returned an invalid ID token")
+	ctx := oidc.ClientContext(context.Background(), client)
+	issuer := baseURL + "/realms/noebs"
+	idTokens := oidc.NewVerifier(issuer, oidc.NewRemoteKeySet(ctx, issuer+"/protocol/openid-connect/certs"), &oidc.Config{
+		ClientID: walletAuthorizerClientID, SupportedSigningAlgs: []string{"RS256"},
+	})
+	verified, err := idTokens.Verify(ctx, tokens.IDToken)
+	if err != nil || verified.Subject == "" || verified.Nonce != expectedNonce || len(verified.Audience) != 1 || verified.Audience[0] != walletAuthorizerClientID {
+		t.Fatal("wallet ID token failed issuer, signature, audience, subject or nonce validation")
 	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		t.Fatal(err)
+	if verified.AccessTokenHash != "" {
+		if err := verified.VerifyAccessToken(tokens.AccessToken); err != nil {
+			t.Fatal("wallet ID token access-token hash differs from the issued access token")
+		}
 	}
 	var claims struct {
 		ACR                string `json:"acr"`
+		AuthorizedParty    string `json:"azp"`
 		AuthenticationTime int64  `json:"auth_time"`
 		IssuedAt           int64  `json:"iat"`
 	}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		t.Fatal(err)
+	if err := verified.Claims(&claims); err != nil {
+		t.Fatal("wallet ID token claims are malformed")
 	}
-	if claims.ACR != googleTOTPACR {
-		t.Fatalf("wallet ID token acr = %q, want %q", claims.ACR, googleTOTPACR)
+	if claims.ACR != googleTOTPACR || claims.AuthorizedParty != walletAuthorizerClientID {
+		t.Fatal("wallet ID token lacks the required authorizer and LoA2 binding")
 	}
 	authenticationTime := time.Unix(claims.AuthenticationTime, 0)
 	issuedAt := time.Unix(claims.IssuedAt, 0)
 	now := time.Now()
 	if claims.AuthenticationTime <= 0 || claims.IssuedAt <= 0 || authenticationTime.After(issuedAt) ||
 		authenticationTime.After(now.Add(5*time.Second)) || now.Sub(authenticationTime) > 30*time.Second {
-		t.Fatalf("wallet ID token auth_time = %d and iat = %d, want a fresh step-up authentication", claims.AuthenticationTime, claims.IssuedAt)
+		t.Fatal("wallet ID token lacks a valid fresh authentication time")
 	}
+	parts := strings.Split(tokens.AccessToken, ".")
+	if len(parts) != 3 {
+		t.Fatal("wallet authorization returned an invalid access token")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	var accessClaims map[string]json.RawMessage
+	if err != nil || json.Unmarshal(payload, &accessClaims) != nil {
+		t.Fatal("wallet authorization returned malformed access-token claims")
+	}
+	if _, exists := accessClaims["auth_time"]; exists {
+		t.Fatal("payment authentication time unexpectedly expanded to access-token claims")
+	}
+	return authenticationTime
 }
 
 func realTOTP(secret string, now time.Time) string {
@@ -677,8 +733,8 @@ func assertRealKeycloakAuthority(t *testing.T, reconciler *Reconciler, state Des
 	if _, err := session.get(ctx, base+"/clients/"+url.PathEscape(authorizer.ID)+"/protocol-mappers/models", &mappers); err != nil {
 		t.Fatal(err)
 	}
-	if len(mappers) != 0 {
-		t.Fatalf("wallet authorizer protocol mappers = %#v", mappers)
+	if len(mappers) != 1 || !mapperMatches(mappers[0], authenticationTimeMapper()) {
+		t.Fatal("wallet authorizer does not have exactly the managed ID-token authentication-time mapper")
 	}
 	assertRealClientScopes(t, session, base, authorizer, "default", []string{"acr"})
 	assertRealClientScopes(t, session, base, authorizer, "optional", nil)

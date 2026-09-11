@@ -24,6 +24,7 @@ const (
 	audienceMapperName      = "noebs-api-audience"
 	subjectMapperID         = "oidc-sub-mapper"
 	subjectMapperName       = "noebs-subject"
+	authTimeMapperName      = "noebs-auth-time"
 )
 
 type realmRepresentation struct {
@@ -793,7 +794,7 @@ func reconcileInteractiveClients(ctx context.Context, session *adminSession, sta
 		mappers := []protocolMapperRepresentation{audienceMapper(state.ResourceClient.ClientID), subjectMapper()}
 		optionalScopes := []string{state.OrganizationClaim.ClientScope}
 		if desired.ClientID == walletAuthorizerClientID {
-			mappers = nil
+			mappers = []protocolMapperRepresentation{authenticationTimeMapper()}
 			optionalScopes = nil
 		}
 		if err := reconcileExactClientProtocolMappers(ctx, session, state.Realm.Name, existing, mappers, result); err != nil {
@@ -952,6 +953,26 @@ func subjectMapper() protocolMapperRepresentation {
 		ConsentRequired: false,
 		Config: map[string]string{
 			"access.token.claim":        "true",
+			"introspection.token.claim": "false",
+			managedAttribute:            "true",
+		},
+	}
+}
+
+// Payment authorization requires a fresh, issuer-owned auth_time in its ID
+// token. Keep this claim independent of the broader built-in basic scope.
+func authenticationTimeMapper() protocolMapperRepresentation {
+	return protocolMapperRepresentation{
+		Name:           authTimeMapperName,
+		Protocol:       "openid-connect",
+		ProtocolMapper: "oidc-usersessionmodel-note-mapper",
+		Config: map[string]string{
+			"user.session.note":         "AUTH_TIME",
+			"claim.name":                "auth_time",
+			"jsonType.label":            "long",
+			"id.token.claim":            "true",
+			"access.token.claim":        "false",
+			"userinfo.token.claim":      "false",
 			"introspection.token.claim": "false",
 			managedAttribute:            "true",
 		},
