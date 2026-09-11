@@ -506,6 +506,11 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 	return []gatewayRouteSpec{
 		{method: fiber.MethodPost, path: "/consumer/auth/profile", role: serviceRoleIdentityAuth, auth: gatewayAuthMobilePrincipal},
 		{method: fiber.MethodPost, path: "/consumer/kyc", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/identity/sessions", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/consumer/identity/sessions/:session_id", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPut, path: "/consumer/identity/sessions/:session_id/evidence/:kind", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/identity/sessions/:session_id/submit", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodDelete, path: "/consumer/identity/sessions/:session_id", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/consumer/user", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPut, path: "/consumer/user", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/consumer/user/lang", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
@@ -536,6 +541,9 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 
 		{method: fiber.MethodPost, path: "/psp/webhooks/:callback_id", capabilityPath: "/psp/webhooks/:provider", role: serviceRolePSPWebhook, auth: gatewayAuthTenantWebhook},
 
+		{method: fiber.MethodGet, path: "/wallet/me", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/wallet/providers", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/wallet/funding-methods", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/wallet/methods", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/wallet/interop", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPost, path: "/wallet/interop/quotes", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},

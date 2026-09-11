@@ -7,15 +7,17 @@ die() {
     exit 1
 }
 
-[[ $# -eq 2 ]] || die "usage: $0 <argo-git-revision> <sha256:image-digest>"
+[[ $# -eq 2 || $# -eq 3 ]] || die "usage: $0 <argo-git-revision> <sha256:image-digest> [sha256:sdk-digest]"
 
 expected_revision="$1"
 expected_digest="$2"
+expected_sdk_digest="${3:-}"
 deploy_host="${NOEBS_DEPLOY_HOST:-100.102.164.34}"
 api_origin="${NOEBS_API_ORIGIN:-https://api.noebs.sd}"
 
 [[ "$expected_revision" =~ ^[0-9a-f]{40}$ ]] || die "Argo revision must be a full 40-character Git SHA"
 [[ "$expected_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "image digest must be sha256 followed by 64 lowercase hexadecimal characters"
+[[ -z "$expected_sdk_digest" || "$expected_sdk_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "SDK digest must be sha256 followed by 64 lowercase hexadecimal characters"
 [[ "$api_origin" == https://* ]] || die "NOEBS_API_ORIGIN must use HTTPS"
 
 command -v ssh >/dev/null 2>&1 || die "ssh is unavailable"
@@ -23,11 +25,12 @@ command -v curl >/dev/null 2>&1 || die "curl is unavailable"
 command -v python3 >/dev/null 2>&1 || die "python3 is unavailable"
 
 printf 'alpha post-deploy smoke: checking Argo, rollouts, images, resources, and migrations\n'
-ssh "$deploy_host" bash -s -- "$expected_revision" "$expected_digest" <<'REMOTE'
+ssh "$deploy_host" bash -s -- "$expected_revision" "$expected_digest" "$expected_sdk_digest" <<'REMOTE'
 set -euo pipefail
 
 expected_revision="$1"
 expected_digest="$2"
+expected_sdk_digest="$3"
 namespace=noebs
 
 fail() {
@@ -92,15 +95,16 @@ caddy_missing_resources="$(jq -r '
 [[ -z "$caddy_missing_resources" ]] || fail "edge Caddy lacks CPU/memory requests or limits"
 
 expected_image="ghcr.io/noebs/noebs@$expected_digest"
+expected_sdk_image="ghcr.io/noebs/noebs@$expected_sdk_digest"
 pods="$("${kubectl_cmd[@]}" -n "$namespace" get pods -o json)"
 
 wrong_declared_images="$(
-    jq -r --arg expected "$expected_image" '
+    jq -r --arg expected "$expected_image" --arg sdk "$expected_sdk_image" '
       .items[]
       | .metadata.name as $pod
       | .spec.containers[]
       | select(.image | startswith("ghcr.io/noebs/noebs"))
-      | select(.image != $expected)
+      | select(.image != (if .name == "mojaloop-sdk" then $sdk else $expected end))
       | "\($pod):\(.name)=\(.image)"
     ' <<<"$pods"
 )"
@@ -112,12 +116,12 @@ running_noebs_count="$(
 [[ "$running_noebs_count" -gt 0 ]] || fail "no running Noebs containers were found"
 
 wrong_running_images="$(
-    jq -r --arg expected "$expected_image" '
+    jq -r --arg expected "$expected_image" --arg sdk "$expected_sdk_image" '
       .items[]
       | .metadata.name as $pod
       | .status.containerStatuses[]?
       | select(.image | startswith("ghcr.io/noebs/noebs"))
-      | select(.imageID != $expected)
+      | select(.imageID != (if .name == "mojaloop-sdk" then $sdk else $expected end))
       | "\($pod):\(.name)=\(.imageID)"
     ' <<<"$pods"
 )"
@@ -236,14 +240,14 @@ topology_drift_count="$("${kubectl_cmd[@]}" -n "$namespace" exec postgres-0 -- s
 [[ "$authority_marker_status" == current ]] || fail "Postgres authority marker is missing"
 [[ "$topology_drift_count" == 0 ]] || fail "Postgres role or service-database topology drift count is $topology_drift_count"
 for actual_expected_label in \
-    "$identity_migrations|0:true,1:true|identity-auth" \
+    "$identity_migrations|0:true,1:true,2:true|identity-auth" \
     "$card_vault_migrations|0:true,1:true|card-vault" \
     "$ebs_adapter_migrations|0:true,1:true|ebs-adapter" \
     "$admin_reporting_migrations|0:true,1:true|admin-reporting" \
     "$notification_chat_migrations|0:true,1:true|notification-chat" \
-    "$wallet_ledger_migrations|0:true,1:true,2:true|wallet-ledger" \
+    "$wallet_ledger_migrations|0:true,1:true,2:true,3:true,4:true|wallet-ledger" \
     "$workload_auth_migrations|0:true,1:true|workload-auth" \
-    "$gateway_auth_migrations|0:true,1:true|gateway-auth"
+    "$gateway_auth_migrations|0:true,1:true,2:true|gateway-auth"
 do
     IFS='|' read -r actual expected label <<<"$actual_expected_label"
     [[ "$actual" == "$expected" ]] || fail "$label migration set is $actual, want exactly $expected"

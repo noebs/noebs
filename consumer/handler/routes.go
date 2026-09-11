@@ -68,6 +68,11 @@ func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Put("/user/lang", h.SetUserLanguage)
 	router.Post("/user/device", h.AddDeviceToken)
 	router.Post("/kyc", h.KYC)
+	router.Post("/identity/sessions", h.CreateIdentitySession)
+	router.Get("/identity/sessions/:session_id", h.GetIdentitySession)
+	router.Put("/identity/sessions/:session_id/evidence/:kind", h.PutIdentityEvidence)
+	router.Post("/identity/sessions/:session_id/submit", h.SubmitIdentitySession)
+	router.Delete("/identity/sessions/:session_id", h.DiscardIdentitySession)
 }
 
 func RegisterNotificationAdminInternalRoutes(router fiber.Router, h *Handler) {

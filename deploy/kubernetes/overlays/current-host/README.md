@@ -176,7 +176,8 @@ with the digest-pin commit and released OCI digest:
 ```sh
 scripts/alpha-post-deploy-smoke.sh \
   '<40-character-digest-pin-commit>' \
-  'sha256:<64-hex-release-digest>'
+  'sha256:<64-hex-release-digest>' \
+  'sha256:<64-hex-sdk-profile-digest>'
 ```
 
 ## One-time wallet money schema `001` to `002` cutover
