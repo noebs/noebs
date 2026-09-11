@@ -39,7 +39,7 @@ func (s *Store) SeedInteropDemo(ctx context.Context, tenant, fsp string) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.DB.ExecContext(ctx, `INSERT INTO interop_bindings(tenant_id,fsp_id,currency,currency_unit_version_id,clearing_wallet_id,suspense_wallet_id,enabled) VALUES($1,$2,'SDG',$3,$4,$5,false) ON CONFLICT(tenant_id) DO NOTHING`, tenant, fsp, unit.ID, clearing.ID, suspense.ID)
+	_, err = s.DB.ExecContext(ctx, `INSERT INTO interop_bindings(tenant_id,fsp_id,currency,currency_unit_version_id,clearing_wallet_id,suspense_wallet_id,enabled) VALUES($1,$2,'SDG',$3,$4,$5,false) ON CONFLICT DO NOTHING`, tenant, fsp, unit.ID, clearing.ID, suspense.ID)
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func (s *Store) SeedInteropDemo(ctx context.Context, tenant, fsp string) error {
 			return err
 		}
 		alias := fmt.Sprintf("24990000002%d", i+1)
-		_, err = s.DB.ExecContext(ctx, `INSERT INTO interop_aliases(tenant_id,identifier,wallet_id,display_name) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,wallet_id) DO NOTHING`, tenant, alias, wallet.ID, fmt.Sprintf("Synthetic noebs wallet %d", i+1))
+		_, err = s.DB.ExecContext(ctx, `INSERT INTO interop_aliases(tenant_id,identifier,wallet_id,display_name) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, tenant, alias, wallet.ID, fmt.Sprintf("Synthetic noebs wallet %d", i+1))
 		if err != nil {
 			return err
 		}

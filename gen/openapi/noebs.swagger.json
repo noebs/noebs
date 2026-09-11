@@ -1192,6 +1192,30 @@
         }
       }
     },
+    "v1ListWalletFundingMethodsResponse": {
+      "type": "object",
+      "properties": {
+        "methods": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1WalletFundingMethod"
+          }
+        }
+      }
+    },
+    "v1ListWalletProvidersResponse": {
+      "type": "object",
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1WalletProvider"
+          }
+        }
+      }
+    },
     "v1ListWalletTransactionsPublicResponse": {
       "type": "object",
       "properties": {
@@ -1516,6 +1540,65 @@
         }
       }
     },
+    "v1WalletAccount": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "wallets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Wallet"
+          }
+        }
+      }
+    },
+    "v1WalletFundingMethod": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "providerId": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "accountIdentifier": {
+          "type": "string"
+        },
+        "accountName": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "unavailableReason": {
+          "type": "string"
+        },
+        "currencyUnitVersion": {
+          "type": "string"
+        },
+        "inputSchemaJson": {
+          "type": "string"
+        }
+      }
+    },
     "v1WalletLedgerEntry": {
       "type": "object",
       "properties": {
@@ -1574,6 +1657,52 @@
         },
         "balanceAfterMoney": {
           "$ref": "#/definitions/v1MoneyAmount"
+        }
+      }
+    },
+    "v1WalletProvider": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "capabilities": {
+          "$ref": "#/definitions/v1WalletProviderCapabilities"
+        },
+        "currencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "transferMode": {
+          "type": "string"
+        },
+        "fundingMode": {
+          "type": "string"
+        }
+      }
+    },
+    "v1WalletProviderCapabilities": {
+      "type": "object",
+      "properties": {
+        "send": {
+          "type": "boolean"
+        },
+        "receive": {
+          "type": "boolean"
+        },
+        "funding": {
+          "type": "boolean"
+        },
+        "services": {
+          "type": "boolean"
         }
       }
     },

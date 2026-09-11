@@ -1,0 +1,108 @@
+# One NoEBS account, multiple payment providers
+
+The app signs into NoEBS through its configured OIDC identity authority. It does
+not sign into Mojaloop. The same verified customer and tenant own their profile,
+wallets, transaction history and identity evidence. Mojaloop is one configured
+payment rail; the switch receives only the native transfer data needed for
+interoperability. Customer balances remain in NoEBS. A hub participant position
+is never exposed as a customer balance or treated as customer funding.
+
+## Account and discovery API
+
+All routes require the existing NoEBS mobile bearer token and active tenant.
+The gateway resolves the customer projection, and the wallet service verifies
+that identity again. Caller-selected `tenant_id` and `user_id` query parameters
+are rejected; account and funding queries never accept an owner identifier.
+
+- `GET /wallet/me` returns `{user_id, tenant_id, wallets: [...]}`. The wallets
+  use the existing wallet protobuf, with string-backed `balance`,
+  `available_balance`, `balance_money` and `available_balance_money`. No account
+  is created by a read. Use `POST /wallet/wallets` with an explicit currency to
+  create a wallet. The normal profile/name endpoint remains `GET /consumer/user`.
+- `GET /wallet/providers` returns `{providers: [...]}`. Each entry has `id`,
+  `name`, `available`, `currencies`, `transfer_mode`, `funding_mode` and
+  `capabilities: {send, receive, funding, services}`. The directory aggregates
+  tenant-scoped enabled PSP methods and the explicitly configured native rail.
+- `GET /wallet/funding-methods?wallet_id=<uuid>` returns `{methods: [...]}` for
+  an owned wallet only. A different customer's wallet returns 404. The methods
+  are scoped to the wallet's exact currency unit version.
+
+Example registered native receiving method:
+
+```json
+{
+  "id": "mojaloop:receive",
+  "provider_id": "mojaloop",
+  "label": "Bank or wallet transfer",
+  "instructions": "From a participating bank or wallet, send to this registered number. Your NoEBS balance updates when the transfer completes.",
+  "account_identifier": "249900000088",
+  "account_name": "Synthetic customer",
+  "currency": "SDG",
+  "available": true,
+  "mode": "external_transfer",
+  "unavailable_reason": "",
+  "currency_unit_version": "17",
+  "input_schema_json": ""
+}
+```
+
+The number and unit version in this example are illustrative. The live response
+reads the operator-registered alias and the wallet's immutable currency unit; it
+never derives a receiving number from profile contact data or installs an alias.
+An unregistered wallet returns `available: false`, empty receiving details and
+`unavailable_reason: registration_required`. Frozen wallets return
+`wallet_inactive`; a disabled binding returns `provider_unavailable`. Unsupported
+currencies/units have no native receiving method. Provider availability describes
+configuration and admission enablement, not a realtime network health guarantee
+or approval of a particular amount.
+
+## Routes retain their monetary meaning
+
+`transfer_mode: interop_quote` uses the existing `/wallet/interop/quotes` and
+`/wallet/interop/transfers` APIs. The distinct `wallet.interop.transfer`
+authorization, quote ownership, explicit currency version, durable idempotency,
+hold reservation and native outcome reconciliation are unchanged. Funding mode
+`external_transfer` means the sender initiates a transfer from a participating
+bank or wallet; NoEBS credits only a correlated native committed outcome.
+Showing instructions does not move funds or create a deposit intent.
+
+Configured PSPs use `transfer_mode: withdrawal` and `funding_mode: deposit` as
+applicable, retaining `/wallet/withdrawals`, `/wallet/deposits` and the established
+`/wallet/methods` request-schema and amount/region filtering contract. The new
+funding method exposes only the public deposit input schema, never private
+provider endpoints, secrets, internal participant clearing wallets or SDK state.
+A client must support a returned mode before offering its action.
+
+`services` is currently false: this release does not introduce wallet-funded
+bill payment, electricity or airtime adapters. Existing card/EBS services retain
+their own capabilities. A completed transfer to NoEBS does not prove that an
+arbitrary app service can spend that wallet balance. This remains a separate
+provider/service admission extension, rather than business logic in Mojaloop.
+
+## Verification and release
+
+Discovery tests cover authenticated account restoration without wallet creation,
+canonical customer ownership, tenant isolation, exact string money/version
+serialization, explicit unavailable states, configured PSP aggregation and
+unchanged balances across receiving-detail refreshes. Store discovery also runs
+under the actual `wallet_ledger_runtime` login. The existing native monetary
+regression covers command/runtime authority, concurrent admission, durable holds,
+callback recovery, balanced posting and idempotent demo provisioning.
+
+Local verification uses an isolated PostgreSQL 18.6 cluster extracted from Ubuntu
+packages under `.state/postgres`, bound only to `127.0.0.1:55432`. It contains
+synthetic test databases only; the test harness creates and removes its own
+service databases. No production database is used. Test invocation:
+
+```sh
+source .state/postgres/test.env
+go test ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/interop -count=1
+go test -race ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/interop \
+  -run 'Test(WalletDiscovery|WalletAccount|FundingDiscovery|ListUserWallets|Interop)' -count=1
+```
+
+Provider discovery adds no migration or new monetary write permission. Publish
+an immutable source image, retain the receipt and promote all application digest
+pins through the existing [release workflow](alpha-image-release.md). Retain the
+pinned official SDK and the separate native transport release as documented in
+[the deployed participant contract](mojaloop-interop.md).

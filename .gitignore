@@ -63,3 +63,6 @@ secrets.decrypted.yaml
 /deploy/docker/postgres/tls.crt
 /deploy/docker/postgres/tls.key
 /deploy/docker/secrets/*.secrets.yaml
+
+# Local credentials, test services and generated runtime state.
+/.state/

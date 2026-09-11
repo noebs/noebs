@@ -8,6 +8,9 @@ import "google/protobuf/struct.proto";
 option go_package = "github.com/adonese/noebs/gen/proto/noebs/wallet/v1;walletv1";
 
 service WalletPublicService {
+  rpc GetWalletAccount(GetWalletAccountRequest) returns (WalletAccount) {}
+  rpc ListWalletProviders(ListWalletProvidersRequest) returns (ListWalletProvidersResponse) {}
+  rpc ListWalletFundingMethods(ListWalletFundingMethodsRequest) returns (ListWalletFundingMethodsResponse) {}
   rpc GetInteropCapability(GetInteropCapabilityRequest) returns (InteropCapability) {}
   rpc CreateInteropQuote(CreateInteropQuoteRequest) returns (InteropQuote) {}
   rpc GetInteropQuote(GetInteropQuoteRequest) returns (InteropQuote) {}
@@ -551,3 +554,48 @@ message InteropTransfer {
  string currency_unit_version = 7; string ledger_transaction_id = 8;
  string error_code = 9; string created_at = 10; string updated_at = 11;
 }
+
+// Account restoration and provider discovery use the same NoEBS identity as all
+// other wallet operations. A provider is a payment rail, never an identity issuer.
+message GetWalletAccountRequest { string tenant_id = 1; }
+message WalletAccount {
+  string user_id = 1;
+  string tenant_id = 2;
+  repeated Wallet wallets = 3;
+}
+message ListWalletProvidersRequest { string tenant_id = 1; }
+message WalletProviderCapabilities {
+  bool send = 1;
+  bool receive = 2;
+  bool funding = 3;
+  bool services = 4;
+}
+message WalletProvider {
+  string id = 1;
+  string name = 2;
+  bool available = 3;
+  WalletProviderCapabilities capabilities = 4;
+  repeated string currencies = 5;
+  string transfer_mode = 6;
+  string funding_mode = 7;
+}
+message ListWalletProvidersResponse { repeated WalletProvider providers = 1; }
+message ListWalletFundingMethodsRequest {
+  string tenant_id = 1;
+  string wallet_id = 2;
+}
+message WalletFundingMethod {
+  string id = 1;
+  string provider_id = 2;
+  string label = 3;
+  string instructions = 4;
+  string account_identifier = 5;
+  string account_name = 6;
+  string currency = 7;
+  bool available = 8;
+  string mode = 9;
+  string unavailable_reason = 10;
+  string currency_unit_version = 11;
+  string input_schema_json = 12;
+}
+message ListWalletFundingMethodsResponse { repeated WalletFundingMethod methods = 1; }

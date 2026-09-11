@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (s *Server) interopIdentity(ctx context.Context, tenant string) (string, string, error) {
+func (s *Server) walletIdentity(ctx context.Context, tenant string) (string, string, error) {
 	claims, err := s.requireGatewayClaims(ctx)
 	if err != nil {
 		return "", "", err
@@ -33,7 +33,7 @@ func (s *Server) GetInteropCapability(ctx context.Context, r *walletv1.GetIntero
 	if r == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	tenant, _, err := s.interopIdentity(ctx, r.TenantId)
+	tenant, _, err := s.walletIdentity(ctx, r.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func (s *Server) CreateInteropQuote(ctx context.Context, r *walletv1.CreateInter
 	if r == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	tenant, owner, err := s.interopIdentity(ctx, r.TenantId)
+	tenant, owner, err := s.walletIdentity(ctx, r.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (s *Server) GetInteropQuote(ctx context.Context, r *walletv1.GetInteropQuot
 	if r == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	tenant, owner, err := s.interopIdentity(ctx, r.TenantId)
+	tenant, owner, err := s.walletIdentity(ctx, r.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (s *Server) CloseInteropQuote(ctx context.Context, r *walletv1.GetInteropQu
 	if r == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	tenant, owner, err := s.interopIdentity(ctx, r.TenantId)
+	tenant, owner, err := s.walletIdentity(ctx, r.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (s *Server) RequestInteropTransfer(ctx context.Context, r *walletv1.Request
 	if r == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	tenant, owner, err := s.interopIdentity(ctx, r.TenantId)
+	tenant, owner, err := s.walletIdentity(ctx, r.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (s *Server) GetInteropTransfer(ctx context.Context, r *walletv1.GetInteropT
 	if r == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	tenant, owner, err := s.interopIdentity(ctx, r.TenantId)
+	tenant, owner, err := s.walletIdentity(ctx, r.TenantId)
 	if err != nil {
 		return nil, err
 	}

@@ -35,6 +35,9 @@ func NewGRPCUserHandler(client walletv1.WalletPublicServiceClient, cfg ebs_field
 func RegisterGRPCUserRoutes(router fiber.Router, handler *GRPCUserHandler) {
 	registerInteropRoutes(router, handler)
 	router.Get("/methods", handler.ListPaymentMethods)
+	router.Get("/me", handler.walletAccount)
+	router.Get("/providers", handler.walletProviders)
+	router.Get("/funding-methods", handler.walletFundingMethods)
 	router.Get("/currencies", handler.ListCurrencies)
 	router.Get("/currencies/:code", handler.GetCurrency)
 	router.Post("/money/parse", handler.ParseMoney)
