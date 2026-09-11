@@ -7,30 +7,33 @@ die() {
     exit 1
 }
 
-[[ $# -eq 2 || $# -eq 3 ]] || die "usage: $0 <argo-git-revision> <sha256:image-digest> [sha256:sdk-digest]"
+[[ $# -eq 3 ]] || die "usage: $0 <argo-git-revision> <sha256:image-digest> <sha256:sdk-digest>"
 
 expected_revision="$1"
 expected_digest="$2"
-expected_sdk_digest="${3:-$expected_digest}"
+expected_sdk_digest="$3"
 deploy_host="${NOEBS_DEPLOY_HOST:-100.102.164.34}"
 api_origin="${NOEBS_API_ORIGIN:-https://api.noebs.sd}"
 
 [[ "$expected_revision" =~ ^[0-9a-f]{40}$ ]] || die "Argo revision must be a full 40-character Git SHA"
 [[ "$expected_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "image digest must be sha256 followed by 64 lowercase hexadecimal characters"
-[[ -z "$expected_sdk_digest" || "$expected_sdk_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "SDK digest must be sha256 followed by 64 lowercase hexadecimal characters"
+[[ "$expected_sdk_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || die "SDK digest must be sha256 followed by 64 lowercase hexadecimal characters"
 [[ "$api_origin" == https://* ]] || die "NOEBS_API_ORIGIN must use HTTPS"
 
 command -v ssh >/dev/null 2>&1 || die "ssh is unavailable"
 command -v curl >/dev/null 2>&1 || die "curl is unavailable"
 command -v python3 >/dev/null 2>&1 || die "python3 is unavailable"
 
+image_checker_b64="$(base64 < "$(dirname -- "${BASH_SOURCE[0]}")/alpha-workload-images.py" | tr -d '\n')"
+
 printf 'alpha post-deploy smoke: checking Argo, rollouts, images, resources, and migrations\n'
-ssh "$deploy_host" bash -s -- "$expected_revision" "$expected_digest" "$expected_sdk_digest" <<'REMOTE'
+ssh "$deploy_host" bash -s -- "$expected_revision" "$expected_digest" "$expected_sdk_digest" "$image_checker_b64" <<'REMOTE'
 set -euo pipefail
 
 expected_revision="$1"
 expected_digest="$2"
 expected_sdk_digest="$3"
+image_checker="$(printf '%s' "$4" | base64 -d)"
 namespace=noebs
 
 fail() {
@@ -41,6 +44,7 @@ fail() {
 command -v sudo >/dev/null 2>&1 || fail "sudo is unavailable"
 command -v k3s >/dev/null 2>&1 || fail "k3s is unavailable"
 command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
+command -v python3 >/dev/null 2>&1 || fail "python3 is unavailable"
 sudo -n true >/dev/null 2>&1 || fail "passwordless sudo is unavailable"
 kubectl_cmd=(sudo -n k3s kubectl)
 
@@ -97,48 +101,16 @@ caddy_missing_resources="$(jq -r '
 expected_image="ghcr.io/noebs/noebs@$expected_digest"
 expected_sdk_image="ghcr.io/noebs/noebs@$expected_sdk_digest"
 pods="$("${kubectl_cmd[@]}" -n "$namespace" get pods -o json)"
-# Completed jobs retain their original image as historical evidence. Validate
-# active pods and the CronJob templates that will create future cleanup jobs.
-pods="$(jq '.items |= map(select(.status.phase != "Succeeded" and .status.phase != "Failed"))' <<<"$pods")"
+# Select required roles independently of the observed image repository. Include
+# init containers, the SDK sidecar, and future cleanup templates; only completed
+# Job pods are historical. The checker runs remotely and returns no secrets.
+workloads="$("${kubectl_cmd[@]}" -n "$namespace" get deployment,statefulset -o json)"
 cronjobs="$("${kubectl_cmd[@]}" -n "$namespace" get cronjobs -o json)"
-wrong_cron_images="$(jq -r --arg expected "$expected_image" '
-  .items[] | .metadata.name as $job | .spec.jobTemplate.spec.template.spec.containers[]
-  | select(.image | startswith("ghcr.io/noebs/noebs"))
-  | select(.image != $expected) | "\($job):\(.name)=\(.image)"
-' <<<"$cronjobs")"
-[[ -z "$wrong_cron_images" ]] || fail "unexpected future cleanup images: $wrong_cron_images"
-
-wrong_declared_images="$(
-    jq -r --arg expected "$expected_image" --arg sdk "$expected_sdk_image" '
-      .items[]
-      | .metadata.name as $pod
-      | .spec.containers[]
-      | select(.image | startswith("ghcr.io/noebs/noebs"))
-      | select(.image != (if .name == "mojaloop-sdk" then $sdk else $expected end))
-      | "\($pod):\(.name)=\(.image)"
-    ' <<<"$pods"
-)"
-[[ -z "$wrong_declared_images" ]] || fail "unexpected declared Noebs images: $wrong_declared_images"
-
-running_noebs_count="$(
-    jq '[.items[].spec.containers[] | select(.image | startswith("ghcr.io/noebs/noebs"))] | length' <<<"$pods"
-)"
-[[ "$running_noebs_count" -gt 0 ]] || fail "no running Noebs containers were found"
-
-wrong_running_images="$(
-    jq -r --arg expected "$expected_image" --arg sdk "$expected_sdk_image" '
-      .items[]
-      | . as $pod
-      | .spec.containers[]
-      | select(.image | startswith("ghcr.io/noebs/noebs"))
-      | . as $declared
-      | [$pod.status.containerStatuses[]? | select(.name == $declared.name)] as $running
-      | select(($running | length) != 1
-          or $running[0].imageID != (if .name == "mojaloop-sdk" then $sdk else $expected end))
-      | "\($pod.metadata.name):\(.name)=\($running[0].imageID // "missing runtime status")"
-    ' <<<"$pods"
-)"
-[[ -z "$wrong_running_images" ]] || fail "unexpected running Noebs image IDs: $wrong_running_images"
+image_snapshot="$(printf '%s\n' "$workloads" "$pods" "$cronjobs" | jq -s '{workloads:.[0],pods:.[1],cronjobs:.[2]}')"
+image_verification="$(python3 -c "$image_checker" "$expected_image" "$expected_sdk_image" <<<"$image_snapshot")" \
+  || fail "workload image contract failed: $image_verification"
+printf 'alpha post-deploy smoke (images): %s\n' "$image_verification"
+pods="$(jq '.items |= map(select(((.status.phase == "Succeeded" or .status.phase == "Failed") and any(.metadata.ownerReferences[]?; .kind == "Job")) | not))' <<<"$pods")"
 
 best_effort="$(
     jq -r '.items[] | select(.status.phase == "Running" and .status.qosClass == "BestEffort") | .metadata.name' <<<"$pods"
@@ -156,7 +128,6 @@ restarted="$(
 )"
 [[ -z "$restarted" ]] || fail "post-rollout containers have restarted: $restarted"
 
-workloads="$("${kubectl_cmd[@]}" -n "$namespace" get deployment,statefulset -o json)"
 missing_resources="$(
     jq -r '
       .items[]

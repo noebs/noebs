@@ -1126,7 +1126,9 @@ func TestKeycloakEmptyStateCutoverHasOneExactDestructiveBoundary(t *testing.T) {
 	}
 	text := string(payload)
 	steps := []string{
+		`: "${RELEASE_SDK_DIGEST:?set the independently verified SDK receipt sha256 image digest}"`,
 		`reencrypt_finished`,
+		`test "$sdk_pinned_digest" = "$RELEASE_SDK_DIGEST"`,
 		`create_noebs_application = false`,
 		`tofu -chdir="$foundation_root" apply "$pause_plan"`,
 		`scale deployment,statefulset --all --replicas=0`,
@@ -1157,7 +1159,7 @@ func TestKeycloakEmptyStateCutoverHasOneExactDestructiveBoundary(t *testing.T) {
 		`https://api.noebs.sd/.well-known/assetlinks.json`,
 		`deployment/consumer-beneficiary`,
 		`retired_authority_count`,
-		`scripts/alpha-post-deploy-smoke.sh "$RELEASE_COMMIT" "$RELEASE_DIGEST"`,
+		`scripts/alpha-post-deploy-smoke.sh "$RELEASE_COMMIT" "$RELEASE_DIGEST" "$RELEASE_SDK_DIGEST"`,
 	}
 	cursor := 0
 	for _, step := range steps {

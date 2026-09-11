@@ -171,7 +171,12 @@ digest-pin commit, every Deployment and StatefulSet has completed rollout, all
 Noebs pod `imageID` values end in the expected digest, no runtime pod is
 `BestEffort`, and every service database has exactly the release's migration
 set. Then run the non-financial live smoke script
-with the digest-pin commit and released OCI digest:
+with the digest-pin commit and both independently verified OCI digests. All three
+arguments are required for this profile; the SDK digest is never inferred from
+the application image. The image checker requires every current NoEBS deployment
+role, the wallet worker SDK sidecar, and both cleanup CronJobs by stable name. It
+checks application/init container declarations and runtime manifests independently
+of the observed repository, while preserving third-party workload images:
 
 ```sh
 scripts/alpha-post-deploy-smoke.sh \

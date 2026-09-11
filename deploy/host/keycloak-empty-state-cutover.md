@@ -24,6 +24,7 @@ umask 077
 : "${CURRENT_COMMIT:?set the currently targeted 40-hex commit}"
 : "${RELEASE_COMMIT:?set the reviewed promotion 40-hex commit}"
 : "${RELEASE_DIGEST:?set the verified sha256 image digest}"
+: "${RELEASE_SDK_DIGEST:?set the independently verified SDK receipt sha256 image digest}"
 : "${RELEASE_REPO_ROOT:?set the reviewed release checkout}"
 : "${RELEASE_ROOT:?set the validated Kubernetes release directory}"
 : "${BOOTSTRAP_INPUT:?set the SOPS-encrypted bootstrap input}"
@@ -32,6 +33,7 @@ umask 077
 [[ "$CURRENT_COMMIT" =~ ^[0-9a-f]{40}$ ]]
 [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
 [[ "$RELEASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+[[ "$RELEASE_SDK_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
 [[ "$(git -C "$RELEASE_REPO_ROOT" rev-parse --verify HEAD^{commit})" == "$RELEASE_COMMIT" ]]
 git -C "$RELEASE_REPO_ROOT" diff --quiet
 git -C "$RELEASE_REPO_ROOT" diff --cached --quiet
@@ -80,6 +82,11 @@ for pin_path in "${pin_paths[@]}"; do
   ' "$pin_path")"
   test "$pinned_digest" = "$RELEASE_DIGEST"
 done
+sdk_pinned_digest="$(awk '
+  $1 == "-" && $2 == "name:" && $3 == "noebs-mojaloop-sdk" { sdk = 1; next }
+  sdk && $1 == "digest:" { print $2; exit }
+' deploy/kubernetes/overlays/current-host/kustomization.yaml)"
+test "$sdk_pinned_digest" = "$RELEASE_SDK_DIGEST"
 
 noebs render-kubernetes-secrets "$RELEASE_ROOT" noebs > "$steady_secrets"
 noebs render-edge-internal-transport "$RELEASE_ROOT" edge > "$edge_internal_transport"
@@ -343,7 +350,7 @@ retired_authority_count="$("${kubectl[@]}" -n noebs exec postgres-0 -- sh -ceu '
 ')"
 test "$retired_authority_count" = 0
 
-scripts/alpha-post-deploy-smoke.sh "$RELEASE_COMMIT" "$RELEASE_DIGEST"
+scripts/alpha-post-deploy-smoke.sh "$RELEASE_COMMIT" "$RELEASE_DIGEST" "$RELEASE_SDK_DIGEST"
 rm -f "$steady_secrets" "$bootstrap_secrets"
 ```
 
