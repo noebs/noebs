@@ -128,11 +128,14 @@ running_noebs_count="$(
 wrong_running_images="$(
     jq -r --arg expected "$expected_image" --arg sdk "$expected_sdk_image" '
       .items[]
-      | .metadata.name as $pod
-      | .status.containerStatuses[]?
+      | . as $pod
+      | .spec.containers[]
       | select(.image | startswith("ghcr.io/noebs/noebs"))
-      | select(.imageID != (if .name == "mojaloop-sdk" then $sdk else $expected end))
-      | "\($pod):\(.name)=\(.imageID)"
+      | . as $declared
+      | [$pod.status.containerStatuses[]? | select(.name == $declared.name)] as $running
+      | select(($running | length) != 1
+          or $running[0].imageID != (if .name == "mojaloop-sdk" then $sdk else $expected end))
+      | "\($pod.metadata.name):\(.name)=\($running[0].imageID // "missing runtime status")"
     ' <<<"$pods"
 )"
 [[ -z "$wrong_running_images" ]] || fail "unexpected running Noebs image IDs: $wrong_running_images"
