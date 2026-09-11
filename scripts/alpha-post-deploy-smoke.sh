@@ -11,7 +11,7 @@ die() {
 
 expected_revision="$1"
 expected_digest="$2"
-expected_sdk_digest="${3:-}"
+expected_sdk_digest="${3:-$expected_digest}"
 deploy_host="${NOEBS_DEPLOY_HOST:-100.102.164.34}"
 api_origin="${NOEBS_API_ORIGIN:-https://api.noebs.sd}"
 
@@ -97,6 +97,16 @@ caddy_missing_resources="$(jq -r '
 expected_image="ghcr.io/noebs/noebs@$expected_digest"
 expected_sdk_image="ghcr.io/noebs/noebs@$expected_sdk_digest"
 pods="$("${kubectl_cmd[@]}" -n "$namespace" get pods -o json)"
+# Completed jobs retain their original image as historical evidence. Validate
+# active pods and the CronJob templates that will create future cleanup jobs.
+pods="$(jq '.items |= map(select(.status.phase != "Succeeded" and .status.phase != "Failed"))' <<<"$pods")"
+cronjobs="$("${kubectl_cmd[@]}" -n "$namespace" get cronjobs -o json)"
+wrong_cron_images="$(jq -r --arg expected "$expected_image" '
+  .items[] | .metadata.name as $job | .spec.jobTemplate.spec.template.spec.containers[]
+  | select(.image | startswith("ghcr.io/noebs/noebs"))
+  | select(.image != $expected) | "\($job):\(.name)=\(.image)"
+' <<<"$cronjobs")"
+[[ -z "$wrong_cron_images" ]] || fail "unexpected future cleanup images: $wrong_cron_images"
 
 wrong_declared_images="$(
     jq -r --arg expected "$expected_image" --arg sdk "$expected_sdk_image" '
@@ -297,6 +307,7 @@ assert links == [{
         "package_name": "com.tutipay.app.alpha",
         "sha256_cert_fingerprints": [
             "B4:45:C2:79:FE:FB:B0:95:AA:33:4F:67:42:4D:EA:6B:52:77:38:EA:FF:A5:EF:FB:80:B5:E2:F5:9B:66:1C:AE",
+            "BB:1F:DB:0B:76:AE:89:D6:B6:BD:7A:D4:A1:5F:85:59:60:16:55:48:73:8E:E4:B8:DC:89:4A:8F:BC:1A:AE:F5",
         ],
     },
 }]
@@ -421,7 +432,8 @@ http_status() {
 [[ "$(http_status GET "$api_origin/auth/realms/noebs/.well-known/uma2-configuration")" == 404 ]] || die "unused Keycloak UMA discovery is publicly reachable"
 [[ "$(http_status GET "$api_origin/auth/realms/noebs/protocol/openid-connect/token")" == 404 ]] || die "Keycloak token endpoint accepts a public GET route"
 [[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/auth")" == 404 ]] || die "Keycloak authorization endpoint accepts a public POST route"
-[[ "$(http_status GET "$api_origin/auth/realms/noebs/protocol/openid-connect/userinfo")" == 404 ]] || die "unused Keycloak userinfo endpoint is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/protocol/openid-connect/userinfo")" == 401 ]] || die "Keycloak userinfo did not reject an anonymous request"
+[[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/userinfo")" == 404 ]] || die "Keycloak userinfo accepts an unsupported public POST route"
 [[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/token/introspect")" == 404 ]] || die "unused Keycloak introspection endpoint is publicly reachable"
 [[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/revoke")" == 404 ]] || die "unused Keycloak revocation endpoint is publicly reachable"
 [[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/auth/device")" == 404 ]] || die "unused Keycloak device authorization endpoint is publicly reachable"
