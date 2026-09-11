@@ -46,27 +46,42 @@ func TestTenantScopedMigrationsEnforceCatalogAndCompositeForeignKeys(t *testing.
 			}
 			for _, table := range tenantTables {
 				var protected bool
+				// A native alias/quote may bind tenant_id through an immutable
+				// participant binding. Follow the same FK column through every
+				// enforced relation; a mere unrelated path to tenants is not enough.
 				if err := db.GetContext(t.Context(), &protected, `
+					WITH RECURSIVE tenant_lineage(relation_oid, column_number, visited) AS (
+						SELECT relation.oid, column_definition.attnum, ARRAY[relation.oid]
+						FROM pg_class relation
+						JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+						JOIN pg_attribute column_definition ON column_definition.attrelid = relation.oid
+						WHERE namespace.nspname = current_schema() AND relation.relname = $1
+						  AND column_definition.attname = 'tenant_id' AND NOT column_definition.attisdropped
+						UNION ALL
+						SELECT foreign_key.confrelid, parent_key.attnum, lineage.visited || foreign_key.confrelid
+						FROM tenant_lineage lineage
+						JOIN pg_constraint foreign_key ON foreign_key.conrelid = lineage.relation_oid
+						  AND foreign_key.contype = 'f' AND foreign_key.convalidated
+						JOIN LATERAL unnest(foreign_key.conkey) WITH ORDINALITY child_key(attnum, position)
+						  ON child_key.attnum = lineage.column_number
+						JOIN LATERAL unnest(foreign_key.confkey) WITH ORDINALITY parent_key(attnum, position)
+						  ON parent_key.position = child_key.position
+						WHERE NOT foreign_key.confrelid = ANY(lineage.visited)
+					)
 					SELECT EXISTS (
-						SELECT 1
-						FROM pg_constraint foreign_key
-						JOIN pg_class child ON child.oid = foreign_key.conrelid
-						JOIN pg_class parent ON parent.oid = foreign_key.confrelid
-						JOIN pg_namespace namespace ON namespace.oid = child.relnamespace
-						WHERE namespace.nspname = current_schema()
-						  AND child.relname = $1
-						  AND parent.relname = 'tenants'
-						  AND foreign_key.contype = 'f'
-						  AND array_length(foreign_key.conkey, 1) = 1
-						  AND array_length(foreign_key.confkey, 1) = 1
-						  AND (SELECT attname FROM pg_attribute WHERE attrelid = child.oid AND attnum = foreign_key.conkey[1]) = 'tenant_id'
-						  AND (SELECT attname FROM pg_attribute WHERE attrelid = parent.oid AND attnum = foreign_key.confkey[1]) = 'id'
+						SELECT 1 FROM tenant_lineage lineage
+						JOIN pg_class relation ON relation.oid = lineage.relation_oid
+						JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+						JOIN pg_attribute column_definition ON column_definition.attrelid = relation.oid
+						  AND column_definition.attnum = lineage.column_number
+						WHERE namespace.nspname = current_schema() AND relation.relname = 'tenants'
+						  AND column_definition.attname = 'id' AND NOT column_definition.attisdropped
 					)
 				`, table); err != nil {
 					t.Fatalf("inspect %s tenant foreign key: %v", table, err)
 				}
 				if !protected {
-					t.Fatalf("%s.%s does not reference tenants(id)", scope, table)
+					t.Fatalf("%s.%s has no enforced tenant_id foreign-key path to tenants(id)", scope, table)
 				}
 			}
 
