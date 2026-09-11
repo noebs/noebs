@@ -9,4 +9,4 @@ resources:
 images:
   - name: ghcr.io/noebs/noebs
     newName: ghcr.io/noebs/noebs
-    digest: sha256:0e2490542446b06e16da952fdcc725da0975e31bf951f1fd43eea29e3e6f57e8
+    digest: sha256:5c4d73c6a8163df5383a282c334f2ad10c9946f9eb7391f3cbf537d9b3f59f29
