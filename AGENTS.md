@@ -2,6 +2,11 @@
 
 These rules apply to all agents working in this repo. The intent is to keep layers clean and deterministic. Do **not** “defensively” mutate inputs inside lower layers.
 
+## Repository workflow
+
+- Work on `master` and push completed changes directly to `master`.
+- Do not create task or feature branches unless the user changes this preference.
+
 ## Layer Responsibilities
 
 - **API/Handler layer**: validate request shape, apply defaults from config, and convert to domain types. Reject missing required fields here.

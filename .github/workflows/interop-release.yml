@@ -1,7 +1,7 @@
 name: Immutable interop release
 on:
   push:
-    branches: [feat/mojaloop-interop]
+    branches: [master]
     paths-ignore: [docs/**, deploy/kubernetes/**]
 permissions:
   contents: read
