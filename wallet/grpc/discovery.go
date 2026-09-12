@@ -118,9 +118,13 @@ func (s *Server) ListWalletProviders(ctx context.Context, req *walletv1.ListWall
 		if _, exists := providers["mojaloop"]; exists {
 			return nil, status.Error(codes.FailedPrecondition, "duplicate payment provider identity")
 		}
+		eligible, err := s.interopAccountConfigured(ctx, tenant, owner, binding)
+		if err != nil {
+			return nil, interopError(err)
+		}
 		providers["mojaloop"] = &walletv1.WalletProvider{
 			Id: "mojaloop", Name: "Mojaloop", Available: binding.Enabled,
-			Capabilities: &walletv1.WalletProviderCapabilities{Send: binding.Enabled, Receive: binding.Enabled, Funding: binding.Enabled},
+			Capabilities: &walletv1.WalletProviderCapabilities{Send: eligible, Receive: eligible, Funding: binding.Enabled},
 			Currencies:   []string{binding.Currency}, TransferMode: "interop_quote", FundingMode: "external_transfer",
 		}
 	}
@@ -213,6 +217,8 @@ func (s *Server) ListWalletFundingMethods(ctx context.Context, req *walletv1.Lis
 		m.UnavailableReason, m.Instructions = "provider_unavailable", "Bank and wallet transfers are currently unavailable."
 	case w.Status != walletstore.WalletStatusActive:
 		m.UnavailableReason, m.Instructions = "wallet_inactive", "Your wallet must be active to receive a transfer."
+	case !isPersonalP2PWallet(w):
+		m.UnavailableReason, m.Instructions = "recipient_unavailable", "Receiving details are unavailable for this account."
 	default:
 		alias, err := s.Service.Store.GetInteropAlias(ctx, tenant, id, "")
 		if errors.Is(err, walletstore.ErrInteropNotFound) {
@@ -226,6 +232,39 @@ func (s *Server) ListWalletFundingMethods(ctx context.Context, req *walletv1.Lis
 	}
 	response.Methods = append(response.Methods, m)
 	return response, nil
+}
+
+// An enabled participant binding does not register every customer with the
+// external rail. Keep its setup entry visible, but expose send/receive only for
+// the caller's active personal wallet and existing alias in the bound unit.
+func (s *Server) interopAccountConfigured(ctx context.Context, tenant, owner string, binding *walletstore.InteropBinding) (bool, error) {
+	if !binding.Enabled {
+		return false, nil
+	}
+	userID, err := strconv.ParseInt(owner, 10, 64)
+	if err != nil || userID <= 0 {
+		return false, walletstore.ErrInvalidUserID
+	}
+	wallets, err := s.Service.Store.ListUserWallets(ctx, tenant, userID)
+	if err != nil {
+		return false, err
+	}
+	for i := range wallets {
+		w := &wallets[i]
+		if !isPersonalP2PWallet(w) || w.OwnerID != owner || w.Status != walletstore.WalletStatusActive ||
+			w.Currency != binding.Currency || w.CurrencyUnitID != binding.CurrencyUnitID {
+			continue
+		}
+		_, err := s.Service.Store.GetInteropAlias(ctx, tenant, w.ID, "")
+		if errors.Is(err, walletstore.ErrInteropNotFound) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 // Discovery advertises configured runtime capability. It does not start a

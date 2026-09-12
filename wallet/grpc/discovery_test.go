@@ -126,8 +126,33 @@ func TestWalletAccountAndFundingDiscovery(t *testing.T) {
 	must(err)
 	providers, err = server.ListWalletProviders(ctx, &walletv1.ListWalletProvidersRequest{})
 	must(err)
-	if len(providers.Providers) != 2 || providers.Providers[1].Id != "mojaloop" || !providers.Providers[1].Available || !providers.Providers[1].Capabilities.Send || providers.Providers[1].Capabilities.Services {
+	if len(providers.Providers) != 2 || providers.Providers[1].Id != "mojaloop" || !providers.Providers[1].Available || providers.Providers[1].Capabilities.Send || providers.Providers[1].Capabilities.Receive || !providers.Providers[1].Capabilities.Funding || providers.Providers[1].Capabilities.Services {
 		t.Fatalf("rail capabilities: %+v", providers)
+	}
+	assertInteropEligibility := func(userID int64, eligible bool) {
+		t.Helper()
+		result, err := server.ListWalletProviders(walletGatewayIdentityContext(userID, tenant), &walletv1.ListWalletProvidersRequest{})
+		must(err)
+		if len(result.Providers) != 2 {
+			t.Fatalf("provider directory: %+v", result)
+		}
+		p := result.Providers[1]
+		if p.Id != "mojaloop" || !p.Available || !p.Capabilities.Funding || p.Capabilities.Send != eligible || p.Capabilities.Receive != eligible {
+			t.Fatalf("account-specific rail eligibility = %v: %+v", eligible, p)
+		}
+	}
+	// A tenant binding and another customer's registered recipient must not
+	// enable this customer's unregistered source wallet or invent an account.
+	foreign, err := ensureUserWalletForTest(t, ctx, server.Service, tenant, 7, "SDG")
+	must(err)
+	_, err = server.Service.Store.DB.ExecContext(ctx, `INSERT INTO interop_aliases(tenant_id,identifier,wallet_id,display_name) VALUES($1,'249900000077',$2,'Fixture recipient')`, tenant, foreign.ID)
+	must(err)
+	assertInteropEligibility(7, true)
+	assertInteropEligibility(42, false)
+	assertInteropEligibility(99, false)
+	_, err = server.ListWalletFundingMethods(ctx, &walletv1.ListWalletFundingMethodsRequest{WalletId: foreign.ID.String()})
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("foreign registered alias disclosed: %v", err)
 	}
 	getFunding := func() *walletv1.WalletFundingMethod {
 		t.Helper()
@@ -144,6 +169,7 @@ func TestWalletAccountAndFundingDiscovery(t *testing.T) {
 	}
 	_, err = server.Service.Store.DB.ExecContext(ctx, `INSERT INTO interop_aliases(tenant_id,identifier,wallet_id,display_name) VALUES($1,'249900000088',$2,'Synthetic customer')`, tenant, w.ID)
 	must(err)
+	assertInteropEligibility(42, true)
 	method = getFunding()
 	if !method.Available || method.AccountIdentifier != "249900000088" || method.AccountName != "Synthetic customer" || method.Mode != "external_transfer" {
 		t.Fatalf("registered receiver: %+v", method)
@@ -158,6 +184,8 @@ func TestWalletAccountAndFundingDiscovery(t *testing.T) {
 	}
 	_, err = server.Service.Store.DB.ExecContext(ctx, `UPDATE wallets SET status='frozen' WHERE id=$1`, w.ID)
 	must(err)
+	assertInteropEligibility(42, false)
+	assertInteropEligibility(7, true)
 	method = getFunding()
 	if method.Available || method.UnavailableReason != "wallet_inactive" || method.AccountIdentifier != "" {
 		t.Fatalf("frozen receiver: %+v", method)

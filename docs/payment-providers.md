@@ -78,7 +78,12 @@ never derives a receiving number from profile contact data or installs an alias.
 An unregistered wallet returns `available: false`, empty receiving details and
 `unavailable_reason: registration_required`. Frozen wallets return
 `wallet_inactive`; a disabled binding returns `provider_unavailable`. Unsupported
-currencies/units have no native receiving method. Provider availability describes
+currencies/units have no native receiving method. Mojaloop send/receive
+capabilities require the authenticated customer's active personal wallet in the
+bound currency unit and its existing registered alias. The enabled participant
+binding alone keeps funding setup visible; it does not enable transfers for a
+new or unregistered customer. Another customer's alias grants no capability.
+Provider availability describes
 configuration and admission enablement, not a realtime network health guarantee
 or approval of a particular amount.
 
