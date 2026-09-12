@@ -56,6 +56,9 @@ func main() {
 }
 
 func runMain() error {
+	if isIdentityReviewCommand() {
+		return identityReviewCommand()
+	}
 	if isRenderConfigCommand() {
 		if err := renderConfigFiles(); err != nil {
 			return fmt.Errorf("render config: %w", err)

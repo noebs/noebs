@@ -40,7 +40,9 @@ func identityResult(c *fiber.Ctx, result store.IdentitySession, err error) error
 	}
 	review := "not_submitted"
 	if result.Status == "submitted" {
-		review = "pending_provider"
+		review = "pending_review"
+	} else if result.Status == "approved" || result.Status == "needs_information" || result.Status == "rejected" || result.Status == "withdrawn" {
+		review = result.Status
 	}
 	c.Set(fiber.HeaderCacheControl, "no-store")
 	return c.JSON(identitySessionResponse{IdentitySession: result,
@@ -97,19 +99,59 @@ func (h *Handler) CreateIdentitySession(c *fiber.Ctx) error {
 		return err
 	}
 	var input struct {
-		SessionID    string `json:"session_id"`
-		DocumentType string `json:"document_type"`
-		Synthetic    bool   `json:"synthetic"`
+		SessionID         string `json:"session_id"`
+		DocumentType      string `json:"document_type"`
+		Synthetic         bool   `json:"synthetic"`
+		PreviousSessionID string `json:"previous_session_id,omitempty"`
 	}
 	if err := identityJSON(c, &input); err != nil {
 		return identityResult(c, store.IdentitySession{}, err)
 	}
 	id, err := identityID(input.SessionID)
-	if err != nil || !input.Synthetic || !store.ValidIdentityDocumentType(input.DocumentType) {
+	if err != nil || !store.ValidIdentityDocumentType(input.DocumentType) {
 		return identityResult(c, store.IdentitySession{}, store.ErrInvalidIdentityEvidence)
 	}
+	var previous *uuid.UUID
+	if input.PreviousSessionID != "" {
+		parsed, err := identityID(input.PreviousSessionID)
+		if err != nil {
+			return identityResult(c, store.IdentitySession{}, err)
+		}
+		previous = &parsed
+	}
 	result, err := h.Service.CreateIdentitySession(c.UserContext(), store.CreateIdentitySessionParams{
-		Owner: owner, SessionID: id, DocumentType: input.DocumentType, Synthetic: input.Synthetic})
+		Owner: owner, SessionID: id, DocumentType: input.DocumentType, Synthetic: input.Synthetic, PreviousSessionID: previous})
+	return identityResult(c, result, err)
+}
+
+func (h *Handler) LatestIdentitySession(c *fiber.Ctx) error {
+	owner, err := identityOwner(c)
+	if err != nil {
+		return err
+	}
+	result, err := h.Service.LatestIdentitySession(c.UserContext(), owner)
+	return identityResult(c, result, err)
+}
+
+func (h *Handler) WithdrawIdentitySession(c *fiber.Ctx) error {
+	owner, err := identityOwner(c)
+	if err != nil {
+		return err
+	}
+	id, err := identityID(c.Params("session_id"))
+	if err != nil {
+		return identityResult(c, store.IdentitySession{}, err)
+	}
+	var input struct {
+		Revision int64 `json:"revision"`
+	}
+	if err := identityJSON(c, &input); err != nil {
+		return identityResult(c, store.IdentitySession{}, err)
+	}
+	if input.Revision < 1 {
+		return identityResult(c, store.IdentitySession{}, store.ErrInvalidIdentityEvidence)
+	}
+	result, err := h.Service.WithdrawIdentitySession(c.UserContext(), owner, id, input.Revision)
 	return identityResult(c, result, err)
 }
 

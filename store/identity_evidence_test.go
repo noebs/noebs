@@ -189,8 +189,8 @@ func TestIdentityEvidenceRejectsMissingAuthorityBeforeDB(t *testing.T) {
 	}
 	owner := IdentityOwner{TenantID: "tenant", UserID: 1}
 	if _, err := s.CreateIdentitySession(ctx, CreateIdentitySessionParams{Owner: owner,
-		SessionID: id, DocumentType: "passport"}); !errors.Is(err, ErrInvalidIdentityEvidence) {
-		t.Fatalf("real evidence allowed: %v", err)
+		SessionID: id, DocumentType: "invalid-document"}); !errors.Is(err, ErrInvalidIdentityEvidence) {
+		t.Fatalf("invalid document allowed: %v", err)
 	}
 	for _, value := range []IdentitySubmission{{}, {Revision: 1, ConsentVersion: IdentityConsentVersion,
 		FieldsReviewed: true, HolderName: " untrimmed "}} {

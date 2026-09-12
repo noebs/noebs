@@ -15,12 +15,14 @@ import (
 )
 
 var (
-	ErrInvalidIdentityEvidence = errors.New("invalid identity evidence")
-	ErrIdentityConflict        = errors.New("identity draft changed; refresh its status")
-	ErrIdentityIncomplete      = errors.New("document and selfie evidence are required")
+	ErrInvalidIdentityEvidence  = errors.New("invalid identity evidence")
+	ErrIdentityConflict         = errors.New("identity draft changed; refresh its status")
+	ErrIdentityIncomplete       = errors.New("document and selfie evidence are required")
+	ErrIdentityReviewIncomplete = errors.New("review the submitted fields and each evidence image before deciding")
 )
 
-const IdentityConsentVersion = "identity-evidence-v1"
+const IdentityConsentVersion = "identity-review-v1"
+const LegacyIdentityConsentVersion = "identity-evidence-v1"
 const MaxIdentityImageBytes = 2 * 1024 * 1024
 
 // IdentityOwner always comes from the authenticated NoEBS profile, never JSON.
@@ -36,23 +38,26 @@ type IdentityEvidenceMetadata struct {
 }
 
 type IdentitySession struct {
-	ID             uuid.UUID                  `json:"session_id"`
-	DocumentType   string                     `json:"document_type"`
-	Synthetic      bool                       `json:"synthetic"`
-	Status         string                     `json:"status"`
-	Revision       int64                      `json:"revision"`
-	Evidence       []IdentityEvidenceMetadata `json:"evidence"`
-	CreatedAt      time.Time                  `json:"created_at"`
-	UpdatedAt      time.Time                  `json:"updated_at"`
-	Submission     json.RawMessage            `json:"submission,omitempty"`
-	submissionHash string
+	ID                uuid.UUID                  `json:"session_id"`
+	DocumentType      string                     `json:"document_type"`
+	Synthetic         bool                       `json:"synthetic"`
+	Status            string                     `json:"status"`
+	Revision          int64                      `json:"revision"`
+	Evidence          []IdentityEvidenceMetadata `json:"evidence"`
+	CreatedAt         time.Time                  `json:"created_at"`
+	UpdatedAt         time.Time                  `json:"updated_at"`
+	Submission        json.RawMessage            `json:"submission,omitempty"`
+	PreviousSessionID *uuid.UUID                 `json:"previous_session_id,omitempty"`
+	Review            *IdentityReview            `json:"review,omitempty"`
+	submissionHash    string
 }
 
 type CreateIdentitySessionParams struct {
-	Owner        IdentityOwner
-	SessionID    uuid.UUID
-	DocumentType string
-	Synthetic    bool
+	Owner             IdentityOwner
+	SessionID         uuid.UUID
+	DocumentType      string
+	Synthetic         bool
+	PreviousSessionID *uuid.UUID
 }
 
 type PutIdentityEvidenceParams struct {
@@ -90,7 +95,7 @@ func ValidIdentityEvidenceKind(value string) bool {
 }
 
 func ValidateIdentitySubmission(value IdentitySubmission) error {
-	if value.Revision < 1 || value.ConsentVersion != IdentityConsentVersion || !value.FieldsReviewed ||
+	if value.Revision < 1 || (value.ConsentVersion != IdentityConsentVersion && value.ConsentVersion != LegacyIdentityConsentVersion) || !value.FieldsReviewed ||
 		value.HolderName == "" || value.HolderName != strings.TrimSpace(value.HolderName) || len(value.HolderName) > 256 ||
 		value.DocumentNumber != strings.TrimSpace(value.DocumentNumber) || len(value.DocumentNumber) > 128 {
 		return ErrInvalidIdentityEvidence
@@ -102,7 +107,7 @@ func (s *Store) CreateIdentitySession(ctx context.Context, p CreateIdentitySessi
 	if err := validateIdentityOwner(p.Owner, p.SessionID); err != nil {
 		return IdentitySession{}, err
 	}
-	if !p.Synthetic || !ValidIdentityDocumentType(p.DocumentType) {
+	if !ValidIdentityDocumentType(p.DocumentType) || (p.PreviousSessionID != nil && (*p.PreviousSessionID == uuid.Nil || *p.PreviousSessionID == p.SessionID)) {
 		return IdentitySession{}, ErrInvalidIdentityEvidence
 	}
 	db, err := s.ensureDB()
@@ -114,15 +119,26 @@ func (s *Store) CreateIdentitySession(ctx context.Context, p CreateIdentitySessi
 		return IdentitySession{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	// A correction is a new evidence set. The reviewed case remains immutable,
+	// and its ownership must be proven even if a client knows its UUID.
+	if p.PreviousSessionID != nil {
+		previous, err := identitySnapshot(ctx, tx, p.Owner, *p.PreviousSessionID, true)
+		if err != nil {
+			return IdentitySession{}, err
+		}
+		if previous.Status != "needs_information" && previous.Status != "rejected" {
+			return IdentitySession{}, ErrIdentityConflict
+		}
+	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO identity_sessions
-		(tenant_id,user_id,id,document_type,synthetic,status,revision,created_at,updated_at)
-		VALUES($1,$2,$3,$4,true,'draft',1,clock_timestamp(),clock_timestamp())
-		ON CONFLICT(tenant_id,user_id,id) DO NOTHING`, p.Owner.TenantID, p.Owner.UserID, p.SessionID, p.DocumentType)
+		(tenant_id,user_id,id,document_type,synthetic,previous_session_id,status,revision,created_at,updated_at)
+		VALUES($1,$2,$3,$4,$5,$6,'draft',1,clock_timestamp(),clock_timestamp())
+		ON CONFLICT(tenant_id,user_id,id) DO NOTHING`, p.Owner.TenantID, p.Owner.UserID, p.SessionID, p.DocumentType, p.Synthetic, p.PreviousSessionID)
 	if err != nil {
 		return IdentitySession{}, err
 	}
 	result, err := identitySnapshot(ctx, tx, p.Owner, p.SessionID, true)
-	if err == nil && result.DocumentType != p.DocumentType {
+	if err == nil && (result.DocumentType != p.DocumentType || !sameIdentityPrevious(result.PreviousSessionID, p.PreviousSessionID)) {
 		err = ErrIdentityConflict
 	}
 	if err != nil {
@@ -231,8 +247,11 @@ func (s *Store) SubmitIdentitySession(ctx context.Context, owner IdentityOwner, 
 	}
 	digest := sha256.Sum256(payload)
 	hash := hex.EncodeToString(digest[:])
-	if result.Status == "submitted" && result.submissionHash == hash {
+	if identitySubmittedStatus(result.Status) && result.submissionHash == hash {
 		return result, tx.Commit()
+	}
+	if !result.Synthetic && submission.ConsentVersion != IdentityConsentVersion {
+		return IdentitySession{}, ErrInvalidIdentityEvidence
 	}
 	if result.Status != "draft" || submission.Revision != result.Revision {
 		return IdentitySession{}, ErrIdentityConflict
@@ -312,16 +331,26 @@ func identitySnapshot(ctx context.Context, tx *sqlx.Tx, owner IdentityOwner, id 
 	}
 	result := IdentitySession{Evidence: []IdentityEvidenceMetadata{}}
 	var submission sql.NullString
+	var previous uuid.NullUUID
+	var review sql.NullString
 	err := tx.QueryRowContext(ctx, `SELECT id,document_type,synthetic,status,revision,created_at,updated_at,
-		submission,COALESCE(submission_sha256,'') FROM identity_sessions
+		submission,COALESCE(submission_sha256,''),previous_session_id,review FROM identity_sessions
 		WHERE tenant_id=$1 AND user_id=$2 AND id=$3`+lock, owner.TenantID, owner.UserID, id).Scan(
 		&result.ID, &result.DocumentType, &result.Synthetic, &result.Status, &result.Revision,
-		&result.CreatedAt, &result.UpdatedAt, &submission, &result.submissionHash)
+		&result.CreatedAt, &result.UpdatedAt, &submission, &result.submissionHash, &previous, &review)
 	if err != nil {
 		return IdentitySession{}, err
 	}
 	if submission.Valid {
 		result.Submission = json.RawMessage(submission.String)
+	}
+	if previous.Valid {
+		result.PreviousSessionID = &previous.UUID
+	}
+	if review.Valid {
+		if err := json.Unmarshal([]byte(review.String), &result.Review); err != nil {
+			return IdentitySession{}, err
+		}
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT kind,sha256,octet_length(image_bytes) FROM identity_evidence
 		WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3 ORDER BY kind`, owner.TenantID, owner.UserID, id)
@@ -337,4 +366,12 @@ func identitySnapshot(ctx context.Context, tx *sqlx.Tx, owner IdentityOwner, id 
 		result.Evidence = append(result.Evidence, metadata)
 	}
 	return result, rows.Err()
+}
+
+func sameIdentityPrevious(a, b *uuid.UUID) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
+}
+
+func identitySubmittedStatus(status string) bool {
+	return status == "submitted" || status == "approved" || status == "needs_information" || status == "rejected"
 }

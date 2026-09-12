@@ -45,6 +45,10 @@ var migrationAuthorityContracts = map[string]migrationAuthorityContract{
 		schemaRoles:   []string{"identity_auth_runtime"},
 		broadDMLRoles: []string{"identity_auth_runtime"},
 		sequenceRoles: []string{"identity_auth_runtime"},
+		specialGrants: []string{
+			`REVOKE INSERT, UPDATE, DELETE ON TABLE public.identity_review_events FROM identity_auth_runtime`,
+			`GRANT INSERT (id, tenant_id, user_id, session_id, actor, action, revision, request_sha256, details) ON TABLE public.identity_review_events TO identity_auth_runtime`,
+		},
 	},
 	MigrationScopeCardVault: {
 		database:      "card_vault",

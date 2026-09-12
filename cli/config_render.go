@@ -47,7 +47,8 @@ func isPrepareKubernetesReleaseCommand() bool {
 }
 
 func isConfigUtilityCommand() bool {
-	return isRenderConfigCommand() ||
+	return isIdentityReviewCommand() ||
+		isRenderConfigCommand() ||
 		isValidateDeploymentCommand() ||
 		isValidateKubernetesDeploymentCommand() ||
 		isRenderKubernetesSecretsCommand() ||

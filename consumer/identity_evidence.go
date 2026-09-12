@@ -23,6 +23,20 @@ func (s *Service) GetIdentitySession(ctx context.Context, owner store.IdentityOw
 	return s.Store.GetIdentitySession(ctx, owner, id)
 }
 
+func (s *Service) LatestIdentitySession(ctx context.Context, owner store.IdentityOwner) (store.IdentitySession, error) {
+	if s == nil || s.Store == nil {
+		return store.IdentitySession{}, ErrMissingStore
+	}
+	return s.Store.LatestIdentitySession(ctx, owner)
+}
+
+func (s *Service) WithdrawIdentitySession(ctx context.Context, owner store.IdentityOwner, id uuid.UUID, revision int64) (store.IdentitySession, error) {
+	if s == nil || s.Store == nil {
+		return store.IdentitySession{}, ErrMissingStore
+	}
+	return s.Store.WithdrawIdentitySession(ctx, owner, id, revision)
+}
+
 func (s *Service) PutIdentityEvidence(ctx context.Context, params store.PutIdentityEvidenceParams) (store.IdentitySession, error) {
 	if s == nil || s.Store == nil {
 		return store.IdentitySession{}, ErrMissingStore
