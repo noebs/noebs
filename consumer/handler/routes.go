@@ -69,9 +69,11 @@ func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Post("/user/device", h.AddDeviceToken)
 	router.Post("/kyc", h.KYC)
 	router.Post("/identity/sessions", h.CreateIdentitySession)
+	router.Get("/identity/sessions/latest", h.LatestIdentitySession)
 	router.Get("/identity/sessions/:session_id", h.GetIdentitySession)
 	router.Put("/identity/sessions/:session_id/evidence/:kind", h.PutIdentityEvidence)
 	router.Post("/identity/sessions/:session_id/submit", h.SubmitIdentitySession)
+	router.Post("/identity/sessions/:session_id/withdraw", h.WithdrawIdentitySession)
 	router.Delete("/identity/sessions/:session_id", h.DiscardIdentitySession)
 }
 

@@ -224,7 +224,7 @@ topology_drift_count="$("${kubectl_cmd[@]}" -n "$namespace" exec postgres-0 -- s
 [[ "$authority_marker_status" == current ]] || fail "Postgres authority marker is missing"
 [[ "$topology_drift_count" == 0 ]] || fail "Postgres role or service-database topology drift count is $topology_drift_count"
 for actual_expected_label in \
-    "$identity_migrations|0:true,1:true,2:true|identity-auth" \
+    "$identity_migrations|0:true,1:true,2:true,3:true|identity-auth" \
     "$card_vault_migrations|0:true,1:true|card-vault" \
     "$ebs_adapter_migrations|0:true,1:true|ebs-adapter" \
     "$admin_reporting_migrations|0:true,1:true|admin-reporting" \
@@ -394,6 +394,9 @@ http_status() {
 }
 
 [[ "$(http_status GET "$api_origin/consumer/user")" == 401 ]] || die "protected user route did not reject an anonymous request"
+[[ "$(http_status GET "$api_origin/consumer/services")" == 401 ]] || die "protected account services did not reject an anonymous request"
+[[ "$(http_status GET "$api_origin/consumer/identity/sessions/latest")" == 401 ]] || die "protected latest identity case did not reject an anonymous request"
+[[ "$(http_status POST "$api_origin/consumer/identity/sessions/00000000-0000-0000-0000-000000000001/withdraw")" == 401 ]] || die "protected identity withdrawal did not reject an anonymous request"
 [[ "$(http_status GET "$api_origin/metrics")" == 404 ]] || die "gateway exposed a metrics route"
 [[ "$(http_status POST "$api_origin/consumer/payment_request")" == 404 ]] || die "removed payment_request route is still exposed"
 [[ "$(http_status GET "$api_origin/auth/admin/")" == 404 ]] || die "Keycloak Admin API is publicly reachable"

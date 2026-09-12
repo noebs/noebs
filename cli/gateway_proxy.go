@@ -71,6 +71,10 @@ func registerAPIGatewayProxyRoutes(
 	if err != nil {
 		return fmt.Errorf("configure identity profile projection resolver: %w", err)
 	}
+	// The service directory shares the same account boundary as its destinations.
+	// It describes admitted routes, never provider health or payment approval.
+	route.Get("/consumer/services", clearGatewayIdentityHeaders, mobileAuth,
+		propagateGatewayOIDCPrincipal(profileResolver), accountServicesHandler(cfg))
 	if err := registerWalletAuthorizationRoutes(
 		route,
 		transactionAuthorization,
@@ -507,9 +511,11 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/consumer/auth/profile", role: serviceRoleIdentityAuth, auth: gatewayAuthMobilePrincipal},
 		{method: fiber.MethodPost, path: "/consumer/kyc", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPost, path: "/consumer/identity/sessions", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/consumer/identity/sessions/latest", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/consumer/identity/sessions/:session_id", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPut, path: "/consumer/identity/sessions/:session_id/evidence/:kind", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPost, path: "/consumer/identity/sessions/:session_id/submit", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/identity/sessions/:session_id/withdraw", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodDelete, path: "/consumer/identity/sessions/:session_id", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/consumer/user", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPut, path: "/consumer/user", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
