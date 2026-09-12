@@ -39,6 +39,7 @@ const (
 	ActivityReleaseFundingSourceWithdrawal        ActivityName = "ReleaseFundingSourceWithdrawal"
 	ActivityRecordAuditEvent                      ActivityName = "RecordAuditEvent"
 	ActivityGetP2PCommand                         ActivityName = "GetP2PCommand"
+	ActivityRecordP2PFailure                      ActivityName = "RecordP2PFailure"
 	ActivityAddManualTransferApproval             ActivityName = "AddManualTransferApproval"
 	ActivityGetManualTransferByWorkflow           ActivityName = "GetManualTransferByWorkflow"
 	ActivityUpdateManualTransferStatus            ActivityName = "UpdateManualTransferStatus"

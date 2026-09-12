@@ -950,7 +950,7 @@ func pspRemoteActivityContext(ctx workflow.Context) workflow.Context {
 	})
 }
 
-func P2P(ctx workflow.Context, params P2PParams) error {
+func P2P(ctx workflow.Context, params P2PParams) (resultErr error) {
 	tenantID, err := walletstore.ValidateTenantID(params.TenantID)
 	if err != nil {
 		return err
@@ -985,6 +985,24 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 	if err != nil {
 		return err
 	}
+	if command.ExpectedFeeAmount != nil {
+		defer func() {
+			if resultErr == nil {
+				return
+			}
+			failureCtx, _ := workflow.NewDisconnectedContext(ctx)
+			failureCtx = workflow.WithActivityOptions(failureCtx, workflow.ActivityOptions{StartToCloseTimeout: 30 * time.Second, RetryPolicy: &temporal.RetryPolicy{MaximumAttempts: 5}})
+			code := "payment_not_completed"
+			if strings.Contains(resultErr.Error(), walletstore.ErrP2PFeeChanged.Error()) {
+				code = "p2p_fee_changed"
+			}
+			if strings.Contains(resultErr.Error(), walletstore.ErrCurrencyMismatch.Error()) {
+				code = "currency_mismatch"
+			}
+			// If finalization cannot be persisted, recovery stays pending.
+			_ = workflow.ExecuteActivity(failureCtx, walletactivity.ActivityRecordP2PFailure, params.TenantID, params.IdempotencyKey, code).Get(failureCtx, nil)
+		}()
+	}
 	if missingRequiredText(command.ReferenceID) {
 		return walletstore.ErrMissingReferenceID
 	}
@@ -1016,16 +1034,18 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 	}
 
 	validationReq := walletvalidation.P2PValidationRequest{
-		TenantID:        params.TenantID,
-		TransactionType: "p2p",
-		FromWalletID:    fromID,
-		ToWalletID:      toID,
-		Currency:        command.Currency,
-		Amount:          command.Amount,
-		FromOwnerType:   command.FromOwnerType,
-		FromOwnerID:     command.FromOwnerID,
-		ToOwnerType:     command.ToOwnerType,
-		ToOwnerID:       command.ToOwnerID,
+		TenantID:                    params.TenantID,
+		TransactionType:             "p2p",
+		FromWalletID:                fromID,
+		ToWalletID:                  toID,
+		Currency:                    command.Currency,
+		Amount:                      command.Amount,
+		FromOwnerType:               command.FromOwnerType,
+		FromOwnerID:                 command.FromOwnerID,
+		ToOwnerType:                 command.ToOwnerType,
+		ToOwnerID:                   command.ToOwnerID,
+		ExpectedFeeAmount:           command.ExpectedFeeAmount,
+		ExpectedCurrencyUnitVersion: command.ExpectedCurrencyUnitVersion,
 	}
 	var validation walletvalidation.P2PValidationResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateP2PTransfer, validationReq).Get(ctx, &validation); err != nil {
@@ -1078,6 +1098,9 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 			Currency:        command.Currency,
 			Amount:          command.Amount,
 		},
+	}
+	if command.ExpectedFeeAmount != nil {
+		settlement.P2PCommandID = params.IdempotencyKey
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateMultiLegSettlement, settlement).Get(ctx, nil); err != nil {
 		return err

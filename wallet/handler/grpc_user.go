@@ -49,6 +49,8 @@ func RegisterGRPCUserRoutes(router fiber.Router, handler *GRPCUserHandler) {
 	router.Get("/wallets/:id/transactions", handler.ListWalletTransactions)
 	router.Get("/wallets/:id", handler.GetWallet)
 	router.Post("/deposits", handler.RequestDeposit)
+	router.Post("/p2p/preview", handler.previewP2P)
+	router.Get("/p2p/status", handler.p2pStatus)
 	router.Post("/p2p", handler.RequestP2PTransfer)
 	router.Post("/withdrawals", handler.RequestWithdrawal)
 }

@@ -41,16 +41,18 @@ type P2PCommandReservation struct {
 }
 
 type P2PCommandPayload struct {
-	Currency      string `json:"currency"`
-	FromWalletID  string `json:"from_wallet_id"`
-	ToWalletID    string `json:"to_wallet_id"`
-	Amount        int64  `json:"amount"`
-	Description   string `json:"description,omitempty"`
-	ReferenceID   string `json:"reference_id"`
-	FromOwnerType string `json:"from_owner_type"`
-	FromOwnerID   string `json:"from_owner_id"`
-	ToOwnerType   string `json:"to_owner_type"`
-	ToOwnerID     string `json:"to_owner_id"`
+	ExpectedFeeAmount           *int64 `json:"expected_fee_amount,omitempty"`
+	ExpectedCurrencyUnitVersion *int64 `json:"expected_currency_unit_version,omitempty"`
+	Currency                    string `json:"currency"`
+	FromWalletID                string `json:"from_wallet_id"`
+	ToWalletID                  string `json:"to_wallet_id"`
+	Amount                      int64  `json:"amount"`
+	Description                 string `json:"description,omitempty"`
+	ReferenceID                 string `json:"reference_id"`
+	FromOwnerType               string `json:"from_owner_type"`
+	FromOwnerID                 string `json:"from_owner_id"`
+	ToOwnerType                 string `json:"to_owner_type"`
+	ToOwnerID                   string `json:"to_owner_id"`
 }
 
 func DecodeP2PCommand(command *P2PCommand, tenantID, idempotencyKey, workflowID string) (P2PCommandPayload, error) {

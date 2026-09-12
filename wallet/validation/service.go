@@ -12,16 +12,18 @@ import (
 )
 
 type P2PValidationRequest struct {
-	TenantID        string
-	TransactionType string
-	FromWalletID    uuid.UUID
-	ToWalletID      uuid.UUID
-	Currency        string
-	Amount          int64
-	FromOwnerType   string
-	FromOwnerID     string
-	ToOwnerType     string
-	ToOwnerID       string
+	ExpectedFeeAmount           *int64
+	ExpectedCurrencyUnitVersion *int64
+	TenantID                    string
+	TransactionType             string
+	FromWalletID                uuid.UUID
+	ToWalletID                  uuid.UUID
+	Currency                    string
+	Amount                      int64
+	FromOwnerType               string
+	FromOwnerID                 string
+	ToOwnerType                 string
+	ToOwnerID                   string
 }
 
 type P2PValidationResult struct {
@@ -121,6 +123,12 @@ func ValidateP2PRequest(req P2PValidationRequest) error {
 	if req.Amount <= 0 {
 		return walletstore.ErrInvalidAmount
 	}
+	if req.ExpectedFeeAmount != nil && *req.ExpectedFeeAmount < 0 {
+		return walletstore.ErrInvalidAmount
+	}
+	if req.ExpectedCurrencyUnitVersion != nil && *req.ExpectedCurrencyUnitVersion <= 0 {
+		return walletstore.ErrInvalidCurrencyUnitID
+	}
 	return nil
 }
 
@@ -218,6 +226,9 @@ func (s *Service) ValidateP2P(ctx context.Context, req P2PValidationRequest) (*P
 	feeEngine := walletfees.FeeEngine{Store: s.Store}
 	feeResult, err := feeEngine.Calculate(ctx, req.TenantID, req.TransactionType, req.Currency, fromWallet.CurrencyUnitID, req.Amount)
 	if err != nil {
+		return nil, err
+	}
+	if err := walletstore.ValidateP2PExpectation(req.ExpectedFeeAmount, req.ExpectedCurrencyUnitVersion, feeResult.TotalFee, fromWallet.CurrencyUnitID); err != nil {
 		return nil, err
 	}
 	totalDebit, err := checkedAddInt64(req.Amount, feeResult.TotalFee)

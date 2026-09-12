@@ -2,6 +2,8 @@ package activity
 
 import (
 	"context"
+	"errors"
+	"go.temporal.io/sdk/temporal"
 
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletvalidation "github.com/adonese/noebs/wallet/validation"
@@ -19,7 +21,11 @@ func (a *ValidationActivities) ValidateP2PTransfer(ctx context.Context, req wall
 	if a == nil || a.Service == nil {
 		return nil, ErrMissingStore
 	}
-	return a.Service.ValidateP2P(ctx, req)
+	result, err := a.Service.ValidateP2P(ctx, req)
+	if req.ExpectedFeeAmount != nil && terminalP2PValidationError(err) {
+		return nil, temporal.NewNonRetryableApplicationError(err.Error(), "p2p_validation_failed", err)
+	}
+	return result, err
 }
 
 func (a *ValidationActivities) ValidateDeposit(ctx context.Context, req walletvalidation.DepositValidationRequest) (*walletvalidation.DepositValidationResult, error) {
@@ -41,4 +47,8 @@ func (a *ValidationActivities) ResolvePSPDepositAmounts(ctx context.Context, req
 		return nil, ErrMissingStore
 	}
 	return a.Service.ResolvePSPDepositAmounts(ctx, req)
+}
+
+func terminalP2PValidationError(err error) bool {
+	return errors.Is(err, walletstore.ErrP2PFeeChanged) || errors.Is(err, walletstore.ErrCurrencyMismatch) || errors.Is(err, walletstore.ErrInsufficientFunds) || errors.Is(err, walletstore.ErrFeeConfigNotFound) || errors.Is(err, walletstore.ErrTransactionLimitNotFound) || errors.Is(err, walletstore.ErrWalletNotFound) || errors.Is(err, walletstore.ErrAmountOverflow) || errors.Is(err, walletstore.ErrP2PCommandFailed) || errors.Is(err, walletstore.ErrInvalidP2PCommand) || errors.Is(err, walletvalidation.ErrWalletInactive) || errors.Is(err, walletvalidation.ErrWalletOwnerMismatch)
 }

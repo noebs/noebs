@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
@@ -33,6 +34,9 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.RequestP2
 	}
 	if req.FromWalletId == req.ToWalletId {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidWalletPair.Error())
+	}
+	if req.ExpectedCurrencyUnitVersion != nil && *req.ExpectedCurrencyUnitVersion <= 0 {
+		return nil, mapError(walletstore.ErrInvalidCurrencyUnitID)
 	}
 	if req.Amount <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
@@ -74,22 +78,42 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.RequestP2
 		return nil, err
 	}
 
+	if req.ExpectedFeeAmount != nil {
+		if *req.ExpectedFeeAmount < 0 {
+			return nil, mapError(walletstore.ErrInvalidAmount)
+		}
+		for _, target := range []struct {
+			id    uuid.UUID
+			owner string
+		}{{fromWalletID, fromOwnerID}, {toWalletID, req.ToOwnerId}} {
+			recipient, err := s.Service.Store.GetWallet(ctx, tenantID, target.id)
+			if err != nil {
+				return nil, mapError(err)
+			}
+			if recipient.OwnerType != walletstore.OwnerTypeUser || !recipient.UserID.Valid || recipient.UserID.Int64 <= 0 || recipient.OwnerID != strconv.FormatInt(recipient.UserID.Int64, 10) || recipient.OwnerID != target.owner || req.ToOwnerType != walletstore.OwnerTypeUser {
+				return nil, mapError(walletstore.ErrWalletNotFound)
+			}
+		}
+	}
+
 	workflowID := p2pWorkflowID(req.TenantId, idempotencyKey)
 	params := walletworkflow.P2PParams{
 		TenantID:       req.TenantId,
 		IdempotencyKey: idempotencyKey,
 	}
 	commandDocument, err := json.Marshal(walletstore.P2PCommandPayload{
-		Currency:      req.Currency,
-		FromWalletID:  req.FromWalletId,
-		ToWalletID:    req.ToWalletId,
-		Amount:        req.Amount,
-		Description:   req.Description,
-		ReferenceID:   referenceID,
-		FromOwnerType: req.FromOwnerType,
-		FromOwnerID:   req.FromOwnerId,
-		ToOwnerType:   req.ToOwnerType,
-		ToOwnerID:     req.ToOwnerId,
+		ExpectedFeeAmount:           req.ExpectedFeeAmount,
+		ExpectedCurrencyUnitVersion: req.ExpectedCurrencyUnitVersion,
+		Currency:                    req.Currency,
+		FromWalletID:                req.FromWalletId,
+		ToWalletID:                  req.ToWalletId,
+		Amount:                      req.Amount,
+		Description:                 req.Description,
+		ReferenceID:                 referenceID,
+		FromOwnerType:               req.FromOwnerType,
+		FromOwnerID:                 req.FromOwnerId,
+		ToOwnerType:                 req.ToOwnerType,
+		ToOwnerID:                   req.ToOwnerId,
 	})
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -111,6 +135,15 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.RequestP2
 		if err := walletstore.ValidateP2PCommandReplay(existing, command); err != nil {
 			return nil, mapError(err)
 		}
+		if req.ExpectedFeeAmount != nil {
+			receipt, err := s.Service.Store.GetP2PReceipt(ctx, tenantID, fromOwnerID, idempotencyKey)
+			if err != nil {
+				return nil, mapError(err)
+			}
+			if receipt.Status == "failed" {
+				return nil, mapError(walletstore.ErrP2PCommandFailed)
+			}
+		}
 		if existing.RunID.Valid {
 			return p2pWorkflowRun(existing), nil
 		}
@@ -131,6 +164,21 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.RequestP2
 					return p2pWorkflowRun(existing), nil
 				}
 			case errors.Is(lookupErr, walletstore.ErrP2PCommandNotFound):
+				if req.ExpectedFeeAmount != nil && terminalP2PAdmissionError(validationErr) {
+					if _, err := s.Service.Store.ReserveP2PCommand(ctx, command); err != nil {
+						return nil, mapError(err)
+					}
+					code := "payment_not_completed"
+					if errors.Is(validationErr, walletstore.ErrP2PFeeChanged) {
+						code = "p2p_fee_changed"
+					}
+					if errors.Is(validationErr, walletstore.ErrCurrencyMismatch) {
+						code = "currency_mismatch"
+					}
+					if err := s.Service.Store.RecordP2PFailure(ctx, tenantID, idempotencyKey, code); err != nil {
+						return nil, mapError(err)
+					}
+				}
 				return nil, mapError(validationErr)
 			default:
 				return nil, mapError(lookupErr)
@@ -180,16 +228,18 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.RequestP2
 func (s *Server) validateP2PTransferRequest(ctx context.Context, req *walletv1.RequestP2PTransferRequest, fromWalletID, toWalletID uuid.UUID) error {
 	validator := walletvalidation.Service{Store: s.Service.Store}
 	_, err := validator.ValidateP2P(ctx, walletvalidation.P2PValidationRequest{
-		TenantID:        req.TenantId,
-		TransactionType: "p2p",
-		FromWalletID:    fromWalletID,
-		ToWalletID:      toWalletID,
-		Currency:        req.Currency,
-		Amount:          req.Amount,
-		FromOwnerType:   req.FromOwnerType,
-		FromOwnerID:     req.FromOwnerId,
-		ToOwnerType:     req.ToOwnerType,
-		ToOwnerID:       req.ToOwnerId,
+		TenantID:                    req.TenantId,
+		TransactionType:             "p2p",
+		FromWalletID:                fromWalletID,
+		ToWalletID:                  toWalletID,
+		Currency:                    req.Currency,
+		Amount:                      req.Amount,
+		FromOwnerType:               req.FromOwnerType,
+		FromOwnerID:                 req.FromOwnerId,
+		ToOwnerType:                 req.ToOwnerType,
+		ToOwnerID:                   req.ToOwnerId,
+		ExpectedFeeAmount:           req.ExpectedFeeAmount,
+		ExpectedCurrencyUnitVersion: req.ExpectedCurrencyUnitVersion,
 	})
 	return err
 }
@@ -200,4 +250,8 @@ func p2pWorkflowID(tenantID, idempotencyKey string) string {
 
 func p2pWorkflowRun(command *walletstore.P2PCommand) *walletv1.RequestP2PTransferResponse {
 	return &walletv1.RequestP2PTransferResponse{WorkflowId: command.WorkflowID, RunId: command.RunID.String}
+}
+
+func terminalP2PAdmissionError(err error) bool {
+	return errors.Is(err, walletstore.ErrP2PFeeChanged) || errors.Is(err, walletstore.ErrCurrencyMismatch) || errors.Is(err, walletstore.ErrInsufficientFunds) || errors.Is(err, walletstore.ErrFeeConfigNotFound) || errors.Is(err, walletstore.ErrTransactionLimitNotFound) || errors.Is(err, walletstore.ErrAmountOverflow) || errors.Is(err, walletvalidation.ErrWalletInactive) || errors.Is(err, walletvalidation.ErrWalletOwnerMismatch)
 }

@@ -20,3 +20,10 @@ func (a *P2PActivities) GetP2PCommand(ctx context.Context, tenantID, idempotency
 	}
 	return a.Store.GetP2PCommand(ctx, tenantID, idempotencyKey)
 }
+
+func (a *P2PActivities) RecordP2PFailure(ctx context.Context, tenantID, idempotencyKey, code string) error {
+	if a == nil || a.Store == nil {
+		return ErrMissingStore
+	}
+	return a.Store.RecordP2PFailure(ctx, tenantID, idempotencyKey, code)
+}

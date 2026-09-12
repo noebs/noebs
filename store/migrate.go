@@ -406,6 +406,8 @@ func walletAuthorityGrants() []string {
 		`GRANT SELECT, INSERT ON TABLE public.p2p_commands TO wallet_ledger_runtime`,
 		`GRANT UPDATE (run_id) ON TABLE public.p2p_commands TO wallet_ledger_runtime`,
 		`GRANT SELECT ON TABLE public.p2p_commands TO wallet_ledger_worker`,
+		`GRANT SELECT, INSERT ON TABLE public.p2p_command_failures TO wallet_ledger_runtime, wallet_ledger_worker`,
+		`GRANT SELECT ON TABLE public.shared_outbound_limits TO wallet_ledger_runtime, wallet_ledger_worker`,
 		`GRANT SELECT, INSERT ON TABLE public.funding_source_withdrawal_reservations TO wallet_ledger_worker`,
 		`GRANT UPDATE (status, ledger_entry_id, consumed_at, released_at) ON TABLE public.funding_source_withdrawal_reservations TO wallet_ledger_worker`,
 		`GRANT USAGE ON SEQUENCE public.funding_source_withdrawal_reservations_id_seq TO wallet_ledger_worker`,

@@ -32,6 +32,8 @@ const (
 	WalletPublicService_EnsureWalletPublic_FullMethodName              = "/noebs.wallet.v1.WalletPublicService/EnsureWalletPublic"
 	WalletPublicService_ListPaymentMethodsPublic_FullMethodName        = "/noebs.wallet.v1.WalletPublicService/ListPaymentMethodsPublic"
 	WalletPublicService_ListWalletTransactionsPublic_FullMethodName    = "/noebs.wallet.v1.WalletPublicService/ListWalletTransactionsPublic"
+	WalletPublicService_PreviewP2PTransfer_FullMethodName              = "/noebs.wallet.v1.WalletPublicService/PreviewP2PTransfer"
+	WalletPublicService_GetP2PTransferStatus_FullMethodName            = "/noebs.wallet.v1.WalletPublicService/GetP2PTransferStatus"
 	WalletPublicService_RequestP2PTransfer_FullMethodName              = "/noebs.wallet.v1.WalletPublicService/RequestP2PTransfer"
 	WalletPublicService_RequestDeposit_FullMethodName                  = "/noebs.wallet.v1.WalletPublicService/RequestDeposit"
 	WalletPublicService_RequestWithdrawal_FullMethodName               = "/noebs.wallet.v1.WalletPublicService/RequestWithdrawal"
@@ -65,6 +67,8 @@ type WalletPublicServiceClient interface {
 	EnsureWalletPublic(ctx context.Context, in *EnsureWalletPublicRequest, opts ...grpc.CallOption) (*EnsureWalletPublicResponse, error)
 	ListPaymentMethodsPublic(ctx context.Context, in *ListPaymentMethodsPublicRequest, opts ...grpc.CallOption) (*ListPaymentMethodsPublicResponse, error)
 	ListWalletTransactionsPublic(ctx context.Context, in *ListWalletTransactionsPublicRequest, opts ...grpc.CallOption) (*ListWalletTransactionsPublicResponse, error)
+	PreviewP2PTransfer(ctx context.Context, in *PreviewP2PTransferRequest, opts ...grpc.CallOption) (*P2PPreview, error)
+	GetP2PTransferStatus(ctx context.Context, in *GetP2PTransferStatusRequest, opts ...grpc.CallOption) (*P2PTransferStatus, error)
 	RequestP2PTransfer(ctx context.Context, in *RequestP2PTransferRequest, opts ...grpc.CallOption) (*RequestP2PTransferResponse, error)
 	RequestDeposit(ctx context.Context, in *RequestDepositRequest, opts ...grpc.CallOption) (*RequestDepositResponse, error)
 	RequestWithdrawal(ctx context.Context, in *RequestWithdrawalRequest, opts ...grpc.CallOption) (*RequestWithdrawalResponse, error)
@@ -213,6 +217,26 @@ func (c *walletPublicServiceClient) ListWalletTransactionsPublic(ctx context.Con
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListWalletTransactionsPublicResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_ListWalletTransactionsPublic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) PreviewP2PTransfer(ctx context.Context, in *PreviewP2PTransferRequest, opts ...grpc.CallOption) (*P2PPreview, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(P2PPreview)
+	err := c.cc.Invoke(ctx, WalletPublicService_PreviewP2PTransfer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) GetP2PTransferStatus(ctx context.Context, in *GetP2PTransferStatusRequest, opts ...grpc.CallOption) (*P2PTransferStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(P2PTransferStatus)
+	err := c.cc.Invoke(ctx, WalletPublicService_GetP2PTransferStatus_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -376,6 +400,8 @@ type WalletPublicServiceServer interface {
 	EnsureWalletPublic(context.Context, *EnsureWalletPublicRequest) (*EnsureWalletPublicResponse, error)
 	ListPaymentMethodsPublic(context.Context, *ListPaymentMethodsPublicRequest) (*ListPaymentMethodsPublicResponse, error)
 	ListWalletTransactionsPublic(context.Context, *ListWalletTransactionsPublicRequest) (*ListWalletTransactionsPublicResponse, error)
+	PreviewP2PTransfer(context.Context, *PreviewP2PTransferRequest) (*P2PPreview, error)
+	GetP2PTransferStatus(context.Context, *GetP2PTransferStatusRequest) (*P2PTransferStatus, error)
 	RequestP2PTransfer(context.Context, *RequestP2PTransferRequest) (*RequestP2PTransferResponse, error)
 	RequestDeposit(context.Context, *RequestDepositRequest) (*RequestDepositResponse, error)
 	RequestWithdrawal(context.Context, *RequestWithdrawalRequest) (*RequestWithdrawalResponse, error)
@@ -438,6 +464,12 @@ func (UnimplementedWalletPublicServiceServer) ListPaymentMethodsPublic(context.C
 }
 func (UnimplementedWalletPublicServiceServer) ListWalletTransactionsPublic(context.Context, *ListWalletTransactionsPublicRequest) (*ListWalletTransactionsPublicResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListWalletTransactionsPublic not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) PreviewP2PTransfer(context.Context, *PreviewP2PTransferRequest) (*P2PPreview, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PreviewP2PTransfer not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) GetP2PTransferStatus(context.Context, *GetP2PTransferStatusRequest) (*P2PTransferStatus, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetP2PTransferStatus not implemented")
 }
 func (UnimplementedWalletPublicServiceServer) RequestP2PTransfer(context.Context, *RequestP2PTransferRequest) (*RequestP2PTransferResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestP2PTransfer not implemented")
@@ -732,6 +764,42 @@ func _WalletPublicService_ListWalletTransactionsPublic_Handler(srv interface{}, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WalletPublicServiceServer).ListWalletTransactionsPublic(ctx, req.(*ListWalletTransactionsPublicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_PreviewP2PTransfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PreviewP2PTransferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).PreviewP2PTransfer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_PreviewP2PTransfer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).PreviewP2PTransfer(ctx, req.(*PreviewP2PTransferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_GetP2PTransferStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetP2PTransferStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).GetP2PTransferStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_GetP2PTransferStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).GetP2PTransferStatus(ctx, req.(*GetP2PTransferStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1046,6 +1114,14 @@ var WalletPublicService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListWalletTransactionsPublic",
 			Handler:    _WalletPublicService_ListWalletTransactionsPublic_Handler,
+		},
+		{
+			MethodName: "PreviewP2PTransfer",
+			Handler:    _WalletPublicService_PreviewP2PTransfer_Handler,
+		},
+		{
+			MethodName: "GetP2PTransferStatus",
+			Handler:    _WalletPublicService_GetP2PTransferStatus_Handler,
 		},
 		{
 			MethodName: "RequestP2PTransfer",

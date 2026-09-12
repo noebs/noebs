@@ -32,6 +32,8 @@ service WalletPublicService {
   rpc ListWalletTransactionsPublic(ListWalletTransactionsPublicRequest) returns (ListWalletTransactionsPublicResponse) {
     option (google.api.http) = {get: "/wallet/{wallet_id}/transactions"};
   }
+  rpc PreviewP2PTransfer(PreviewP2PTransferRequest) returns (P2PPreview) {}
+  rpc GetP2PTransferStatus(GetP2PTransferStatusRequest) returns (P2PTransferStatus) {}
   rpc RequestP2PTransfer(RequestP2PTransferRequest) returns (RequestP2PTransferResponse) {}
   rpc RequestDeposit(RequestDepositRequest) returns (RequestDepositResponse) {
     option (google.api.http) = {
@@ -246,6 +248,46 @@ message RequestP2PTransferRequest {
   string from_owner_id = 10;
   string to_owner_type = 11;
   string to_owner_id = 12;
+  optional int64 expected_fee_amount = 13;
+  optional int64 expected_currency_unit_version = 14;
+}
+
+message PreviewP2PTransferRequest {
+  string tenant_id = 1;
+  string from_wallet_id = 2;
+  string to_wallet_id = 3;
+  int64 amount = 4;
+  string currency = 5;
+}
+message P2PPreview {
+  string from_wallet_id = 1;
+  string to_wallet_id = 2;
+  string to_owner_type = 3;
+  string to_owner_id = 4;
+  string recipient_name = 5;
+  string amount_minor = 6;
+  string fee_amount_minor = 7;
+  string total_debit_minor = 8;
+  string currency = 9;
+  string currency_unit_version = 10;
+}
+message GetP2PTransferStatusRequest { string tenant_id = 1; string idempotency_key = 2; }
+message P2PTransferStatus {
+  string status = 1;
+  string idempotency_key = 2;
+  string reference_id = 3;
+  string from_wallet_id = 4;
+  string to_wallet_id = 5;
+  string recipient_name = 6;
+  string amount_minor = 7;
+  string fee_amount_minor = 8;
+  string total_debit_minor = 9;
+  string currency = 10;
+  string currency_unit_version = 11;
+  string transaction_id = 12;
+  string error_code = 13;
+  string created_at = 14;
+  string to_owner_id = 15;
 }
 
 message RequestP2PTransferResponse {

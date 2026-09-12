@@ -1188,21 +1188,23 @@ func (x *ListWalletTransactionsPublicResponse) GetTransactions() []*WalletLedger
 }
 
 type RequestP2PTransferRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	TenantId       string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	IdempotencyKey string                 `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	Currency       string                 `protobuf:"bytes,3,opt,name=currency,proto3" json:"currency,omitempty"`
-	FromWalletId   string                 `protobuf:"bytes,4,opt,name=from_wallet_id,json=fromWalletId,proto3" json:"from_wallet_id,omitempty"`
-	ToWalletId     string                 `protobuf:"bytes,5,opt,name=to_wallet_id,json=toWalletId,proto3" json:"to_wallet_id,omitempty"`
-	Amount         int64                  `protobuf:"varint,6,opt,name=amount,proto3" json:"amount,omitempty"`
-	Description    string                 `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"`
-	ReferenceId    string                 `protobuf:"bytes,8,opt,name=reference_id,json=referenceId,proto3" json:"reference_id,omitempty"`
-	FromOwnerType  string                 `protobuf:"bytes,9,opt,name=from_owner_type,json=fromOwnerType,proto3" json:"from_owner_type,omitempty"`
-	FromOwnerId    string                 `protobuf:"bytes,10,opt,name=from_owner_id,json=fromOwnerId,proto3" json:"from_owner_id,omitempty"`
-	ToOwnerType    string                 `protobuf:"bytes,11,opt,name=to_owner_type,json=toOwnerType,proto3" json:"to_owner_type,omitempty"`
-	ToOwnerId      string                 `protobuf:"bytes,12,opt,name=to_owner_id,json=toOwnerId,proto3" json:"to_owner_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	TenantId                    string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	IdempotencyKey              string                 `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	Currency                    string                 `protobuf:"bytes,3,opt,name=currency,proto3" json:"currency,omitempty"`
+	FromWalletId                string                 `protobuf:"bytes,4,opt,name=from_wallet_id,json=fromWalletId,proto3" json:"from_wallet_id,omitempty"`
+	ToWalletId                  string                 `protobuf:"bytes,5,opt,name=to_wallet_id,json=toWalletId,proto3" json:"to_wallet_id,omitempty"`
+	Amount                      int64                  `protobuf:"varint,6,opt,name=amount,proto3" json:"amount,omitempty"`
+	Description                 string                 `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"`
+	ReferenceId                 string                 `protobuf:"bytes,8,opt,name=reference_id,json=referenceId,proto3" json:"reference_id,omitempty"`
+	FromOwnerType               string                 `protobuf:"bytes,9,opt,name=from_owner_type,json=fromOwnerType,proto3" json:"from_owner_type,omitempty"`
+	FromOwnerId                 string                 `protobuf:"bytes,10,opt,name=from_owner_id,json=fromOwnerId,proto3" json:"from_owner_id,omitempty"`
+	ToOwnerType                 string                 `protobuf:"bytes,11,opt,name=to_owner_type,json=toOwnerType,proto3" json:"to_owner_type,omitempty"`
+	ToOwnerId                   string                 `protobuf:"bytes,12,opt,name=to_owner_id,json=toOwnerId,proto3" json:"to_owner_id,omitempty"`
+	ExpectedFeeAmount           *int64                 `protobuf:"varint,13,opt,name=expected_fee_amount,json=expectedFeeAmount,proto3,oneof" json:"expected_fee_amount,omitempty"`
+	ExpectedCurrencyUnitVersion *int64                 `protobuf:"varint,14,opt,name=expected_currency_unit_version,json=expectedCurrencyUnitVersion,proto3,oneof" json:"expected_currency_unit_version,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *RequestP2PTransferRequest) Reset() {
@@ -1319,6 +1321,420 @@ func (x *RequestP2PTransferRequest) GetToOwnerId() string {
 	return ""
 }
 
+func (x *RequestP2PTransferRequest) GetExpectedFeeAmount() int64 {
+	if x != nil && x.ExpectedFeeAmount != nil {
+		return *x.ExpectedFeeAmount
+	}
+	return 0
+}
+
+func (x *RequestP2PTransferRequest) GetExpectedCurrencyUnitVersion() int64 {
+	if x != nil && x.ExpectedCurrencyUnitVersion != nil {
+		return *x.ExpectedCurrencyUnitVersion
+	}
+	return 0
+}
+
+type PreviewP2PTransferRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	FromWalletId  string                 `protobuf:"bytes,2,opt,name=from_wallet_id,json=fromWalletId,proto3" json:"from_wallet_id,omitempty"`
+	ToWalletId    string                 `protobuf:"bytes,3,opt,name=to_wallet_id,json=toWalletId,proto3" json:"to_wallet_id,omitempty"`
+	Amount        int64                  `protobuf:"varint,4,opt,name=amount,proto3" json:"amount,omitempty"`
+	Currency      string                 `protobuf:"bytes,5,opt,name=currency,proto3" json:"currency,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PreviewP2PTransferRequest) Reset() {
+	*x = PreviewP2PTransferRequest{}
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PreviewP2PTransferRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PreviewP2PTransferRequest) ProtoMessage() {}
+
+func (x *PreviewP2PTransferRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PreviewP2PTransferRequest.ProtoReflect.Descriptor instead.
+func (*PreviewP2PTransferRequest) Descriptor() ([]byte, []int) {
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *PreviewP2PTransferRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *PreviewP2PTransferRequest) GetFromWalletId() string {
+	if x != nil {
+		return x.FromWalletId
+	}
+	return ""
+}
+
+func (x *PreviewP2PTransferRequest) GetToWalletId() string {
+	if x != nil {
+		return x.ToWalletId
+	}
+	return ""
+}
+
+func (x *PreviewP2PTransferRequest) GetAmount() int64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *PreviewP2PTransferRequest) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+type P2PPreview struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	FromWalletId        string                 `protobuf:"bytes,1,opt,name=from_wallet_id,json=fromWalletId,proto3" json:"from_wallet_id,omitempty"`
+	ToWalletId          string                 `protobuf:"bytes,2,opt,name=to_wallet_id,json=toWalletId,proto3" json:"to_wallet_id,omitempty"`
+	ToOwnerType         string                 `protobuf:"bytes,3,opt,name=to_owner_type,json=toOwnerType,proto3" json:"to_owner_type,omitempty"`
+	ToOwnerId           string                 `protobuf:"bytes,4,opt,name=to_owner_id,json=toOwnerId,proto3" json:"to_owner_id,omitempty"`
+	RecipientName       string                 `protobuf:"bytes,5,opt,name=recipient_name,json=recipientName,proto3" json:"recipient_name,omitempty"`
+	AmountMinor         string                 `protobuf:"bytes,6,opt,name=amount_minor,json=amountMinor,proto3" json:"amount_minor,omitempty"`
+	FeeAmountMinor      string                 `protobuf:"bytes,7,opt,name=fee_amount_minor,json=feeAmountMinor,proto3" json:"fee_amount_minor,omitempty"`
+	TotalDebitMinor     string                 `protobuf:"bytes,8,opt,name=total_debit_minor,json=totalDebitMinor,proto3" json:"total_debit_minor,omitempty"`
+	Currency            string                 `protobuf:"bytes,9,opt,name=currency,proto3" json:"currency,omitempty"`
+	CurrencyUnitVersion string                 `protobuf:"bytes,10,opt,name=currency_unit_version,json=currencyUnitVersion,proto3" json:"currency_unit_version,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *P2PPreview) Reset() {
+	*x = P2PPreview{}
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *P2PPreview) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*P2PPreview) ProtoMessage() {}
+
+func (x *P2PPreview) ProtoReflect() protoreflect.Message {
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use P2PPreview.ProtoReflect.Descriptor instead.
+func (*P2PPreview) Descriptor() ([]byte, []int) {
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *P2PPreview) GetFromWalletId() string {
+	if x != nil {
+		return x.FromWalletId
+	}
+	return ""
+}
+
+func (x *P2PPreview) GetToWalletId() string {
+	if x != nil {
+		return x.ToWalletId
+	}
+	return ""
+}
+
+func (x *P2PPreview) GetToOwnerType() string {
+	if x != nil {
+		return x.ToOwnerType
+	}
+	return ""
+}
+
+func (x *P2PPreview) GetToOwnerId() string {
+	if x != nil {
+		return x.ToOwnerId
+	}
+	return ""
+}
+
+func (x *P2PPreview) GetRecipientName() string {
+	if x != nil {
+		return x.RecipientName
+	}
+	return ""
+}
+
+func (x *P2PPreview) GetAmountMinor() string {
+	if x != nil {
+		return x.AmountMinor
+	}
+	return ""
+}
+
+func (x *P2PPreview) GetFeeAmountMinor() string {
+	if x != nil {
+		return x.FeeAmountMinor
+	}
+	return ""
+}
+
+func (x *P2PPreview) GetTotalDebitMinor() string {
+	if x != nil {
+		return x.TotalDebitMinor
+	}
+	return ""
+}
+
+func (x *P2PPreview) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *P2PPreview) GetCurrencyUnitVersion() string {
+	if x != nil {
+		return x.CurrencyUnitVersion
+	}
+	return ""
+}
+
+type GetP2PTransferStatusRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	TenantId       string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	IdempotencyKey string                 `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetP2PTransferStatusRequest) Reset() {
+	*x = GetP2PTransferStatusRequest{}
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetP2PTransferStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetP2PTransferStatusRequest) ProtoMessage() {}
+
+func (x *GetP2PTransferStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetP2PTransferStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetP2PTransferStatusRequest) Descriptor() ([]byte, []int) {
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GetP2PTransferStatusRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *GetP2PTransferStatusRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type P2PTransferStatus struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Status              string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	IdempotencyKey      string                 `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	ReferenceId         string                 `protobuf:"bytes,3,opt,name=reference_id,json=referenceId,proto3" json:"reference_id,omitempty"`
+	FromWalletId        string                 `protobuf:"bytes,4,opt,name=from_wallet_id,json=fromWalletId,proto3" json:"from_wallet_id,omitempty"`
+	ToWalletId          string                 `protobuf:"bytes,5,opt,name=to_wallet_id,json=toWalletId,proto3" json:"to_wallet_id,omitempty"`
+	RecipientName       string                 `protobuf:"bytes,6,opt,name=recipient_name,json=recipientName,proto3" json:"recipient_name,omitempty"`
+	AmountMinor         string                 `protobuf:"bytes,7,opt,name=amount_minor,json=amountMinor,proto3" json:"amount_minor,omitempty"`
+	FeeAmountMinor      string                 `protobuf:"bytes,8,opt,name=fee_amount_minor,json=feeAmountMinor,proto3" json:"fee_amount_minor,omitempty"`
+	TotalDebitMinor     string                 `protobuf:"bytes,9,opt,name=total_debit_minor,json=totalDebitMinor,proto3" json:"total_debit_minor,omitempty"`
+	Currency            string                 `protobuf:"bytes,10,opt,name=currency,proto3" json:"currency,omitempty"`
+	CurrencyUnitVersion string                 `protobuf:"bytes,11,opt,name=currency_unit_version,json=currencyUnitVersion,proto3" json:"currency_unit_version,omitempty"`
+	TransactionId       string                 `protobuf:"bytes,12,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	ErrorCode           string                 `protobuf:"bytes,13,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	CreatedAt           string                 `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ToOwnerId           string                 `protobuf:"bytes,15,opt,name=to_owner_id,json=toOwnerId,proto3" json:"to_owner_id,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *P2PTransferStatus) Reset() {
+	*x = P2PTransferStatus{}
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *P2PTransferStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*P2PTransferStatus) ProtoMessage() {}
+
+func (x *P2PTransferStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use P2PTransferStatus.ProtoReflect.Descriptor instead.
+func (*P2PTransferStatus) Descriptor() ([]byte, []int) {
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *P2PTransferStatus) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetReferenceId() string {
+	if x != nil {
+		return x.ReferenceId
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetFromWalletId() string {
+	if x != nil {
+		return x.FromWalletId
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetToWalletId() string {
+	if x != nil {
+		return x.ToWalletId
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetRecipientName() string {
+	if x != nil {
+		return x.RecipientName
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetAmountMinor() string {
+	if x != nil {
+		return x.AmountMinor
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetFeeAmountMinor() string {
+	if x != nil {
+		return x.FeeAmountMinor
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetTotalDebitMinor() string {
+	if x != nil {
+		return x.TotalDebitMinor
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetCurrencyUnitVersion() string {
+	if x != nil {
+		return x.CurrencyUnitVersion
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetToOwnerId() string {
+	if x != nil {
+		return x.ToOwnerId
+	}
+	return ""
+}
+
 type RequestP2PTransferResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	WorkflowId    string                 `protobuf:"bytes,1,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"`
@@ -1329,7 +1745,7 @@ type RequestP2PTransferResponse struct {
 
 func (x *RequestP2PTransferResponse) Reset() {
 	*x = RequestP2PTransferResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[14]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1341,7 +1757,7 @@ func (x *RequestP2PTransferResponse) String() string {
 func (*RequestP2PTransferResponse) ProtoMessage() {}
 
 func (x *RequestP2PTransferResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[14]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1354,7 +1770,7 @@ func (x *RequestP2PTransferResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestP2PTransferResponse.ProtoReflect.Descriptor instead.
 func (*RequestP2PTransferResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{14}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RequestP2PTransferResponse) GetWorkflowId() string {
@@ -1387,7 +1803,7 @@ type RequestDepositRequest struct {
 
 func (x *RequestDepositRequest) Reset() {
 	*x = RequestDepositRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[15]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1399,7 +1815,7 @@ func (x *RequestDepositRequest) String() string {
 func (*RequestDepositRequest) ProtoMessage() {}
 
 func (x *RequestDepositRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[15]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1412,7 +1828,7 @@ func (x *RequestDepositRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestDepositRequest.ProtoReflect.Descriptor instead.
 func (*RequestDepositRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{15}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RequestDepositRequest) GetTenantId() string {
@@ -1481,7 +1897,7 @@ type RequestDepositResponse struct {
 
 func (x *RequestDepositResponse) Reset() {
 	*x = RequestDepositResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[16]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1493,7 +1909,7 @@ func (x *RequestDepositResponse) String() string {
 func (*RequestDepositResponse) ProtoMessage() {}
 
 func (x *RequestDepositResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[16]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1506,7 +1922,7 @@ func (x *RequestDepositResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestDepositResponse.ProtoReflect.Descriptor instead.
 func (*RequestDepositResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{16}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RequestDepositResponse) GetWorkflowId() string {
@@ -1547,7 +1963,7 @@ type RequestWithdrawalRequest struct {
 
 func (x *RequestWithdrawalRequest) Reset() {
 	*x = RequestWithdrawalRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[17]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1559,7 +1975,7 @@ func (x *RequestWithdrawalRequest) String() string {
 func (*RequestWithdrawalRequest) ProtoMessage() {}
 
 func (x *RequestWithdrawalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[17]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1572,7 +1988,7 @@ func (x *RequestWithdrawalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestWithdrawalRequest.ProtoReflect.Descriptor instead.
 func (*RequestWithdrawalRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{17}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RequestWithdrawalRequest) GetTenantId() string {
@@ -1697,7 +2113,7 @@ type RequestWithdrawalResponse struct {
 
 func (x *RequestWithdrawalResponse) Reset() {
 	*x = RequestWithdrawalResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[18]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1709,7 +2125,7 @@ func (x *RequestWithdrawalResponse) String() string {
 func (*RequestWithdrawalResponse) ProtoMessage() {}
 
 func (x *RequestWithdrawalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[18]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1722,7 +2138,7 @@ func (x *RequestWithdrawalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestWithdrawalResponse.ProtoReflect.Descriptor instead.
 func (*RequestWithdrawalResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{18}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RequestWithdrawalResponse) GetWorkflowId() string {
@@ -1760,7 +2176,7 @@ type FundingSource struct {
 
 func (x *FundingSource) Reset() {
 	*x = FundingSource{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[19]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1772,7 +2188,7 @@ func (x *FundingSource) String() string {
 func (*FundingSource) ProtoMessage() {}
 
 func (x *FundingSource) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[19]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1785,7 +2201,7 @@ func (x *FundingSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FundingSource.ProtoReflect.Descriptor instead.
 func (*FundingSource) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{19}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *FundingSource) GetId() int64 {
@@ -1889,7 +2305,7 @@ type ListFundingSourcesRequest struct {
 
 func (x *ListFundingSourcesRequest) Reset() {
 	*x = ListFundingSourcesRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[20]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1901,7 +2317,7 @@ func (x *ListFundingSourcesRequest) String() string {
 func (*ListFundingSourcesRequest) ProtoMessage() {}
 
 func (x *ListFundingSourcesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[20]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1914,7 +2330,7 @@ func (x *ListFundingSourcesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFundingSourcesRequest.ProtoReflect.Descriptor instead.
 func (*ListFundingSourcesRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{20}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ListFundingSourcesRequest) GetTenantId() string {
@@ -1940,7 +2356,7 @@ type ListFundingSourcesResponse struct {
 
 func (x *ListFundingSourcesResponse) Reset() {
 	*x = ListFundingSourcesResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[21]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1952,7 +2368,7 @@ func (x *ListFundingSourcesResponse) String() string {
 func (*ListFundingSourcesResponse) ProtoMessage() {}
 
 func (x *ListFundingSourcesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[21]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1965,7 +2381,7 @@ func (x *ListFundingSourcesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFundingSourcesResponse.ProtoReflect.Descriptor instead.
 func (*ListFundingSourcesResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{21}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListFundingSourcesResponse) GetSources() []*FundingSource {
@@ -1995,7 +2411,7 @@ type WithdrawalDestination struct {
 
 func (x *WithdrawalDestination) Reset() {
 	*x = WithdrawalDestination{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[22]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2007,7 +2423,7 @@ func (x *WithdrawalDestination) String() string {
 func (*WithdrawalDestination) ProtoMessage() {}
 
 func (x *WithdrawalDestination) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[22]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2020,7 +2436,7 @@ func (x *WithdrawalDestination) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WithdrawalDestination.ProtoReflect.Descriptor instead.
 func (*WithdrawalDestination) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{22}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *WithdrawalDestination) GetId() int64 {
@@ -2119,7 +2535,7 @@ type CreateWithdrawalDestinationRequest struct {
 
 func (x *CreateWithdrawalDestinationRequest) Reset() {
 	*x = CreateWithdrawalDestinationRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[23]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2131,7 +2547,7 @@ func (x *CreateWithdrawalDestinationRequest) String() string {
 func (*CreateWithdrawalDestinationRequest) ProtoMessage() {}
 
 func (x *CreateWithdrawalDestinationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[23]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2144,7 +2560,7 @@ func (x *CreateWithdrawalDestinationRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use CreateWithdrawalDestinationRequest.ProtoReflect.Descriptor instead.
 func (*CreateWithdrawalDestinationRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{23}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *CreateWithdrawalDestinationRequest) GetTenantId() string {
@@ -2184,7 +2600,7 @@ type CreateWithdrawalDestinationResponse struct {
 
 func (x *CreateWithdrawalDestinationResponse) Reset() {
 	*x = CreateWithdrawalDestinationResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[24]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2196,7 +2612,7 @@ func (x *CreateWithdrawalDestinationResponse) String() string {
 func (*CreateWithdrawalDestinationResponse) ProtoMessage() {}
 
 func (x *CreateWithdrawalDestinationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[24]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2209,7 +2625,7 @@ func (x *CreateWithdrawalDestinationResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use CreateWithdrawalDestinationResponse.ProtoReflect.Descriptor instead.
 func (*CreateWithdrawalDestinationResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{24}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CreateWithdrawalDestinationResponse) GetDestination() *WithdrawalDestination {
@@ -2230,7 +2646,7 @@ type ListWithdrawalDestinationsRequest struct {
 
 func (x *ListWithdrawalDestinationsRequest) Reset() {
 	*x = ListWithdrawalDestinationsRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[25]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2242,7 +2658,7 @@ func (x *ListWithdrawalDestinationsRequest) String() string {
 func (*ListWithdrawalDestinationsRequest) ProtoMessage() {}
 
 func (x *ListWithdrawalDestinationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[25]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2255,7 +2671,7 @@ func (x *ListWithdrawalDestinationsRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ListWithdrawalDestinationsRequest.ProtoReflect.Descriptor instead.
 func (*ListWithdrawalDestinationsRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{25}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ListWithdrawalDestinationsRequest) GetTenantId() string {
@@ -2288,7 +2704,7 @@ type ListWithdrawalDestinationsResponse struct {
 
 func (x *ListWithdrawalDestinationsResponse) Reset() {
 	*x = ListWithdrawalDestinationsResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[26]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2300,7 +2716,7 @@ func (x *ListWithdrawalDestinationsResponse) String() string {
 func (*ListWithdrawalDestinationsResponse) ProtoMessage() {}
 
 func (x *ListWithdrawalDestinationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[26]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2313,7 +2729,7 @@ func (x *ListWithdrawalDestinationsResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListWithdrawalDestinationsResponse.ProtoReflect.Descriptor instead.
 func (*ListWithdrawalDestinationsResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{26}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ListWithdrawalDestinationsResponse) GetDestinations() []*WithdrawalDestination {
@@ -2333,7 +2749,7 @@ type DeactivateWithdrawalDestinationRequest struct {
 
 func (x *DeactivateWithdrawalDestinationRequest) Reset() {
 	*x = DeactivateWithdrawalDestinationRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[27]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2345,7 +2761,7 @@ func (x *DeactivateWithdrawalDestinationRequest) String() string {
 func (*DeactivateWithdrawalDestinationRequest) ProtoMessage() {}
 
 func (x *DeactivateWithdrawalDestinationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[27]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2358,7 +2774,7 @@ func (x *DeactivateWithdrawalDestinationRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use DeactivateWithdrawalDestinationRequest.ProtoReflect.Descriptor instead.
 func (*DeactivateWithdrawalDestinationRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{27}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *DeactivateWithdrawalDestinationRequest) GetTenantId() string {
@@ -2383,7 +2799,7 @@ type DeactivateWithdrawalDestinationResponse struct {
 
 func (x *DeactivateWithdrawalDestinationResponse) Reset() {
 	*x = DeactivateWithdrawalDestinationResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[28]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2395,7 +2811,7 @@ func (x *DeactivateWithdrawalDestinationResponse) String() string {
 func (*DeactivateWithdrawalDestinationResponse) ProtoMessage() {}
 
 func (x *DeactivateWithdrawalDestinationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[28]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2408,7 +2824,7 @@ func (x *DeactivateWithdrawalDestinationResponse) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use DeactivateWithdrawalDestinationResponse.ProtoReflect.Descriptor instead.
 func (*DeactivateWithdrawalDestinationResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{28}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{32}
 }
 
 type CurrencyUnit struct {
@@ -2434,7 +2850,7 @@ type CurrencyUnit struct {
 
 func (x *CurrencyUnit) Reset() {
 	*x = CurrencyUnit{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[29]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2446,7 +2862,7 @@ func (x *CurrencyUnit) String() string {
 func (*CurrencyUnit) ProtoMessage() {}
 
 func (x *CurrencyUnit) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[29]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2459,7 +2875,7 @@ func (x *CurrencyUnit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CurrencyUnit.ProtoReflect.Descriptor instead.
 func (*CurrencyUnit) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{29}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *CurrencyUnit) GetCurrencyCode() string {
@@ -2585,7 +3001,7 @@ type MoneyAmount struct {
 
 func (x *MoneyAmount) Reset() {
 	*x = MoneyAmount{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[30]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2597,7 +3013,7 @@ func (x *MoneyAmount) String() string {
 func (*MoneyAmount) ProtoMessage() {}
 
 func (x *MoneyAmount) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[30]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2610,7 +3026,7 @@ func (x *MoneyAmount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoneyAmount.ProtoReflect.Descriptor instead.
 func (*MoneyAmount) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{30}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *MoneyAmount) GetMinorUnits() string {
@@ -2671,7 +3087,7 @@ type ListCurrenciesPublicRequest struct {
 
 func (x *ListCurrenciesPublicRequest) Reset() {
 	*x = ListCurrenciesPublicRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[31]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2683,7 +3099,7 @@ func (x *ListCurrenciesPublicRequest) String() string {
 func (*ListCurrenciesPublicRequest) ProtoMessage() {}
 
 func (x *ListCurrenciesPublicRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[31]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2696,7 +3112,7 @@ func (x *ListCurrenciesPublicRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCurrenciesPublicRequest.ProtoReflect.Descriptor instead.
 func (*ListCurrenciesPublicRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{31}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ListCurrenciesPublicRequest) GetTenantId() string {
@@ -2715,7 +3131,7 @@ type ListCurrenciesPublicResponse struct {
 
 func (x *ListCurrenciesPublicResponse) Reset() {
 	*x = ListCurrenciesPublicResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[32]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2727,7 +3143,7 @@ func (x *ListCurrenciesPublicResponse) String() string {
 func (*ListCurrenciesPublicResponse) ProtoMessage() {}
 
 func (x *ListCurrenciesPublicResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[32]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2740,7 +3156,7 @@ func (x *ListCurrenciesPublicResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCurrenciesPublicResponse.ProtoReflect.Descriptor instead.
 func (*ListCurrenciesPublicResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{32}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListCurrenciesPublicResponse) GetCurrencies() []*CurrencyUnit {
@@ -2760,7 +3176,7 @@ type GetCurrencyPublicRequest struct {
 
 func (x *GetCurrencyPublicRequest) Reset() {
 	*x = GetCurrencyPublicRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[33]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2772,7 +3188,7 @@ func (x *GetCurrencyPublicRequest) String() string {
 func (*GetCurrencyPublicRequest) ProtoMessage() {}
 
 func (x *GetCurrencyPublicRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[33]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2785,7 +3201,7 @@ func (x *GetCurrencyPublicRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCurrencyPublicRequest.ProtoReflect.Descriptor instead.
 func (*GetCurrencyPublicRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{33}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *GetCurrencyPublicRequest) GetTenantId() string {
@@ -2811,7 +3227,7 @@ type GetCurrencyPublicResponse struct {
 
 func (x *GetCurrencyPublicResponse) Reset() {
 	*x = GetCurrencyPublicResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[34]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2823,7 +3239,7 @@ func (x *GetCurrencyPublicResponse) String() string {
 func (*GetCurrencyPublicResponse) ProtoMessage() {}
 
 func (x *GetCurrencyPublicResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[34]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2836,7 +3252,7 @@ func (x *GetCurrencyPublicResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCurrencyPublicResponse.ProtoReflect.Descriptor instead.
 func (*GetCurrencyPublicResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{34}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *GetCurrencyPublicResponse) GetCurrency() *CurrencyUnit {
@@ -2861,7 +3277,7 @@ type ParseMoneyPublicRequest struct {
 
 func (x *ParseMoneyPublicRequest) Reset() {
 	*x = ParseMoneyPublicRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[35]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2873,7 +3289,7 @@ func (x *ParseMoneyPublicRequest) String() string {
 func (*ParseMoneyPublicRequest) ProtoMessage() {}
 
 func (x *ParseMoneyPublicRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[35]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2886,7 +3302,7 @@ func (x *ParseMoneyPublicRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ParseMoneyPublicRequest.ProtoReflect.Descriptor instead.
 func (*ParseMoneyPublicRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{35}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ParseMoneyPublicRequest) GetTenantId() string {
@@ -2933,7 +3349,7 @@ type ParseMoneyPublicResponse struct {
 
 func (x *ParseMoneyPublicResponse) Reset() {
 	*x = ParseMoneyPublicResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[36]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2945,7 +3361,7 @@ func (x *ParseMoneyPublicResponse) String() string {
 func (*ParseMoneyPublicResponse) ProtoMessage() {}
 
 func (x *ParseMoneyPublicResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[36]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2958,7 +3374,7 @@ func (x *ParseMoneyPublicResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ParseMoneyPublicResponse.ProtoReflect.Descriptor instead.
 func (*ParseMoneyPublicResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{36}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ParseMoneyPublicResponse) GetMoney() *MoneyAmount {
@@ -2983,7 +3399,7 @@ type FormatMoneyPublicRequest struct {
 
 func (x *FormatMoneyPublicRequest) Reset() {
 	*x = FormatMoneyPublicRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[37]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2995,7 +3411,7 @@ func (x *FormatMoneyPublicRequest) String() string {
 func (*FormatMoneyPublicRequest) ProtoMessage() {}
 
 func (x *FormatMoneyPublicRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[37]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3008,7 +3424,7 @@ func (x *FormatMoneyPublicRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FormatMoneyPublicRequest.ProtoReflect.Descriptor instead.
 func (*FormatMoneyPublicRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{37}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *FormatMoneyPublicRequest) GetTenantId() string {
@@ -3055,7 +3471,7 @@ type FormatMoneyPublicResponse struct {
 
 func (x *FormatMoneyPublicResponse) Reset() {
 	*x = FormatMoneyPublicResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[38]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3067,7 +3483,7 @@ func (x *FormatMoneyPublicResponse) String() string {
 func (*FormatMoneyPublicResponse) ProtoMessage() {}
 
 func (x *FormatMoneyPublicResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[38]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3080,7 +3496,7 @@ func (x *FormatMoneyPublicResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FormatMoneyPublicResponse.ProtoReflect.Descriptor instead.
 func (*FormatMoneyPublicResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{38}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *FormatMoneyPublicResponse) GetMoney() *MoneyAmount {
@@ -3112,7 +3528,7 @@ type QuoteConversionPublicRequest struct {
 
 func (x *QuoteConversionPublicRequest) Reset() {
 	*x = QuoteConversionPublicRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[39]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3124,7 +3540,7 @@ func (x *QuoteConversionPublicRequest) String() string {
 func (*QuoteConversionPublicRequest) ProtoMessage() {}
 
 func (x *QuoteConversionPublicRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[39]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3137,7 +3553,7 @@ func (x *QuoteConversionPublicRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuoteConversionPublicRequest.ProtoReflect.Descriptor instead.
 func (*QuoteConversionPublicRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{39}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *QuoteConversionPublicRequest) GetTenantId() string {
@@ -3248,7 +3664,7 @@ type ConversionQuote struct {
 
 func (x *ConversionQuote) Reset() {
 	*x = ConversionQuote{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[40]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3260,7 +3676,7 @@ func (x *ConversionQuote) String() string {
 func (*ConversionQuote) ProtoMessage() {}
 
 func (x *ConversionQuote) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[40]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3273,7 +3689,7 @@ func (x *ConversionQuote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversionQuote.ProtoReflect.Descriptor instead.
 func (*ConversionQuote) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{40}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ConversionQuote) GetId() string {
@@ -3460,7 +3876,7 @@ type QuoteConversionPublicResponse struct {
 
 func (x *QuoteConversionPublicResponse) Reset() {
 	*x = QuoteConversionPublicResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[41]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3472,7 +3888,7 @@ func (x *QuoteConversionPublicResponse) String() string {
 func (*QuoteConversionPublicResponse) ProtoMessage() {}
 
 func (x *QuoteConversionPublicResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[41]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3485,7 +3901,7 @@ func (x *QuoteConversionPublicResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuoteConversionPublicResponse.ProtoReflect.Descriptor instead.
 func (*QuoteConversionPublicResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{41}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *QuoteConversionPublicResponse) GetQuote() *ConversionQuote {
@@ -3506,7 +3922,7 @@ type GetConversionQuotePublicRequest struct {
 
 func (x *GetConversionQuotePublicRequest) Reset() {
 	*x = GetConversionQuotePublicRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[42]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3518,7 +3934,7 @@ func (x *GetConversionQuotePublicRequest) String() string {
 func (*GetConversionQuotePublicRequest) ProtoMessage() {}
 
 func (x *GetConversionQuotePublicRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[42]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3531,7 +3947,7 @@ func (x *GetConversionQuotePublicRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConversionQuotePublicRequest.ProtoReflect.Descriptor instead.
 func (*GetConversionQuotePublicRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{42}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *GetConversionQuotePublicRequest) GetTenantId() string {
@@ -3564,7 +3980,7 @@ type GetConversionQuotePublicResponse struct {
 
 func (x *GetConversionQuotePublicResponse) Reset() {
 	*x = GetConversionQuotePublicResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[43]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3576,7 +3992,7 @@ func (x *GetConversionQuotePublicResponse) String() string {
 func (*GetConversionQuotePublicResponse) ProtoMessage() {}
 
 func (x *GetConversionQuotePublicResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[43]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3589,7 +4005,7 @@ func (x *GetConversionQuotePublicResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConversionQuotePublicResponse.ProtoReflect.Descriptor instead.
 func (*GetConversionQuotePublicResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{43}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *GetConversionQuotePublicResponse) GetQuote() *ConversionQuote {
@@ -3611,7 +4027,7 @@ type FXSourcePair struct {
 
 func (x *FXSourcePair) Reset() {
 	*x = FXSourcePair{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[44]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3623,7 +4039,7 @@ func (x *FXSourcePair) String() string {
 func (*FXSourcePair) ProtoMessage() {}
 
 func (x *FXSourcePair) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[44]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3636,7 +4052,7 @@ func (x *FXSourcePair) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FXSourcePair.ProtoReflect.Descriptor instead.
 func (*FXSourcePair) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{44}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *FXSourcePair) GetId() int64 {
@@ -3681,7 +4097,7 @@ type FXSource struct {
 
 func (x *FXSource) Reset() {
 	*x = FXSource{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[45]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3693,7 +4109,7 @@ func (x *FXSource) String() string {
 func (*FXSource) ProtoMessage() {}
 
 func (x *FXSource) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[45]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3706,7 +4122,7 @@ func (x *FXSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FXSource.ProtoReflect.Descriptor instead.
 func (*FXSource) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{45}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *FXSource) GetCode() string {
@@ -3760,7 +4176,7 @@ type ListFXSourcesPublicRequest struct {
 
 func (x *ListFXSourcesPublicRequest) Reset() {
 	*x = ListFXSourcesPublicRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[46]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3772,7 +4188,7 @@ func (x *ListFXSourcesPublicRequest) String() string {
 func (*ListFXSourcesPublicRequest) ProtoMessage() {}
 
 func (x *ListFXSourcesPublicRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[46]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3785,7 +4201,7 @@ func (x *ListFXSourcesPublicRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFXSourcesPublicRequest.ProtoReflect.Descriptor instead.
 func (*ListFXSourcesPublicRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{46}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ListFXSourcesPublicRequest) GetTenantId() string {
@@ -3804,7 +4220,7 @@ type ListFXSourcesPublicResponse struct {
 
 func (x *ListFXSourcesPublicResponse) Reset() {
 	*x = ListFXSourcesPublicResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[47]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3816,7 +4232,7 @@ func (x *ListFXSourcesPublicResponse) String() string {
 func (*ListFXSourcesPublicResponse) ProtoMessage() {}
 
 func (x *ListFXSourcesPublicResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[47]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3829,7 +4245,7 @@ func (x *ListFXSourcesPublicResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFXSourcesPublicResponse.ProtoReflect.Descriptor instead.
 func (*ListFXSourcesPublicResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{47}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ListFXSourcesPublicResponse) GetSources() []*FXSource {
@@ -3850,7 +4266,7 @@ type GetInteropCapabilityRequest struct {
 
 func (x *GetInteropCapabilityRequest) Reset() {
 	*x = GetInteropCapabilityRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[48]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3862,7 +4278,7 @@ func (x *GetInteropCapabilityRequest) String() string {
 func (*GetInteropCapabilityRequest) ProtoMessage() {}
 
 func (x *GetInteropCapabilityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[48]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3875,7 +4291,7 @@ func (x *GetInteropCapabilityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInteropCapabilityRequest.ProtoReflect.Descriptor instead.
 func (*GetInteropCapabilityRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{48}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *GetInteropCapabilityRequest) GetTenantId() string {
@@ -3897,7 +4313,7 @@ type InteropCapability struct {
 
 func (x *InteropCapability) Reset() {
 	*x = InteropCapability{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[49]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3909,7 +4325,7 @@ func (x *InteropCapability) String() string {
 func (*InteropCapability) ProtoMessage() {}
 
 func (x *InteropCapability) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[49]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3922,7 +4338,7 @@ func (x *InteropCapability) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteropCapability.ProtoReflect.Descriptor instead.
 func (*InteropCapability) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{49}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *InteropCapability) GetEnabled() bool {
@@ -3968,7 +4384,7 @@ type CreateInteropQuoteRequest struct {
 
 func (x *CreateInteropQuoteRequest) Reset() {
 	*x = CreateInteropQuoteRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[50]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3980,7 +4396,7 @@ func (x *CreateInteropQuoteRequest) String() string {
 func (*CreateInteropQuoteRequest) ProtoMessage() {}
 
 func (x *CreateInteropQuoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[50]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3993,7 +4409,7 @@ func (x *CreateInteropQuoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateInteropQuoteRequest.ProtoReflect.Descriptor instead.
 func (*CreateInteropQuoteRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{50}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *CreateInteropQuoteRequest) GetTenantId() string {
@@ -4055,7 +4471,7 @@ type GetInteropQuoteRequest struct {
 
 func (x *GetInteropQuoteRequest) Reset() {
 	*x = GetInteropQuoteRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[51]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4067,7 +4483,7 @@ func (x *GetInteropQuoteRequest) String() string {
 func (*GetInteropQuoteRequest) ProtoMessage() {}
 
 func (x *GetInteropQuoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[51]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4080,7 +4496,7 @@ func (x *GetInteropQuoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInteropQuoteRequest.ProtoReflect.Descriptor instead.
 func (*GetInteropQuoteRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{51}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *GetInteropQuoteRequest) GetTenantId() string {
@@ -4107,7 +4523,7 @@ type CloseInteropQuoteResponse struct {
 
 func (x *CloseInteropQuoteResponse) Reset() {
 	*x = CloseInteropQuoteResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[52]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4119,7 +4535,7 @@ func (x *CloseInteropQuoteResponse) String() string {
 func (*CloseInteropQuoteResponse) ProtoMessage() {}
 
 func (x *CloseInteropQuoteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[52]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4132,7 +4548,7 @@ func (x *CloseInteropQuoteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseInteropQuoteResponse.ProtoReflect.Descriptor instead.
 func (*CloseInteropQuoteResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{52}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *CloseInteropQuoteResponse) GetClosed() bool {
@@ -4169,7 +4585,7 @@ type InteropQuote struct {
 
 func (x *InteropQuote) Reset() {
 	*x = InteropQuote{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[53]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4181,7 +4597,7 @@ func (x *InteropQuote) String() string {
 func (*InteropQuote) ProtoMessage() {}
 
 func (x *InteropQuote) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[53]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4194,7 +4610,7 @@ func (x *InteropQuote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteropQuote.ProtoReflect.Descriptor instead.
 func (*InteropQuote) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{53}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *InteropQuote) GetQuoteId() string {
@@ -4292,7 +4708,7 @@ type RequestInteropTransferRequest struct {
 
 func (x *RequestInteropTransferRequest) Reset() {
 	*x = RequestInteropTransferRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[54]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4304,7 +4720,7 @@ func (x *RequestInteropTransferRequest) String() string {
 func (*RequestInteropTransferRequest) ProtoMessage() {}
 
 func (x *RequestInteropTransferRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[54]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4317,7 +4733,7 @@ func (x *RequestInteropTransferRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestInteropTransferRequest.ProtoReflect.Descriptor instead.
 func (*RequestInteropTransferRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{54}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *RequestInteropTransferRequest) GetTenantId() string {
@@ -4352,7 +4768,7 @@ type GetInteropTransferRequest struct {
 
 func (x *GetInteropTransferRequest) Reset() {
 	*x = GetInteropTransferRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[55]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4364,7 +4780,7 @@ func (x *GetInteropTransferRequest) String() string {
 func (*GetInteropTransferRequest) ProtoMessage() {}
 
 func (x *GetInteropTransferRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[55]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4377,7 +4793,7 @@ func (x *GetInteropTransferRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInteropTransferRequest.ProtoReflect.Descriptor instead.
 func (*GetInteropTransferRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{55}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *GetInteropTransferRequest) GetTenantId() string {
@@ -4420,7 +4836,7 @@ type InteropTransfer struct {
 
 func (x *InteropTransfer) Reset() {
 	*x = InteropTransfer{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[56]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4432,7 +4848,7 @@ func (x *InteropTransfer) String() string {
 func (*InteropTransfer) ProtoMessage() {}
 
 func (x *InteropTransfer) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[56]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4445,7 +4861,7 @@ func (x *InteropTransfer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InteropTransfer.ProtoReflect.Descriptor instead.
 func (*InteropTransfer) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{56}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *InteropTransfer) GetTransferId() string {
@@ -4536,7 +4952,7 @@ type GetWalletAccountRequest struct {
 
 func (x *GetWalletAccountRequest) Reset() {
 	*x = GetWalletAccountRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[57]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4548,7 +4964,7 @@ func (x *GetWalletAccountRequest) String() string {
 func (*GetWalletAccountRequest) ProtoMessage() {}
 
 func (x *GetWalletAccountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[57]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4561,7 +4977,7 @@ func (x *GetWalletAccountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWalletAccountRequest.ProtoReflect.Descriptor instead.
 func (*GetWalletAccountRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{57}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *GetWalletAccountRequest) GetTenantId() string {
@@ -4582,7 +4998,7 @@ type WalletAccount struct {
 
 func (x *WalletAccount) Reset() {
 	*x = WalletAccount{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[58]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4594,7 +5010,7 @@ func (x *WalletAccount) String() string {
 func (*WalletAccount) ProtoMessage() {}
 
 func (x *WalletAccount) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[58]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4607,7 +5023,7 @@ func (x *WalletAccount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WalletAccount.ProtoReflect.Descriptor instead.
 func (*WalletAccount) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{58}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *WalletAccount) GetUserId() string {
@@ -4640,7 +5056,7 @@ type ListWalletProvidersRequest struct {
 
 func (x *ListWalletProvidersRequest) Reset() {
 	*x = ListWalletProvidersRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[59]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4652,7 +5068,7 @@ func (x *ListWalletProvidersRequest) String() string {
 func (*ListWalletProvidersRequest) ProtoMessage() {}
 
 func (x *ListWalletProvidersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[59]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4665,7 +5081,7 @@ func (x *ListWalletProvidersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWalletProvidersRequest.ProtoReflect.Descriptor instead.
 func (*ListWalletProvidersRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{59}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ListWalletProvidersRequest) GetTenantId() string {
@@ -4687,7 +5103,7 @@ type WalletProviderCapabilities struct {
 
 func (x *WalletProviderCapabilities) Reset() {
 	*x = WalletProviderCapabilities{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[60]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4699,7 +5115,7 @@ func (x *WalletProviderCapabilities) String() string {
 func (*WalletProviderCapabilities) ProtoMessage() {}
 
 func (x *WalletProviderCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[60]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4712,7 +5128,7 @@ func (x *WalletProviderCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WalletProviderCapabilities.ProtoReflect.Descriptor instead.
 func (*WalletProviderCapabilities) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{60}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *WalletProviderCapabilities) GetSend() bool {
@@ -4758,7 +5174,7 @@ type WalletProvider struct {
 
 func (x *WalletProvider) Reset() {
 	*x = WalletProvider{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[61]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4770,7 +5186,7 @@ func (x *WalletProvider) String() string {
 func (*WalletProvider) ProtoMessage() {}
 
 func (x *WalletProvider) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[61]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4783,7 +5199,7 @@ func (x *WalletProvider) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WalletProvider.ProtoReflect.Descriptor instead.
 func (*WalletProvider) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{61}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *WalletProvider) GetId() string {
@@ -4844,7 +5260,7 @@ type ListWalletProvidersResponse struct {
 
 func (x *ListWalletProvidersResponse) Reset() {
 	*x = ListWalletProvidersResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[62]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4856,7 +5272,7 @@ func (x *ListWalletProvidersResponse) String() string {
 func (*ListWalletProvidersResponse) ProtoMessage() {}
 
 func (x *ListWalletProvidersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[62]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4869,7 +5285,7 @@ func (x *ListWalletProvidersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWalletProvidersResponse.ProtoReflect.Descriptor instead.
 func (*ListWalletProvidersResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{62}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ListWalletProvidersResponse) GetProviders() []*WalletProvider {
@@ -4889,7 +5305,7 @@ type ListWalletFundingMethodsRequest struct {
 
 func (x *ListWalletFundingMethodsRequest) Reset() {
 	*x = ListWalletFundingMethodsRequest{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[63]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4901,7 +5317,7 @@ func (x *ListWalletFundingMethodsRequest) String() string {
 func (*ListWalletFundingMethodsRequest) ProtoMessage() {}
 
 func (x *ListWalletFundingMethodsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[63]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4914,7 +5330,7 @@ func (x *ListWalletFundingMethodsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWalletFundingMethodsRequest.ProtoReflect.Descriptor instead.
 func (*ListWalletFundingMethodsRequest) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{63}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ListWalletFundingMethodsRequest) GetTenantId() string {
@@ -4951,7 +5367,7 @@ type WalletFundingMethod struct {
 
 func (x *WalletFundingMethod) Reset() {
 	*x = WalletFundingMethod{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[64]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4963,7 +5379,7 @@ func (x *WalletFundingMethod) String() string {
 func (*WalletFundingMethod) ProtoMessage() {}
 
 func (x *WalletFundingMethod) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[64]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4976,7 +5392,7 @@ func (x *WalletFundingMethod) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WalletFundingMethod.ProtoReflect.Descriptor instead.
 func (*WalletFundingMethod) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{64}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *WalletFundingMethod) GetId() string {
@@ -5072,7 +5488,7 @@ type ListWalletFundingMethodsResponse struct {
 
 func (x *ListWalletFundingMethodsResponse) Reset() {
 	*x = ListWalletFundingMethodsResponse{}
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[65]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5084,7 +5500,7 @@ func (x *ListWalletFundingMethodsResponse) String() string {
 func (*ListWalletFundingMethodsResponse) ProtoMessage() {}
 
 func (x *ListWalletFundingMethodsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[65]
+	mi := &file_noebs_wallet_v1_wallet_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5097,7 +5513,7 @@ func (x *ListWalletFundingMethodsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWalletFundingMethodsResponse.ProtoReflect.Descriptor instead.
 func (*ListWalletFundingMethodsResponse) Descriptor() ([]byte, []int) {
-	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{65}
+	return file_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *ListWalletFundingMethodsResponse) GetMethods() []*WalletFundingMethod {
@@ -5228,7 +5644,7 @@ const file_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\r_reference_idB\x0e\n" +
 	"\f_description\"n\n" +
 	"$ListWalletTransactionsPublicResponse\x12F\n" +
-	"\ftransactions\x18\x01 \x03(\v2\".noebs.wallet.v1.WalletLedgerEntryR\ftransactions\"\xb2\x03\n" +
+	"\ftransactions\x18\x01 \x03(\v2\".noebs.wallet.v1.WalletLedgerEntryR\ftransactions\"\xec\x04\n" +
 	"\x19RequestP2PTransferRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12'\n" +
 	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12\x1a\n" +
@@ -5243,7 +5659,55 @@ const file_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\rfrom_owner_id\x18\n" +
 	" \x01(\tR\vfromOwnerId\x12\"\n" +
 	"\rto_owner_type\x18\v \x01(\tR\vtoOwnerType\x12\x1e\n" +
-	"\vto_owner_id\x18\f \x01(\tR\ttoOwnerId\"T\n" +
+	"\vto_owner_id\x18\f \x01(\tR\ttoOwnerId\x123\n" +
+	"\x13expected_fee_amount\x18\r \x01(\x03H\x00R\x11expectedFeeAmount\x88\x01\x01\x12H\n" +
+	"\x1eexpected_currency_unit_version\x18\x0e \x01(\x03H\x01R\x1bexpectedCurrencyUnitVersion\x88\x01\x01B\x16\n" +
+	"\x14_expected_fee_amountB!\n" +
+	"\x1f_expected_currency_unit_version\"\xb4\x01\n" +
+	"\x19PreviewP2PTransferRequest\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12$\n" +
+	"\x0efrom_wallet_id\x18\x02 \x01(\tR\ffromWalletId\x12 \n" +
+	"\fto_wallet_id\x18\x03 \x01(\tR\n" +
+	"toWalletId\x12\x16\n" +
+	"\x06amount\x18\x04 \x01(\x03R\x06amount\x12\x1a\n" +
+	"\bcurrency\x18\x05 \x01(\tR\bcurrency\"\x88\x03\n" +
+	"\n" +
+	"P2PPreview\x12$\n" +
+	"\x0efrom_wallet_id\x18\x01 \x01(\tR\ffromWalletId\x12 \n" +
+	"\fto_wallet_id\x18\x02 \x01(\tR\n" +
+	"toWalletId\x12\"\n" +
+	"\rto_owner_type\x18\x03 \x01(\tR\vtoOwnerType\x12\x1e\n" +
+	"\vto_owner_id\x18\x04 \x01(\tR\ttoOwnerId\x12%\n" +
+	"\x0erecipient_name\x18\x05 \x01(\tR\rrecipientName\x12!\n" +
+	"\famount_minor\x18\x06 \x01(\tR\vamountMinor\x12(\n" +
+	"\x10fee_amount_minor\x18\a \x01(\tR\x0efeeAmountMinor\x12*\n" +
+	"\x11total_debit_minor\x18\b \x01(\tR\x0ftotalDebitMinor\x12\x1a\n" +
+	"\bcurrency\x18\t \x01(\tR\bcurrency\x122\n" +
+	"\x15currency_unit_version\x18\n" +
+	" \x01(\tR\x13currencyUnitVersion\"c\n" +
+	"\x1bGetP2PTransferStatusRequest\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12'\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\"\xb4\x04\n" +
+	"\x11P2PTransferStatus\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12'\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12!\n" +
+	"\freference_id\x18\x03 \x01(\tR\vreferenceId\x12$\n" +
+	"\x0efrom_wallet_id\x18\x04 \x01(\tR\ffromWalletId\x12 \n" +
+	"\fto_wallet_id\x18\x05 \x01(\tR\n" +
+	"toWalletId\x12%\n" +
+	"\x0erecipient_name\x18\x06 \x01(\tR\rrecipientName\x12!\n" +
+	"\famount_minor\x18\a \x01(\tR\vamountMinor\x12(\n" +
+	"\x10fee_amount_minor\x18\b \x01(\tR\x0efeeAmountMinor\x12*\n" +
+	"\x11total_debit_minor\x18\t \x01(\tR\x0ftotalDebitMinor\x12\x1a\n" +
+	"\bcurrency\x18\n" +
+	" \x01(\tR\bcurrency\x122\n" +
+	"\x15currency_unit_version\x18\v \x01(\tR\x13currencyUnitVersion\x12%\n" +
+	"\x0etransaction_id\x18\f \x01(\tR\rtransactionId\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\r \x01(\tR\terrorCode\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x0e \x01(\tR\tcreatedAt\x12\x1e\n" +
+	"\vto_owner_id\x18\x0f \x01(\tR\ttoOwnerId\"T\n" +
 	"\x1aRequestP2PTransferResponse\x12\x1f\n" +
 	"\vworkflow_id\x18\x01 \x01(\tR\n" +
 	"workflowId\x12\x15\n" +
@@ -5601,7 +6065,7 @@ const file_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\x1eADMIN_WALLET_ACTION_LIST_RATES\x10\r\x12#\n" +
 	"\x1fADMIN_WALLET_ACTION_CREATE_RATE\x10\x0e\x12(\n" +
 	"$ADMIN_WALLET_ACTION_APPROVE_TRANSFER\x10\x0f\x12'\n" +
-	"#ADMIN_WALLET_ACTION_REJECT_TRANSFER\x10\x102\xf3\x1c\n" +
+	"#ADMIN_WALLET_ACTION_REJECT_TRANSFER\x10\x102\xc0\x1e\n" +
 	"\x13WalletPublicService\x12^\n" +
 	"\x10GetWalletAccount\x12(.noebs.wallet.v1.GetWalletAccountRequest\x1a\x1e.noebs.wallet.v1.WalletAccount\"\x00\x12r\n" +
 	"\x13ListWalletProviders\x12+.noebs.wallet.v1.ListWalletProvidersRequest\x1a,.noebs.wallet.v1.ListWalletProvidersResponse\"\x00\x12\x81\x01\n" +
@@ -5615,7 +6079,9 @@ const file_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\x0fGetWalletPublic\x12'.noebs.wallet.v1.GetWalletPublicRequest\x1a(.noebs.wallet.v1.GetWalletPublicResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/wallet/{wallet_id}\x12\x81\x01\n" +
 	"\x12EnsureWalletPublic\x12*.noebs.wallet.v1.EnsureWalletPublicRequest\x1a+.noebs.wallet.v1.EnsureWalletPublicResponse\"\x12\x82\xd3\xe4\x93\x02\f:\x01*\"\a/wallet\x12\x98\x01\n" +
 	"\x18ListPaymentMethodsPublic\x120.noebs.wallet.v1.ListPaymentMethodsPublicRequest\x1a1.noebs.wallet.v1.ListPaymentMethodsPublicResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/wallet/methods\x12\xb5\x01\n" +
-	"\x1cListWalletTransactionsPublic\x124.noebs.wallet.v1.ListWalletTransactionsPublicRequest\x1a5.noebs.wallet.v1.ListWalletTransactionsPublicResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /wallet/{wallet_id}/transactions\x12o\n" +
+	"\x1cListWalletTransactionsPublic\x124.noebs.wallet.v1.ListWalletTransactionsPublicRequest\x1a5.noebs.wallet.v1.ListWalletTransactionsPublicResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /wallet/{wallet_id}/transactions\x12_\n" +
+	"\x12PreviewP2PTransfer\x12*.noebs.wallet.v1.PreviewP2PTransferRequest\x1a\x1b.noebs.wallet.v1.P2PPreview\"\x00\x12j\n" +
+	"\x14GetP2PTransferStatus\x12,.noebs.wallet.v1.GetP2PTransferStatusRequest\x1a\".noebs.wallet.v1.P2PTransferStatus\"\x00\x12o\n" +
 	"\x12RequestP2PTransfer\x12*.noebs.wallet.v1.RequestP2PTransferRequest\x1a+.noebs.wallet.v1.RequestP2PTransferResponse\"\x00\x12~\n" +
 	"\x0eRequestDeposit\x12&.noebs.wallet.v1.RequestDepositRequest\x1a'.noebs.wallet.v1.RequestDepositResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/wallet/deposits\x12l\n" +
 	"\x11RequestWithdrawal\x12).noebs.wallet.v1.RequestWithdrawalRequest\x1a*.noebs.wallet.v1.RequestWithdrawalResponse\"\x00\x12\x9a\x01\n" +
@@ -5646,7 +6112,7 @@ func file_noebs_wallet_v1_wallet_proto_rawDescGZIP() []byte {
 }
 
 var file_noebs_wallet_v1_wallet_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_noebs_wallet_v1_wallet_proto_msgTypes = make([]protoimpl.MessageInfo, 69)
+var file_noebs_wallet_v1_wallet_proto_msgTypes = make([]protoimpl.MessageInfo, 73)
 var file_noebs_wallet_v1_wallet_proto_goTypes = []any{
 	(AdminWalletAction)(0),                          // 0: noebs.wallet.v1.AdminWalletAction
 	(*RenderWalletAdminRequest)(nil),                // 1: noebs.wallet.v1.RenderWalletAdminRequest
@@ -5663,158 +6129,166 @@ var file_noebs_wallet_v1_wallet_proto_goTypes = []any{
 	(*WalletLedgerEntry)(nil),                       // 12: noebs.wallet.v1.WalletLedgerEntry
 	(*ListWalletTransactionsPublicResponse)(nil),    // 13: noebs.wallet.v1.ListWalletTransactionsPublicResponse
 	(*RequestP2PTransferRequest)(nil),               // 14: noebs.wallet.v1.RequestP2PTransferRequest
-	(*RequestP2PTransferResponse)(nil),              // 15: noebs.wallet.v1.RequestP2PTransferResponse
-	(*RequestDepositRequest)(nil),                   // 16: noebs.wallet.v1.RequestDepositRequest
-	(*RequestDepositResponse)(nil),                  // 17: noebs.wallet.v1.RequestDepositResponse
-	(*RequestWithdrawalRequest)(nil),                // 18: noebs.wallet.v1.RequestWithdrawalRequest
-	(*RequestWithdrawalResponse)(nil),               // 19: noebs.wallet.v1.RequestWithdrawalResponse
-	(*FundingSource)(nil),                           // 20: noebs.wallet.v1.FundingSource
-	(*ListFundingSourcesRequest)(nil),               // 21: noebs.wallet.v1.ListFundingSourcesRequest
-	(*ListFundingSourcesResponse)(nil),              // 22: noebs.wallet.v1.ListFundingSourcesResponse
-	(*WithdrawalDestination)(nil),                   // 23: noebs.wallet.v1.WithdrawalDestination
-	(*CreateWithdrawalDestinationRequest)(nil),      // 24: noebs.wallet.v1.CreateWithdrawalDestinationRequest
-	(*CreateWithdrawalDestinationResponse)(nil),     // 25: noebs.wallet.v1.CreateWithdrawalDestinationResponse
-	(*ListWithdrawalDestinationsRequest)(nil),       // 26: noebs.wallet.v1.ListWithdrawalDestinationsRequest
-	(*ListWithdrawalDestinationsResponse)(nil),      // 27: noebs.wallet.v1.ListWithdrawalDestinationsResponse
-	(*DeactivateWithdrawalDestinationRequest)(nil),  // 28: noebs.wallet.v1.DeactivateWithdrawalDestinationRequest
-	(*DeactivateWithdrawalDestinationResponse)(nil), // 29: noebs.wallet.v1.DeactivateWithdrawalDestinationResponse
-	(*CurrencyUnit)(nil),                            // 30: noebs.wallet.v1.CurrencyUnit
-	(*MoneyAmount)(nil),                             // 31: noebs.wallet.v1.MoneyAmount
-	(*ListCurrenciesPublicRequest)(nil),             // 32: noebs.wallet.v1.ListCurrenciesPublicRequest
-	(*ListCurrenciesPublicResponse)(nil),            // 33: noebs.wallet.v1.ListCurrenciesPublicResponse
-	(*GetCurrencyPublicRequest)(nil),                // 34: noebs.wallet.v1.GetCurrencyPublicRequest
-	(*GetCurrencyPublicResponse)(nil),               // 35: noebs.wallet.v1.GetCurrencyPublicResponse
-	(*ParseMoneyPublicRequest)(nil),                 // 36: noebs.wallet.v1.ParseMoneyPublicRequest
-	(*ParseMoneyPublicResponse)(nil),                // 37: noebs.wallet.v1.ParseMoneyPublicResponse
-	(*FormatMoneyPublicRequest)(nil),                // 38: noebs.wallet.v1.FormatMoneyPublicRequest
-	(*FormatMoneyPublicResponse)(nil),               // 39: noebs.wallet.v1.FormatMoneyPublicResponse
-	(*QuoteConversionPublicRequest)(nil),            // 40: noebs.wallet.v1.QuoteConversionPublicRequest
-	(*ConversionQuote)(nil),                         // 41: noebs.wallet.v1.ConversionQuote
-	(*QuoteConversionPublicResponse)(nil),           // 42: noebs.wallet.v1.QuoteConversionPublicResponse
-	(*GetConversionQuotePublicRequest)(nil),         // 43: noebs.wallet.v1.GetConversionQuotePublicRequest
-	(*GetConversionQuotePublicResponse)(nil),        // 44: noebs.wallet.v1.GetConversionQuotePublicResponse
-	(*FXSourcePair)(nil),                            // 45: noebs.wallet.v1.FXSourcePair
-	(*FXSource)(nil),                                // 46: noebs.wallet.v1.FXSource
-	(*ListFXSourcesPublicRequest)(nil),              // 47: noebs.wallet.v1.ListFXSourcesPublicRequest
-	(*ListFXSourcesPublicResponse)(nil),             // 48: noebs.wallet.v1.ListFXSourcesPublicResponse
-	(*GetInteropCapabilityRequest)(nil),             // 49: noebs.wallet.v1.GetInteropCapabilityRequest
-	(*InteropCapability)(nil),                       // 50: noebs.wallet.v1.InteropCapability
-	(*CreateInteropQuoteRequest)(nil),               // 51: noebs.wallet.v1.CreateInteropQuoteRequest
-	(*GetInteropQuoteRequest)(nil),                  // 52: noebs.wallet.v1.GetInteropQuoteRequest
-	(*CloseInteropQuoteResponse)(nil),               // 53: noebs.wallet.v1.CloseInteropQuoteResponse
-	(*InteropQuote)(nil),                            // 54: noebs.wallet.v1.InteropQuote
-	(*RequestInteropTransferRequest)(nil),           // 55: noebs.wallet.v1.RequestInteropTransferRequest
-	(*GetInteropTransferRequest)(nil),               // 56: noebs.wallet.v1.GetInteropTransferRequest
-	(*InteropTransfer)(nil),                         // 57: noebs.wallet.v1.InteropTransfer
-	(*GetWalletAccountRequest)(nil),                 // 58: noebs.wallet.v1.GetWalletAccountRequest
-	(*WalletAccount)(nil),                           // 59: noebs.wallet.v1.WalletAccount
-	(*ListWalletProvidersRequest)(nil),              // 60: noebs.wallet.v1.ListWalletProvidersRequest
-	(*WalletProviderCapabilities)(nil),              // 61: noebs.wallet.v1.WalletProviderCapabilities
-	(*WalletProvider)(nil),                          // 62: noebs.wallet.v1.WalletProvider
-	(*ListWalletProvidersResponse)(nil),             // 63: noebs.wallet.v1.ListWalletProvidersResponse
-	(*ListWalletFundingMethodsRequest)(nil),         // 64: noebs.wallet.v1.ListWalletFundingMethodsRequest
-	(*WalletFundingMethod)(nil),                     // 65: noebs.wallet.v1.WalletFundingMethod
-	(*ListWalletFundingMethodsResponse)(nil),        // 66: noebs.wallet.v1.ListWalletFundingMethodsResponse
-	nil,                                             // 67: noebs.wallet.v1.RenderWalletAdminRequest.QueryEntry
-	nil,                                             // 68: noebs.wallet.v1.RenderWalletAdminRequest.FormEntry
-	nil,                                             // 69: noebs.wallet.v1.RenderWalletAdminRequest.PathEntry
-	(*structpb.Struct)(nil),                         // 70: google.protobuf.Struct
+	(*PreviewP2PTransferRequest)(nil),               // 15: noebs.wallet.v1.PreviewP2PTransferRequest
+	(*P2PPreview)(nil),                              // 16: noebs.wallet.v1.P2PPreview
+	(*GetP2PTransferStatusRequest)(nil),             // 17: noebs.wallet.v1.GetP2PTransferStatusRequest
+	(*P2PTransferStatus)(nil),                       // 18: noebs.wallet.v1.P2PTransferStatus
+	(*RequestP2PTransferResponse)(nil),              // 19: noebs.wallet.v1.RequestP2PTransferResponse
+	(*RequestDepositRequest)(nil),                   // 20: noebs.wallet.v1.RequestDepositRequest
+	(*RequestDepositResponse)(nil),                  // 21: noebs.wallet.v1.RequestDepositResponse
+	(*RequestWithdrawalRequest)(nil),                // 22: noebs.wallet.v1.RequestWithdrawalRequest
+	(*RequestWithdrawalResponse)(nil),               // 23: noebs.wallet.v1.RequestWithdrawalResponse
+	(*FundingSource)(nil),                           // 24: noebs.wallet.v1.FundingSource
+	(*ListFundingSourcesRequest)(nil),               // 25: noebs.wallet.v1.ListFundingSourcesRequest
+	(*ListFundingSourcesResponse)(nil),              // 26: noebs.wallet.v1.ListFundingSourcesResponse
+	(*WithdrawalDestination)(nil),                   // 27: noebs.wallet.v1.WithdrawalDestination
+	(*CreateWithdrawalDestinationRequest)(nil),      // 28: noebs.wallet.v1.CreateWithdrawalDestinationRequest
+	(*CreateWithdrawalDestinationResponse)(nil),     // 29: noebs.wallet.v1.CreateWithdrawalDestinationResponse
+	(*ListWithdrawalDestinationsRequest)(nil),       // 30: noebs.wallet.v1.ListWithdrawalDestinationsRequest
+	(*ListWithdrawalDestinationsResponse)(nil),      // 31: noebs.wallet.v1.ListWithdrawalDestinationsResponse
+	(*DeactivateWithdrawalDestinationRequest)(nil),  // 32: noebs.wallet.v1.DeactivateWithdrawalDestinationRequest
+	(*DeactivateWithdrawalDestinationResponse)(nil), // 33: noebs.wallet.v1.DeactivateWithdrawalDestinationResponse
+	(*CurrencyUnit)(nil),                            // 34: noebs.wallet.v1.CurrencyUnit
+	(*MoneyAmount)(nil),                             // 35: noebs.wallet.v1.MoneyAmount
+	(*ListCurrenciesPublicRequest)(nil),             // 36: noebs.wallet.v1.ListCurrenciesPublicRequest
+	(*ListCurrenciesPublicResponse)(nil),            // 37: noebs.wallet.v1.ListCurrenciesPublicResponse
+	(*GetCurrencyPublicRequest)(nil),                // 38: noebs.wallet.v1.GetCurrencyPublicRequest
+	(*GetCurrencyPublicResponse)(nil),               // 39: noebs.wallet.v1.GetCurrencyPublicResponse
+	(*ParseMoneyPublicRequest)(nil),                 // 40: noebs.wallet.v1.ParseMoneyPublicRequest
+	(*ParseMoneyPublicResponse)(nil),                // 41: noebs.wallet.v1.ParseMoneyPublicResponse
+	(*FormatMoneyPublicRequest)(nil),                // 42: noebs.wallet.v1.FormatMoneyPublicRequest
+	(*FormatMoneyPublicResponse)(nil),               // 43: noebs.wallet.v1.FormatMoneyPublicResponse
+	(*QuoteConversionPublicRequest)(nil),            // 44: noebs.wallet.v1.QuoteConversionPublicRequest
+	(*ConversionQuote)(nil),                         // 45: noebs.wallet.v1.ConversionQuote
+	(*QuoteConversionPublicResponse)(nil),           // 46: noebs.wallet.v1.QuoteConversionPublicResponse
+	(*GetConversionQuotePublicRequest)(nil),         // 47: noebs.wallet.v1.GetConversionQuotePublicRequest
+	(*GetConversionQuotePublicResponse)(nil),        // 48: noebs.wallet.v1.GetConversionQuotePublicResponse
+	(*FXSourcePair)(nil),                            // 49: noebs.wallet.v1.FXSourcePair
+	(*FXSource)(nil),                                // 50: noebs.wallet.v1.FXSource
+	(*ListFXSourcesPublicRequest)(nil),              // 51: noebs.wallet.v1.ListFXSourcesPublicRequest
+	(*ListFXSourcesPublicResponse)(nil),             // 52: noebs.wallet.v1.ListFXSourcesPublicResponse
+	(*GetInteropCapabilityRequest)(nil),             // 53: noebs.wallet.v1.GetInteropCapabilityRequest
+	(*InteropCapability)(nil),                       // 54: noebs.wallet.v1.InteropCapability
+	(*CreateInteropQuoteRequest)(nil),               // 55: noebs.wallet.v1.CreateInteropQuoteRequest
+	(*GetInteropQuoteRequest)(nil),                  // 56: noebs.wallet.v1.GetInteropQuoteRequest
+	(*CloseInteropQuoteResponse)(nil),               // 57: noebs.wallet.v1.CloseInteropQuoteResponse
+	(*InteropQuote)(nil),                            // 58: noebs.wallet.v1.InteropQuote
+	(*RequestInteropTransferRequest)(nil),           // 59: noebs.wallet.v1.RequestInteropTransferRequest
+	(*GetInteropTransferRequest)(nil),               // 60: noebs.wallet.v1.GetInteropTransferRequest
+	(*InteropTransfer)(nil),                         // 61: noebs.wallet.v1.InteropTransfer
+	(*GetWalletAccountRequest)(nil),                 // 62: noebs.wallet.v1.GetWalletAccountRequest
+	(*WalletAccount)(nil),                           // 63: noebs.wallet.v1.WalletAccount
+	(*ListWalletProvidersRequest)(nil),              // 64: noebs.wallet.v1.ListWalletProvidersRequest
+	(*WalletProviderCapabilities)(nil),              // 65: noebs.wallet.v1.WalletProviderCapabilities
+	(*WalletProvider)(nil),                          // 66: noebs.wallet.v1.WalletProvider
+	(*ListWalletProvidersResponse)(nil),             // 67: noebs.wallet.v1.ListWalletProvidersResponse
+	(*ListWalletFundingMethodsRequest)(nil),         // 68: noebs.wallet.v1.ListWalletFundingMethodsRequest
+	(*WalletFundingMethod)(nil),                     // 69: noebs.wallet.v1.WalletFundingMethod
+	(*ListWalletFundingMethodsResponse)(nil),        // 70: noebs.wallet.v1.ListWalletFundingMethodsResponse
+	nil,                                             // 71: noebs.wallet.v1.RenderWalletAdminRequest.QueryEntry
+	nil,                                             // 72: noebs.wallet.v1.RenderWalletAdminRequest.FormEntry
+	nil,                                             // 73: noebs.wallet.v1.RenderWalletAdminRequest.PathEntry
+	(*structpb.Struct)(nil),                         // 74: google.protobuf.Struct
 }
 var file_noebs_wallet_v1_wallet_proto_depIdxs = []int32{
 	0,  // 0: noebs.wallet.v1.RenderWalletAdminRequest.action:type_name -> noebs.wallet.v1.AdminWalletAction
-	67, // 1: noebs.wallet.v1.RenderWalletAdminRequest.query:type_name -> noebs.wallet.v1.RenderWalletAdminRequest.QueryEntry
-	68, // 2: noebs.wallet.v1.RenderWalletAdminRequest.form:type_name -> noebs.wallet.v1.RenderWalletAdminRequest.FormEntry
-	69, // 3: noebs.wallet.v1.RenderWalletAdminRequest.path:type_name -> noebs.wallet.v1.RenderWalletAdminRequest.PathEntry
-	31, // 4: noebs.wallet.v1.Wallet.balance_money:type_name -> noebs.wallet.v1.MoneyAmount
-	31, // 5: noebs.wallet.v1.Wallet.available_balance_money:type_name -> noebs.wallet.v1.MoneyAmount
+	71, // 1: noebs.wallet.v1.RenderWalletAdminRequest.query:type_name -> noebs.wallet.v1.RenderWalletAdminRequest.QueryEntry
+	72, // 2: noebs.wallet.v1.RenderWalletAdminRequest.form:type_name -> noebs.wallet.v1.RenderWalletAdminRequest.FormEntry
+	73, // 3: noebs.wallet.v1.RenderWalletAdminRequest.path:type_name -> noebs.wallet.v1.RenderWalletAdminRequest.PathEntry
+	35, // 4: noebs.wallet.v1.Wallet.balance_money:type_name -> noebs.wallet.v1.MoneyAmount
+	35, // 5: noebs.wallet.v1.Wallet.available_balance_money:type_name -> noebs.wallet.v1.MoneyAmount
 	3,  // 6: noebs.wallet.v1.GetWalletPublicResponse.wallet:type_name -> noebs.wallet.v1.Wallet
 	3,  // 7: noebs.wallet.v1.EnsureWalletPublicResponse.wallet:type_name -> noebs.wallet.v1.Wallet
-	31, // 8: noebs.wallet.v1.PaymentMethod.min_amount_money:type_name -> noebs.wallet.v1.MoneyAmount
-	31, // 9: noebs.wallet.v1.PaymentMethod.max_amount_money:type_name -> noebs.wallet.v1.MoneyAmount
+	35, // 8: noebs.wallet.v1.PaymentMethod.min_amount_money:type_name -> noebs.wallet.v1.MoneyAmount
+	35, // 9: noebs.wallet.v1.PaymentMethod.max_amount_money:type_name -> noebs.wallet.v1.MoneyAmount
 	9,  // 10: noebs.wallet.v1.ListPaymentMethodsPublicResponse.methods:type_name -> noebs.wallet.v1.PaymentMethod
-	31, // 11: noebs.wallet.v1.WalletLedgerEntry.amount_money:type_name -> noebs.wallet.v1.MoneyAmount
-	31, // 12: noebs.wallet.v1.WalletLedgerEntry.balance_after_money:type_name -> noebs.wallet.v1.MoneyAmount
+	35, // 11: noebs.wallet.v1.WalletLedgerEntry.amount_money:type_name -> noebs.wallet.v1.MoneyAmount
+	35, // 12: noebs.wallet.v1.WalletLedgerEntry.balance_after_money:type_name -> noebs.wallet.v1.MoneyAmount
 	12, // 13: noebs.wallet.v1.ListWalletTransactionsPublicResponse.transactions:type_name -> noebs.wallet.v1.WalletLedgerEntry
-	70, // 14: noebs.wallet.v1.RequestDepositRequest.metadata:type_name -> google.protobuf.Struct
-	70, // 15: noebs.wallet.v1.RequestWithdrawalRequest.metadata:type_name -> google.protobuf.Struct
-	70, // 16: noebs.wallet.v1.FundingSource.source_details:type_name -> google.protobuf.Struct
-	70, // 17: noebs.wallet.v1.FundingSource.withdrawal_method:type_name -> google.protobuf.Struct
-	20, // 18: noebs.wallet.v1.ListFundingSourcesResponse.sources:type_name -> noebs.wallet.v1.FundingSource
-	70, // 19: noebs.wallet.v1.WithdrawalDestination.destination_details:type_name -> google.protobuf.Struct
-	23, // 20: noebs.wallet.v1.CreateWithdrawalDestinationResponse.destination:type_name -> noebs.wallet.v1.WithdrawalDestination
-	23, // 21: noebs.wallet.v1.ListWithdrawalDestinationsResponse.destinations:type_name -> noebs.wallet.v1.WithdrawalDestination
-	30, // 22: noebs.wallet.v1.ListCurrenciesPublicResponse.currencies:type_name -> noebs.wallet.v1.CurrencyUnit
-	30, // 23: noebs.wallet.v1.GetCurrencyPublicResponse.currency:type_name -> noebs.wallet.v1.CurrencyUnit
-	31, // 24: noebs.wallet.v1.ParseMoneyPublicResponse.money:type_name -> noebs.wallet.v1.MoneyAmount
-	31, // 25: noebs.wallet.v1.FormatMoneyPublicResponse.money:type_name -> noebs.wallet.v1.MoneyAmount
-	31, // 26: noebs.wallet.v1.ConversionQuote.input:type_name -> noebs.wallet.v1.MoneyAmount
-	31, // 27: noebs.wallet.v1.ConversionQuote.output:type_name -> noebs.wallet.v1.MoneyAmount
-	41, // 28: noebs.wallet.v1.QuoteConversionPublicResponse.quote:type_name -> noebs.wallet.v1.ConversionQuote
-	41, // 29: noebs.wallet.v1.GetConversionQuotePublicResponse.quote:type_name -> noebs.wallet.v1.ConversionQuote
-	45, // 30: noebs.wallet.v1.FXSource.pairs:type_name -> noebs.wallet.v1.FXSourcePair
-	46, // 31: noebs.wallet.v1.ListFXSourcesPublicResponse.sources:type_name -> noebs.wallet.v1.FXSource
+	74, // 14: noebs.wallet.v1.RequestDepositRequest.metadata:type_name -> google.protobuf.Struct
+	74, // 15: noebs.wallet.v1.RequestWithdrawalRequest.metadata:type_name -> google.protobuf.Struct
+	74, // 16: noebs.wallet.v1.FundingSource.source_details:type_name -> google.protobuf.Struct
+	74, // 17: noebs.wallet.v1.FundingSource.withdrawal_method:type_name -> google.protobuf.Struct
+	24, // 18: noebs.wallet.v1.ListFundingSourcesResponse.sources:type_name -> noebs.wallet.v1.FundingSource
+	74, // 19: noebs.wallet.v1.WithdrawalDestination.destination_details:type_name -> google.protobuf.Struct
+	27, // 20: noebs.wallet.v1.CreateWithdrawalDestinationResponse.destination:type_name -> noebs.wallet.v1.WithdrawalDestination
+	27, // 21: noebs.wallet.v1.ListWithdrawalDestinationsResponse.destinations:type_name -> noebs.wallet.v1.WithdrawalDestination
+	34, // 22: noebs.wallet.v1.ListCurrenciesPublicResponse.currencies:type_name -> noebs.wallet.v1.CurrencyUnit
+	34, // 23: noebs.wallet.v1.GetCurrencyPublicResponse.currency:type_name -> noebs.wallet.v1.CurrencyUnit
+	35, // 24: noebs.wallet.v1.ParseMoneyPublicResponse.money:type_name -> noebs.wallet.v1.MoneyAmount
+	35, // 25: noebs.wallet.v1.FormatMoneyPublicResponse.money:type_name -> noebs.wallet.v1.MoneyAmount
+	35, // 26: noebs.wallet.v1.ConversionQuote.input:type_name -> noebs.wallet.v1.MoneyAmount
+	35, // 27: noebs.wallet.v1.ConversionQuote.output:type_name -> noebs.wallet.v1.MoneyAmount
+	45, // 28: noebs.wallet.v1.QuoteConversionPublicResponse.quote:type_name -> noebs.wallet.v1.ConversionQuote
+	45, // 29: noebs.wallet.v1.GetConversionQuotePublicResponse.quote:type_name -> noebs.wallet.v1.ConversionQuote
+	49, // 30: noebs.wallet.v1.FXSource.pairs:type_name -> noebs.wallet.v1.FXSourcePair
+	50, // 31: noebs.wallet.v1.ListFXSourcesPublicResponse.sources:type_name -> noebs.wallet.v1.FXSource
 	3,  // 32: noebs.wallet.v1.WalletAccount.wallets:type_name -> noebs.wallet.v1.Wallet
-	61, // 33: noebs.wallet.v1.WalletProvider.capabilities:type_name -> noebs.wallet.v1.WalletProviderCapabilities
-	62, // 34: noebs.wallet.v1.ListWalletProvidersResponse.providers:type_name -> noebs.wallet.v1.WalletProvider
-	65, // 35: noebs.wallet.v1.ListWalletFundingMethodsResponse.methods:type_name -> noebs.wallet.v1.WalletFundingMethod
-	58, // 36: noebs.wallet.v1.WalletPublicService.GetWalletAccount:input_type -> noebs.wallet.v1.GetWalletAccountRequest
-	60, // 37: noebs.wallet.v1.WalletPublicService.ListWalletProviders:input_type -> noebs.wallet.v1.ListWalletProvidersRequest
-	64, // 38: noebs.wallet.v1.WalletPublicService.ListWalletFundingMethods:input_type -> noebs.wallet.v1.ListWalletFundingMethodsRequest
-	49, // 39: noebs.wallet.v1.WalletPublicService.GetInteropCapability:input_type -> noebs.wallet.v1.GetInteropCapabilityRequest
-	51, // 40: noebs.wallet.v1.WalletPublicService.CreateInteropQuote:input_type -> noebs.wallet.v1.CreateInteropQuoteRequest
-	52, // 41: noebs.wallet.v1.WalletPublicService.GetInteropQuote:input_type -> noebs.wallet.v1.GetInteropQuoteRequest
-	52, // 42: noebs.wallet.v1.WalletPublicService.CloseInteropQuote:input_type -> noebs.wallet.v1.GetInteropQuoteRequest
-	55, // 43: noebs.wallet.v1.WalletPublicService.RequestInteropTransfer:input_type -> noebs.wallet.v1.RequestInteropTransferRequest
-	56, // 44: noebs.wallet.v1.WalletPublicService.GetInteropTransfer:input_type -> noebs.wallet.v1.GetInteropTransferRequest
+	65, // 33: noebs.wallet.v1.WalletProvider.capabilities:type_name -> noebs.wallet.v1.WalletProviderCapabilities
+	66, // 34: noebs.wallet.v1.ListWalletProvidersResponse.providers:type_name -> noebs.wallet.v1.WalletProvider
+	69, // 35: noebs.wallet.v1.ListWalletFundingMethodsResponse.methods:type_name -> noebs.wallet.v1.WalletFundingMethod
+	62, // 36: noebs.wallet.v1.WalletPublicService.GetWalletAccount:input_type -> noebs.wallet.v1.GetWalletAccountRequest
+	64, // 37: noebs.wallet.v1.WalletPublicService.ListWalletProviders:input_type -> noebs.wallet.v1.ListWalletProvidersRequest
+	68, // 38: noebs.wallet.v1.WalletPublicService.ListWalletFundingMethods:input_type -> noebs.wallet.v1.ListWalletFundingMethodsRequest
+	53, // 39: noebs.wallet.v1.WalletPublicService.GetInteropCapability:input_type -> noebs.wallet.v1.GetInteropCapabilityRequest
+	55, // 40: noebs.wallet.v1.WalletPublicService.CreateInteropQuote:input_type -> noebs.wallet.v1.CreateInteropQuoteRequest
+	56, // 41: noebs.wallet.v1.WalletPublicService.GetInteropQuote:input_type -> noebs.wallet.v1.GetInteropQuoteRequest
+	56, // 42: noebs.wallet.v1.WalletPublicService.CloseInteropQuote:input_type -> noebs.wallet.v1.GetInteropQuoteRequest
+	59, // 43: noebs.wallet.v1.WalletPublicService.RequestInteropTransfer:input_type -> noebs.wallet.v1.RequestInteropTransferRequest
+	60, // 44: noebs.wallet.v1.WalletPublicService.GetInteropTransfer:input_type -> noebs.wallet.v1.GetInteropTransferRequest
 	4,  // 45: noebs.wallet.v1.WalletPublicService.GetWalletPublic:input_type -> noebs.wallet.v1.GetWalletPublicRequest
 	6,  // 46: noebs.wallet.v1.WalletPublicService.EnsureWalletPublic:input_type -> noebs.wallet.v1.EnsureWalletPublicRequest
 	8,  // 47: noebs.wallet.v1.WalletPublicService.ListPaymentMethodsPublic:input_type -> noebs.wallet.v1.ListPaymentMethodsPublicRequest
 	11, // 48: noebs.wallet.v1.WalletPublicService.ListWalletTransactionsPublic:input_type -> noebs.wallet.v1.ListWalletTransactionsPublicRequest
-	14, // 49: noebs.wallet.v1.WalletPublicService.RequestP2PTransfer:input_type -> noebs.wallet.v1.RequestP2PTransferRequest
-	16, // 50: noebs.wallet.v1.WalletPublicService.RequestDeposit:input_type -> noebs.wallet.v1.RequestDepositRequest
-	18, // 51: noebs.wallet.v1.WalletPublicService.RequestWithdrawal:input_type -> noebs.wallet.v1.RequestWithdrawalRequest
-	21, // 52: noebs.wallet.v1.WalletPublicService.ListFundingSources:input_type -> noebs.wallet.v1.ListFundingSourcesRequest
-	24, // 53: noebs.wallet.v1.WalletPublicService.CreateWithdrawalDestination:input_type -> noebs.wallet.v1.CreateWithdrawalDestinationRequest
-	26, // 54: noebs.wallet.v1.WalletPublicService.ListWithdrawalDestinations:input_type -> noebs.wallet.v1.ListWithdrawalDestinationsRequest
-	28, // 55: noebs.wallet.v1.WalletPublicService.DeactivateWithdrawalDestination:input_type -> noebs.wallet.v1.DeactivateWithdrawalDestinationRequest
-	32, // 56: noebs.wallet.v1.WalletPublicService.ListCurrenciesPublic:input_type -> noebs.wallet.v1.ListCurrenciesPublicRequest
-	34, // 57: noebs.wallet.v1.WalletPublicService.GetCurrencyPublic:input_type -> noebs.wallet.v1.GetCurrencyPublicRequest
-	36, // 58: noebs.wallet.v1.WalletPublicService.ParseMoneyPublic:input_type -> noebs.wallet.v1.ParseMoneyPublicRequest
-	38, // 59: noebs.wallet.v1.WalletPublicService.FormatMoneyPublic:input_type -> noebs.wallet.v1.FormatMoneyPublicRequest
-	40, // 60: noebs.wallet.v1.WalletPublicService.QuoteConversionPublic:input_type -> noebs.wallet.v1.QuoteConversionPublicRequest
-	43, // 61: noebs.wallet.v1.WalletPublicService.GetConversionQuotePublic:input_type -> noebs.wallet.v1.GetConversionQuotePublicRequest
-	47, // 62: noebs.wallet.v1.WalletPublicService.ListFXSourcesPublic:input_type -> noebs.wallet.v1.ListFXSourcesPublicRequest
-	1,  // 63: noebs.wallet.v1.WalletAdminService.RenderWalletAdmin:input_type -> noebs.wallet.v1.RenderWalletAdminRequest
-	59, // 64: noebs.wallet.v1.WalletPublicService.GetWalletAccount:output_type -> noebs.wallet.v1.WalletAccount
-	63, // 65: noebs.wallet.v1.WalletPublicService.ListWalletProviders:output_type -> noebs.wallet.v1.ListWalletProvidersResponse
-	66, // 66: noebs.wallet.v1.WalletPublicService.ListWalletFundingMethods:output_type -> noebs.wallet.v1.ListWalletFundingMethodsResponse
-	50, // 67: noebs.wallet.v1.WalletPublicService.GetInteropCapability:output_type -> noebs.wallet.v1.InteropCapability
-	54, // 68: noebs.wallet.v1.WalletPublicService.CreateInteropQuote:output_type -> noebs.wallet.v1.InteropQuote
-	54, // 69: noebs.wallet.v1.WalletPublicService.GetInteropQuote:output_type -> noebs.wallet.v1.InteropQuote
-	53, // 70: noebs.wallet.v1.WalletPublicService.CloseInteropQuote:output_type -> noebs.wallet.v1.CloseInteropQuoteResponse
-	57, // 71: noebs.wallet.v1.WalletPublicService.RequestInteropTransfer:output_type -> noebs.wallet.v1.InteropTransfer
-	57, // 72: noebs.wallet.v1.WalletPublicService.GetInteropTransfer:output_type -> noebs.wallet.v1.InteropTransfer
-	5,  // 73: noebs.wallet.v1.WalletPublicService.GetWalletPublic:output_type -> noebs.wallet.v1.GetWalletPublicResponse
-	7,  // 74: noebs.wallet.v1.WalletPublicService.EnsureWalletPublic:output_type -> noebs.wallet.v1.EnsureWalletPublicResponse
-	10, // 75: noebs.wallet.v1.WalletPublicService.ListPaymentMethodsPublic:output_type -> noebs.wallet.v1.ListPaymentMethodsPublicResponse
-	13, // 76: noebs.wallet.v1.WalletPublicService.ListWalletTransactionsPublic:output_type -> noebs.wallet.v1.ListWalletTransactionsPublicResponse
-	15, // 77: noebs.wallet.v1.WalletPublicService.RequestP2PTransfer:output_type -> noebs.wallet.v1.RequestP2PTransferResponse
-	17, // 78: noebs.wallet.v1.WalletPublicService.RequestDeposit:output_type -> noebs.wallet.v1.RequestDepositResponse
-	19, // 79: noebs.wallet.v1.WalletPublicService.RequestWithdrawal:output_type -> noebs.wallet.v1.RequestWithdrawalResponse
-	22, // 80: noebs.wallet.v1.WalletPublicService.ListFundingSources:output_type -> noebs.wallet.v1.ListFundingSourcesResponse
-	25, // 81: noebs.wallet.v1.WalletPublicService.CreateWithdrawalDestination:output_type -> noebs.wallet.v1.CreateWithdrawalDestinationResponse
-	27, // 82: noebs.wallet.v1.WalletPublicService.ListWithdrawalDestinations:output_type -> noebs.wallet.v1.ListWithdrawalDestinationsResponse
-	29, // 83: noebs.wallet.v1.WalletPublicService.DeactivateWithdrawalDestination:output_type -> noebs.wallet.v1.DeactivateWithdrawalDestinationResponse
-	33, // 84: noebs.wallet.v1.WalletPublicService.ListCurrenciesPublic:output_type -> noebs.wallet.v1.ListCurrenciesPublicResponse
-	35, // 85: noebs.wallet.v1.WalletPublicService.GetCurrencyPublic:output_type -> noebs.wallet.v1.GetCurrencyPublicResponse
-	37, // 86: noebs.wallet.v1.WalletPublicService.ParseMoneyPublic:output_type -> noebs.wallet.v1.ParseMoneyPublicResponse
-	39, // 87: noebs.wallet.v1.WalletPublicService.FormatMoneyPublic:output_type -> noebs.wallet.v1.FormatMoneyPublicResponse
-	42, // 88: noebs.wallet.v1.WalletPublicService.QuoteConversionPublic:output_type -> noebs.wallet.v1.QuoteConversionPublicResponse
-	44, // 89: noebs.wallet.v1.WalletPublicService.GetConversionQuotePublic:output_type -> noebs.wallet.v1.GetConversionQuotePublicResponse
-	48, // 90: noebs.wallet.v1.WalletPublicService.ListFXSourcesPublic:output_type -> noebs.wallet.v1.ListFXSourcesPublicResponse
-	2,  // 91: noebs.wallet.v1.WalletAdminService.RenderWalletAdmin:output_type -> noebs.wallet.v1.RenderWalletAdminResponse
-	64, // [64:92] is the sub-list for method output_type
-	36, // [36:64] is the sub-list for method input_type
+	15, // 49: noebs.wallet.v1.WalletPublicService.PreviewP2PTransfer:input_type -> noebs.wallet.v1.PreviewP2PTransferRequest
+	17, // 50: noebs.wallet.v1.WalletPublicService.GetP2PTransferStatus:input_type -> noebs.wallet.v1.GetP2PTransferStatusRequest
+	14, // 51: noebs.wallet.v1.WalletPublicService.RequestP2PTransfer:input_type -> noebs.wallet.v1.RequestP2PTransferRequest
+	20, // 52: noebs.wallet.v1.WalletPublicService.RequestDeposit:input_type -> noebs.wallet.v1.RequestDepositRequest
+	22, // 53: noebs.wallet.v1.WalletPublicService.RequestWithdrawal:input_type -> noebs.wallet.v1.RequestWithdrawalRequest
+	25, // 54: noebs.wallet.v1.WalletPublicService.ListFundingSources:input_type -> noebs.wallet.v1.ListFundingSourcesRequest
+	28, // 55: noebs.wallet.v1.WalletPublicService.CreateWithdrawalDestination:input_type -> noebs.wallet.v1.CreateWithdrawalDestinationRequest
+	30, // 56: noebs.wallet.v1.WalletPublicService.ListWithdrawalDestinations:input_type -> noebs.wallet.v1.ListWithdrawalDestinationsRequest
+	32, // 57: noebs.wallet.v1.WalletPublicService.DeactivateWithdrawalDestination:input_type -> noebs.wallet.v1.DeactivateWithdrawalDestinationRequest
+	36, // 58: noebs.wallet.v1.WalletPublicService.ListCurrenciesPublic:input_type -> noebs.wallet.v1.ListCurrenciesPublicRequest
+	38, // 59: noebs.wallet.v1.WalletPublicService.GetCurrencyPublic:input_type -> noebs.wallet.v1.GetCurrencyPublicRequest
+	40, // 60: noebs.wallet.v1.WalletPublicService.ParseMoneyPublic:input_type -> noebs.wallet.v1.ParseMoneyPublicRequest
+	42, // 61: noebs.wallet.v1.WalletPublicService.FormatMoneyPublic:input_type -> noebs.wallet.v1.FormatMoneyPublicRequest
+	44, // 62: noebs.wallet.v1.WalletPublicService.QuoteConversionPublic:input_type -> noebs.wallet.v1.QuoteConversionPublicRequest
+	47, // 63: noebs.wallet.v1.WalletPublicService.GetConversionQuotePublic:input_type -> noebs.wallet.v1.GetConversionQuotePublicRequest
+	51, // 64: noebs.wallet.v1.WalletPublicService.ListFXSourcesPublic:input_type -> noebs.wallet.v1.ListFXSourcesPublicRequest
+	1,  // 65: noebs.wallet.v1.WalletAdminService.RenderWalletAdmin:input_type -> noebs.wallet.v1.RenderWalletAdminRequest
+	63, // 66: noebs.wallet.v1.WalletPublicService.GetWalletAccount:output_type -> noebs.wallet.v1.WalletAccount
+	67, // 67: noebs.wallet.v1.WalletPublicService.ListWalletProviders:output_type -> noebs.wallet.v1.ListWalletProvidersResponse
+	70, // 68: noebs.wallet.v1.WalletPublicService.ListWalletFundingMethods:output_type -> noebs.wallet.v1.ListWalletFundingMethodsResponse
+	54, // 69: noebs.wallet.v1.WalletPublicService.GetInteropCapability:output_type -> noebs.wallet.v1.InteropCapability
+	58, // 70: noebs.wallet.v1.WalletPublicService.CreateInteropQuote:output_type -> noebs.wallet.v1.InteropQuote
+	58, // 71: noebs.wallet.v1.WalletPublicService.GetInteropQuote:output_type -> noebs.wallet.v1.InteropQuote
+	57, // 72: noebs.wallet.v1.WalletPublicService.CloseInteropQuote:output_type -> noebs.wallet.v1.CloseInteropQuoteResponse
+	61, // 73: noebs.wallet.v1.WalletPublicService.RequestInteropTransfer:output_type -> noebs.wallet.v1.InteropTransfer
+	61, // 74: noebs.wallet.v1.WalletPublicService.GetInteropTransfer:output_type -> noebs.wallet.v1.InteropTransfer
+	5,  // 75: noebs.wallet.v1.WalletPublicService.GetWalletPublic:output_type -> noebs.wallet.v1.GetWalletPublicResponse
+	7,  // 76: noebs.wallet.v1.WalletPublicService.EnsureWalletPublic:output_type -> noebs.wallet.v1.EnsureWalletPublicResponse
+	10, // 77: noebs.wallet.v1.WalletPublicService.ListPaymentMethodsPublic:output_type -> noebs.wallet.v1.ListPaymentMethodsPublicResponse
+	13, // 78: noebs.wallet.v1.WalletPublicService.ListWalletTransactionsPublic:output_type -> noebs.wallet.v1.ListWalletTransactionsPublicResponse
+	16, // 79: noebs.wallet.v1.WalletPublicService.PreviewP2PTransfer:output_type -> noebs.wallet.v1.P2PPreview
+	18, // 80: noebs.wallet.v1.WalletPublicService.GetP2PTransferStatus:output_type -> noebs.wallet.v1.P2PTransferStatus
+	19, // 81: noebs.wallet.v1.WalletPublicService.RequestP2PTransfer:output_type -> noebs.wallet.v1.RequestP2PTransferResponse
+	21, // 82: noebs.wallet.v1.WalletPublicService.RequestDeposit:output_type -> noebs.wallet.v1.RequestDepositResponse
+	23, // 83: noebs.wallet.v1.WalletPublicService.RequestWithdrawal:output_type -> noebs.wallet.v1.RequestWithdrawalResponse
+	26, // 84: noebs.wallet.v1.WalletPublicService.ListFundingSources:output_type -> noebs.wallet.v1.ListFundingSourcesResponse
+	29, // 85: noebs.wallet.v1.WalletPublicService.CreateWithdrawalDestination:output_type -> noebs.wallet.v1.CreateWithdrawalDestinationResponse
+	31, // 86: noebs.wallet.v1.WalletPublicService.ListWithdrawalDestinations:output_type -> noebs.wallet.v1.ListWithdrawalDestinationsResponse
+	33, // 87: noebs.wallet.v1.WalletPublicService.DeactivateWithdrawalDestination:output_type -> noebs.wallet.v1.DeactivateWithdrawalDestinationResponse
+	37, // 88: noebs.wallet.v1.WalletPublicService.ListCurrenciesPublic:output_type -> noebs.wallet.v1.ListCurrenciesPublicResponse
+	39, // 89: noebs.wallet.v1.WalletPublicService.GetCurrencyPublic:output_type -> noebs.wallet.v1.GetCurrencyPublicResponse
+	41, // 90: noebs.wallet.v1.WalletPublicService.ParseMoneyPublic:output_type -> noebs.wallet.v1.ParseMoneyPublicResponse
+	43, // 91: noebs.wallet.v1.WalletPublicService.FormatMoneyPublic:output_type -> noebs.wallet.v1.FormatMoneyPublicResponse
+	46, // 92: noebs.wallet.v1.WalletPublicService.QuoteConversionPublic:output_type -> noebs.wallet.v1.QuoteConversionPublicResponse
+	48, // 93: noebs.wallet.v1.WalletPublicService.GetConversionQuotePublic:output_type -> noebs.wallet.v1.GetConversionQuotePublicResponse
+	52, // 94: noebs.wallet.v1.WalletPublicService.ListFXSourcesPublic:output_type -> noebs.wallet.v1.ListFXSourcesPublicResponse
+	2,  // 95: noebs.wallet.v1.WalletAdminService.RenderWalletAdmin:output_type -> noebs.wallet.v1.RenderWalletAdminResponse
+	66, // [66:96] is the sub-list for method output_type
+	36, // [36:66] is the sub-list for method input_type
 	36, // [36:36] is the sub-list for extension type_name
 	36, // [36:36] is the sub-list for extension extendee
 	0,  // [0:36] is the sub-list for field type_name
@@ -5827,16 +6301,17 @@ func file_noebs_wallet_v1_wallet_proto_init() {
 	}
 	file_noebs_wallet_v1_wallet_proto_msgTypes[8].OneofWrappers = []any{}
 	file_noebs_wallet_v1_wallet_proto_msgTypes[11].OneofWrappers = []any{}
-	file_noebs_wallet_v1_wallet_proto_msgTypes[17].OneofWrappers = []any{}
-	file_noebs_wallet_v1_wallet_proto_msgTypes[29].OneofWrappers = []any{}
-	file_noebs_wallet_v1_wallet_proto_msgTypes[40].OneofWrappers = []any{}
+	file_noebs_wallet_v1_wallet_proto_msgTypes[13].OneofWrappers = []any{}
+	file_noebs_wallet_v1_wallet_proto_msgTypes[21].OneofWrappers = []any{}
+	file_noebs_wallet_v1_wallet_proto_msgTypes[33].OneofWrappers = []any{}
+	file_noebs_wallet_v1_wallet_proto_msgTypes[44].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_noebs_wallet_v1_wallet_proto_rawDesc), len(file_noebs_wallet_v1_wallet_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   69,
+			NumMessages:   73,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

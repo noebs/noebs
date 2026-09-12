@@ -3,6 +3,7 @@ package activity
 import (
 	"context"
 	"errors"
+	"go.temporal.io/sdk/temporal"
 
 	walletstore "github.com/adonese/noebs/wallet/store"
 )
@@ -43,6 +44,9 @@ func (a *LedgerActivities) ExecuteMultiLegSettlement(ctx context.Context, params
 		return nil, ErrMissingStore
 	}
 	result, err := a.Store.PostMultiLegSettlement(ctx, params)
+	if params.P2PCommandID != "" && terminalP2PValidationError(err) {
+		return nil, temporal.NewNonRetryableApplicationError(err.Error(), "p2p_settlement_failed", err)
+	}
 	return result, classifyTransactionLimitError(err)
 }
 

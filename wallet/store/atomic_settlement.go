@@ -21,6 +21,7 @@ type SettlementTransfer struct {
 }
 
 type MultiLegSettlementParams struct {
+	P2PCommandID   string
 	TenantID       string
 	IdempotencyKey string
 	Currency       string
@@ -193,6 +194,11 @@ func (s *Store) postMultiLegSettlement(
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if params.P2PCommandID != "" {
+		if err := lockP2PCommand(ctx, tx, params.TenantID, params.P2PCommandID); err != nil {
+			return nil, err
+		}
+	}
 	var withdrawalHold *BalanceHold
 	if mode.HeldWithdrawal != nil {
 		withdrawalHold, err = s.lockHold(ctx, tx, params.TenantID, mode.HeldWithdrawal.HoldID)
@@ -207,6 +213,11 @@ func (s *Store) postMultiLegSettlement(
 	wallets, orderedWallets, err := s.lockSettlementWallets(ctx, tx, params)
 	if err != nil {
 		return nil, err
+	}
+	if params.P2PCommandID != "" {
+		if err := s.validateP2PSettlement(ctx, tx, params, wallets); err != nil {
+			return nil, err
+		}
 	}
 	existing, err := s.findMultiLegSettlement(ctx, tx, params)
 	if err != nil {

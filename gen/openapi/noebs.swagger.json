@@ -1270,6 +1270,91 @@
         }
       }
     },
+    "v1P2PPreview": {
+      "type": "object",
+      "properties": {
+        "fromWalletId": {
+          "type": "string"
+        },
+        "toWalletId": {
+          "type": "string"
+        },
+        "toOwnerType": {
+          "type": "string"
+        },
+        "toOwnerId": {
+          "type": "string"
+        },
+        "recipientName": {
+          "type": "string"
+        },
+        "amountMinor": {
+          "type": "string"
+        },
+        "feeAmountMinor": {
+          "type": "string"
+        },
+        "totalDebitMinor": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "currencyUnitVersion": {
+          "type": "string"
+        }
+      }
+    },
+    "v1P2PTransferStatus": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "referenceId": {
+          "type": "string"
+        },
+        "fromWalletId": {
+          "type": "string"
+        },
+        "toWalletId": {
+          "type": "string"
+        },
+        "recipientName": {
+          "type": "string"
+        },
+        "amountMinor": {
+          "type": "string"
+        },
+        "feeAmountMinor": {
+          "type": "string"
+        },
+        "totalDebitMinor": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "currencyUnitVersion": {
+          "type": "string"
+        },
+        "transactionId": {
+          "type": "string"
+        },
+        "errorCode": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "toOwnerId": {
+          "type": "string"
+        }
+      }
+    },
     "v1ParseMoneyPublicRequest": {
       "type": "object",
       "properties": {

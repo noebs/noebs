@@ -106,6 +106,7 @@ func registerAPIGatewayProxyRoutes(
 			handler = gatewayWebSocketProxyHandler(target, internalTransportClientTLS)
 		}
 
+		handler = gatewayAccountNameHandler(spec, profileResolver, handler)
 		handlers := make([]fiber.Handler, 0, 8)
 		handlers = append(handlers, captureWalletAuthorizationHeader, clearGatewayIdentityHeaders)
 		switch spec.auth {
@@ -569,6 +570,8 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodGet, path: "/wallet/wallets/:id/transactions", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/wallet/wallets/:id", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPost, path: "/wallet/deposits", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/wallet/p2p/preview", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/wallet/p2p/status", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPost, path: "/wallet/p2p", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser, transaction: transactionauth.OperationWalletP2P},
 		{method: fiber.MethodPost, path: "/wallet/withdrawals", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser, transaction: transactionauth.OperationWalletWithdrawal},
 

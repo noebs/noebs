@@ -38,6 +38,7 @@ func TestActivityNamesAreNonEmptySDKStrings(t *testing.T) {
 		ActivityReleaseFundingSourceWithdrawal,
 		ActivityRecordAuditEvent,
 		ActivityGetP2PCommand,
+		ActivityRecordP2PFailure,
 		ActivityAddManualTransferApproval,
 		ActivityGetManualTransferByWorkflow,
 		ActivityUpdateManualTransferStatus,

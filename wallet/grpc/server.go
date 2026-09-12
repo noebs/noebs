@@ -222,6 +222,9 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrConversionQuoteNotFound),
 		errors.Is(err, walletstore.ErrInactiveCurrency):
 		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, walletstore.ErrP2PFeeChanged),
+		errors.Is(err, walletstore.ErrP2PCommandFailed):
+		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, walletstore.ErrDuplicateTransaction),
 		errors.Is(err, walletstore.ErrDuplicateWallet),
 		errors.Is(err, walletstore.ErrDuplicateHold),

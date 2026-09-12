@@ -161,6 +161,8 @@ func TestAPIGatewayCatalogIsExactOIDCCutoverSurface(t *testing.T) {
 		gatewayRouteKey(http.MethodGet, "/wallet/wallets/:id/transactions"):                           gatewayAuthMobileUser,
 		gatewayRouteKey(http.MethodGet, "/wallet/wallets/:id"):                                        gatewayAuthMobileUser,
 		gatewayRouteKey(http.MethodPost, "/wallet/deposits"):                                          gatewayAuthMobileUser,
+		gatewayRouteKey(http.MethodPost, "/wallet/p2p/preview"):                                       gatewayAuthMobileUser,
+		gatewayRouteKey(http.MethodGet, "/wallet/p2p/status"):                                         gatewayAuthMobileUser,
 		gatewayRouteKey(http.MethodPost, "/wallet/p2p"):                                               gatewayAuthMobileUser,
 		gatewayRouteKey(http.MethodPost, "/wallet/withdrawals"):                                       gatewayAuthMobileUser,
 		gatewayRouteKey(http.MethodGet, "/backoffice/assets/*"):                                       gatewayAuthPublic,

@@ -25,7 +25,9 @@ func TestP2PCanonicalizationBindsEveryBusinessField(t *testing.T) {
 		"idempotency_key":" transfer-1 ",
 		"reference_id":" transfer-1 ",
 		"to_owner_type":" user ",
-		"to_owner_id":" 44 "
+		"to_owner_id":" 44 ",
+        "expected_fee_amount":0,
+        "expected_currency_unit_version":14
 	}`)
 	canonical, err := ParsePublic(transactionauth.OperationWalletP2P, "alpha", body, testDefaults)
 	if err != nil {
@@ -55,6 +57,8 @@ func TestP2PCanonicalizationBindsEveryBusinessField(t *testing.T) {
 	mutations := map[string][]byte{
 		"tenant":         body,
 		"currency":       bytes.Replace(body, []byte("SDG"), []byte("USD"), 1),
+		"fee":            bytes.Replace(body, []byte(`"expected_fee_amount":0`), []byte(`"expected_fee_amount":1`), 1),
+		"unit":           bytes.Replace(body, []byte(`"expected_currency_unit_version":14`), []byte(`"expected_currency_unit_version":15`), 1),
 		"from wallet":    bytes.Replace(body, []byte("440000"), []byte("440002"), 1),
 		"to wallet":      bytes.Replace(body, []byte("440001"), []byte("440003"), 1),
 		"amount":         bytes.Replace(body, []byte("1250"), []byte("1251"), 1),

@@ -142,6 +142,8 @@ func walletMethodAuthRequirement(fullMethod string) walletAuthRequirement {
 		walletv1.WalletPublicService_ListPaymentMethodsPublic_FullMethodName,
 		walletv1.WalletPublicService_ListWalletTransactionsPublic_FullMethodName,
 		walletv1.WalletPublicService_RequestP2PTransfer_FullMethodName,
+		walletv1.WalletPublicService_PreviewP2PTransfer_FullMethodName,
+		walletv1.WalletPublicService_GetP2PTransferStatus_FullMethodName,
 		walletv1.WalletPublicService_RequestDeposit_FullMethodName,
 		walletv1.WalletPublicService_RequestWithdrawal_FullMethodName,
 		walletv1.WalletPublicService_ListFundingSources_FullMethodName,

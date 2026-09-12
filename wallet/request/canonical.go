@@ -221,6 +221,12 @@ func normalizeP2P(request *walletv1.RequestP2PTransferRequest, tenantID string) 
 	if request.Amount <= 0 {
 		return "", ErrInvalidAmount
 	}
+	if request.ExpectedFeeAmount != nil && *request.ExpectedFeeAmount < 0 {
+		return "", ErrInvalidAmount
+	}
+	if request.ExpectedCurrencyUnitVersion != nil && *request.ExpectedCurrencyUnitVersion <= 0 {
+		return "", ErrInvalidAmount
+	}
 	if request.IdempotencyKey == "" {
 		return "", ErrMissingIdempotencyKey
 	}
