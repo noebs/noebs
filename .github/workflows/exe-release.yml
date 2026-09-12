@@ -15,8 +15,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  select-release:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      current: ${{ steps.select.outputs.current }}
+    steps:
+      - name: Skip superseded automatic releases
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          current=$(gh api "repos/$GH_REPO/git/ref/heads/master" --jq .object.sha)
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch || "$RELEASE_SHA" == "$current" ]]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+            echo 'A newer master revision superseded this automatic release.'
+          fi
+  deploy:
+    needs: select-release
+    if: needs.select-release.outputs.current == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -51,13 +73,18 @@ jobs:
       - name: Load deployment identity
         env:
           EXE_KEY: ${{ secrets.EXE_SSH_PRIVATE_KEY }}
+          EXE_AGE_KEY: ${{ secrets.EXE_AGE_PRIVATE_KEY }}
         run: |
           test -n "$EXE_KEY"
+          test -n "$EXE_AGE_KEY"
           install -d -m 0700 "$RUNNER_TEMP/exe"
           umask 077
           printf '%s\n' "$EXE_KEY" > "$RUNNER_TEMP/exe/key"
+          printf '%s\n' "$EXE_AGE_KEY" > "$RUNNER_TEMP/exe/age-key.txt"
       - name: Reconcile VMs and back up Terraform state
         run: scripts/exe/reconcile.py --key "$RUNNER_TEMP/exe/key" --work "$RUNNER_TEMP/exe"
+      - name: Install encrypted runtime inputs from this revision
+        run: scripts/exe/sync-runtime.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --age-key "$RUNNER_TEMP/exe/age-key.txt"
       - name: Join private Kubernetes cluster
         env:
           EXE_TAILSCALE_AUTH_KEY: ${{ secrets.EXE_TAILSCALE_AUTH_KEY }}
@@ -87,5 +114,5 @@ jobs:
         if: always()
         run: |
           rm -rf "$RUNNER_TEMP/exe/restore"
-          rm -f "$RUNNER_TEMP/exe/key"
+          rm -f "$RUNNER_TEMP/exe/key" "$RUNNER_TEMP/exe/age-key.txt"
           docker logout ghcr.io
