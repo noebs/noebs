@@ -25,7 +25,8 @@ class FakeHost:
         if '-p ActiveState' in command:
             return b'active\n' if self.active else b'inactive\n'
         if '-p UnitFileState' in command:
-            return (('enabled' if self.enabled else 'disabled') + '\n').encode() * len(UNITS)
+            states = ['enabled' if self.enabled else 'disabled'] * len(UNITS)
+            return ('\n\n'.join(states) + '\n').encode()
         if 'cat /etc/systemd/system/noebs-mojaloop-relay.service' in command:
             return b'ExecStart=relay --als 10.243.1.1:4000 --quotes 10.243.1.1:4000'
         if command.startswith('curl '):

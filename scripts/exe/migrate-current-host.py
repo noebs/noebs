@@ -34,10 +34,10 @@ COLD_VOLUMES = {'kafka': 'kafka-data-kafka-0',
                 'noebs-mojaloop-redis': 'data-noebs-mojaloop-redis-0'}
 DATABASES_SQL = """SELECT json_build_object('name',datname,'owner',pg_get_userbyid(datdba),
 'encoding',pg_encoding_to_char(encoding),'collate',datcollate,'ctype',datctype,
-'provider',datlocprovider,'acl',(SELECT json_agg(json_build_object(
+'provider',datlocprovider,'acl',coalesce((SELECT json_agg(json_build_object(
 'grantee',CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
 'grantor',pg_get_userbyid(a.grantor),'privilege',a.privilege_type,'grantable',a.is_grantable)
-ORDER BY a.grantee,a.privilege_type) FROM aclexplode(coalesce(datacl,acldefault('d',datdba))) a),
+ORDER BY a.grantee,a.privilege_type) FROM aclexplode(coalesce(datacl,acldefault('d',datdba))) a),'[]'),
 'settings',coalesce((SELECT json_agg(json_build_object('role',CASE WHEN setrole=0 THEN '' ELSE pg_get_userbyid(setrole) END,
 'values',setconfig) ORDER BY setrole) FROM pg_db_role_setting WHERE setdatabase=pg_database.oid),'[]'))
 FROM pg_database WHERE NOT datistemplate ORDER BY datname;"""
@@ -250,14 +250,6 @@ def probe_worker_from_edge(source, worker_ip):
                  '--header=Host: api.noebs.sd', 'http://' + worker_ip + ':8080/test'], namespace='edge')
 
 
-def backup_timer_state(host):
-    output = host.run('systemctl show noebs-backup.timer --property=LoadState,ActiveState,UnitFileState').decode()
-    state = dict(line.split('=', 1) for line in output.splitlines())
-    if state['LoadState'] != 'loaded':
-        raise ValueError('Destination encrypted backup timer must be installed before migration')
-    return state
-
-
 def verify_authorities(source, destination):
     if source['cluster_uid'] == destination['cluster_uid']:
         raise ValueError('Source and destination are the same cluster')
@@ -294,7 +286,8 @@ def verify_plan_unchanged(expected, actual):
 
 
 def database_permissions(database, target):
-    statements = ['REVOKE ALL ON DATABASE ' + identifier(target) + ' FROM PUBLIC;']
+    statements = ['REVOKE ALL ON DATABASE ' + identifier(target) + ' FROM PUBLIC;',
+                  'REVOKE ALL ON DATABASE ' + identifier(target) + ' FROM ' + identifier(database['owner']) + ';']
     for grant in database['acl']:
         grantee = 'PUBLIC' if grant['grantee'] == 'PUBLIC' else identifier(grant['grantee'])
         statements += ['SET ROLE ' + identifier(grant['grantor']) + ';',
@@ -346,7 +339,10 @@ class Migration:
                 volume['configMap']['name'] = name
         for container in template['spec']['containers']:
             if container['name'] == 'caddy':
-                container['args'] = ['caddy', 'run', '--config', '/etc/caddy/Caddyfile']
+                container['args'] = ['caddy', 'run', '--config', '/etc/caddy/migration.json']
+                for mount in container['volumeMounts']:
+                    if mount['name'] == 'config':
+                        mount['mountPath'] = '/etc/caddy/migration.json'
         self.source.kube(['patch', 'deployment/caddy', '--type=merge', '-p',
                           json.dumps({'spec': {'template': template}})], namespace='edge')
         self.source.kube(['rollout', 'status', 'deployment/caddy', '--timeout=300s'], namespace='edge')
@@ -410,8 +406,6 @@ class Migration:
         self.destination.kube(['create', '-f', '-'], json.dumps(marker).encode())
         marker['data']['state'] = 'source-fenced'
         self.source.kube(['create', '-f', '-'], json.dumps(marker).encode())
-        self.destination.run('sudo systemctl stop noebs-backup.timer')
-        self.destination.run("timeout 300 bash -c 'while systemctl is-active --quiet noebs-backup.service; do sleep 1; done'")
         # Pause source reconciliation before replacing only the production site's route.
         for app in self.plan['source']['applications']:
             self.source.kube(['patch', 'application/' + app['metadata']['name'], '--type=merge', '-p', json.dumps({
@@ -555,11 +549,12 @@ class Migration:
         reject_backup_checkpoint(self.destination)
         if staging_marker(self.destination, self.plan['destination']['cluster_uid']) != self.plan['destination_staging']:
             raise ValueError('Destination staging identity or release marker changed before replacement')
-        for name, archive in self.plan['archives'].items():
-            remote = self.plan['off_host_archives'][name]
-            received = self.volume_hosts['noebs-backup'].run('sudo sha256sum ' + shlex.quote(remote)).decode().split()[0]
-            if received != archive['sha256']:
-                raise ValueError('Off-host encrypted snapshot checksum mismatch before replacement: ' + name)
+        expected = {self.plan['off_host_archives'][name]: archive['sha256']
+                    for name, archive in self.plan['archives'].items()}
+        output = self.volume_hosts['noebs-backup'].run('sudo sha256sum -- ' + shlex.join(expected)).decode()
+        received = {path: checksum for checksum, path in (line.split(maxsplit=1) for line in output.splitlines())}
+        if received != expected:
+            raise ValueError('Off-host encrypted snapshot checksum mismatch before replacement')
         for name, archive in self.plan['archives'].items():
             path = self.directory / archive['file']
             if file_digest(path) != archive['sha256']:
@@ -621,8 +616,6 @@ class Migration:
         self.lease.check()
         subprocess.run(self.plan['activate_command'] + ['--native-handoff', str(native_handoff.resolve())], cwd=ROOT, check=True,
                        env=os.environ | {'NOEBS_RELEASE_LEASE': self.plan['id']})
-        if self.plan['destination_backup_timer']['ActiveState'] == 'active':
-            self.destination.run('sudo systemctl start noebs-backup.timer')
         self.assert_stopped(self.source)
 
     def route(self):
@@ -733,7 +726,6 @@ def main():
                 'source_host': args.source, 'destination_host': machines['noebs-data']['ssh_destination'],
                 'worker_ip': worker_ip, 'source': left, 'destination': right, 'source_edge_json': edge_json,
                 'destination_staging': staging,
-                'destination_backup_timer': backup_timer_state(destination),
                 'recipients': args.recipient, 'activate_command': command, 'origin': ORIGIN,
                 'release_revision': revision, 'release_receipts': receipts})
             print('Read-only migration plan saved to', path)

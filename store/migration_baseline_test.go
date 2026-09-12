@@ -15,7 +15,7 @@ func TestPostgresMigrationsAreFreshCanonicalBaselines(t *testing.T) {
 		MigrationScopeEBSAdapter:       {"001_ebs_adapter.sql"},
 		MigrationScopeAdminReporting:   {"001_admin_reporting.sql"},
 		MigrationScopeNotificationChat: {"001_notification_chat.sql", "002_status_notifications.sql"},
-		MigrationScopeWalletLedger:     {"001_wallet_ledger.sql", "002_groosh_money.sql", "003_mojaloop_interop.sql", "004_interop_admission_closure.sql", "005_p2p_receipts.sql", "006_shared_outbound_limits.sql", "007_transaction_lifecycle.sql"},
+		MigrationScopeWalletLedger:     {"001_wallet_ledger.sql", "002_groosh_money.sql", "003_mojaloop_interop.sql", "004_interop_admission_closure.sql", "005_p2p_receipts.sql", "006_shared_outbound_limits.sql", "007_transaction_lifecycle.sql", "008_p2p_recipient_notifications.sql"},
 		MigrationScopeWorkloadAuth:     {"001_workload_auth.sql"},
 		MigrationScopeGatewayAuth:      {"001_gateway_auth.sql", "002_mojaloop_interop.sql"},
 	}

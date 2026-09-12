@@ -19,8 +19,7 @@ def checkpoint():
             'cold_volumes': {name: '/var/lib/rancher/k3s/storage/' + name for name in COLD_CLAIMS},
             'cronjobs': [{'name': 'enabled', 'uid': 'enabled-uid', 'suspend': False},
                          {'name': 'disabled', 'uid': 'disabled-uid', 'suspend': True}],
-            'edge': item('caddy', 2, namespace='edge'),
-            'backup_timer': {'LoadState': 'loaded', 'ActiveState': 'active', 'UnitFileState': 'enabled'}}
+            'edge': item('caddy', 2, namespace='edge')}
 
 
 class Host:
@@ -112,7 +111,6 @@ class CoordinatedBackupTests(unittest.TestCase):
         self.assertLess(operations.index(('deployment/temporal', 0)), operations.index(('statefulset/kafka', 0)))
         self.assertLess(operations.index(('deployment/keycloak', 1)), operations.index(('deployment/temporal', 1)))
         self.assertIn(('deployment/identity-worker', 0), operations)
-        self.assertIn(('run', 'sudo systemctl start noebs-backup.timer'), self.host.events)
 
     def test_peers_in_same_restore_wave_start_before_waiting_for_readiness(self):
         self.backup.execute()
@@ -133,11 +131,6 @@ class CoordinatedBackupTests(unittest.TestCase):
         self.assertFalse(any(event[0] == 'run' and 'noebs-backup publish' in event[1] for event in self.host.events))
         with self.assertRaises(ValueError):
             validate_checkpoint(self.state)
-
-    def test_disabled_timer_stays_disabled(self):
-        self.state['backup_timer'] = {'LoadState': 'loaded', 'ActiveState': 'inactive', 'UnitFileState': 'disabled'}
-        self.backup.execute()
-        self.assertNotIn(('run', 'sudo systemctl start noebs-backup.timer'), self.host.events)
 
     def test_unmanaged_writer_or_database_client_prevents_snapshot(self):
         for problem in ['pod', 'database']:

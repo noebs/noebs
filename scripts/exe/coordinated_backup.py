@@ -85,10 +85,6 @@ def inventory(host, staging_only):
     statefulsets = {item['metadata']['name']: item for item in resources if item['kind'] == 'StatefulSet'}
     if set(statefulsets) != {'postgres', 'temporal-postgres', 'keycloak-postgres'} | set(COLD_CLAIMS):
         raise ValueError('Unexpected stateful writer inventory')
-    timer = dict(line.split('=', 1) for line in host.run(
-        'systemctl show noebs-backup.timer --property=LoadState,ActiveState,UnitFileState').decode().splitlines())
-    if timer.get('LoadState') != 'loaded' or timer.get('ActiveState') not in ['active', 'inactive']:
-        raise ValueError('Backup timer must be installed and stable')
     cold = {}
     for name, claim in COLD_CLAIMS.items():
         pvc = host.get('pvc/' + claim)
@@ -105,7 +101,7 @@ def inventory(host, staging_only):
             'edge': workload(host.get('deployment/caddy', 'edge'), 'edge'),
             'cronjobs': [{'name': item['metadata']['name'], 'uid': item['metadata']['uid'],
                           'suspend': item['spec'].get('suspend')} for item in resources if item['kind'] == 'CronJob'],
-            'backup_timer': timer, 'cold_volumes': cold, 'phase': 'planned'}
+            'cold_volumes': cold, 'phase': 'planned'}
 
 
 class Backup:
@@ -167,7 +163,6 @@ class Backup:
         self.checkpoint['phase'] = 'pausing'
         self.save()
         self.host.kube(['create', 'configmap', MARKER, '--from-literal=checkpoint_id=' + self.checkpoint['id']])
-        self.host.run('sudo systemctl stop noebs-backup.timer')
         self.scale(self.checkpoint['edge'], 0)
         for item in self.checkpoint['cronjobs']:
             self.cron(item, True)
@@ -200,8 +195,6 @@ class Backup:
         self.scale(self.checkpoint['edge'], self.checkpoint['edge']['replicas'])
         self.checkpoint['admission_resumed_at'] = now()
         self.checkpoint['pause_seconds'] = (datetime.fromisoformat(self.checkpoint['admission_resumed_at']) - datetime.fromisoformat(self.checkpoint['admission_paused_at'])).total_seconds()
-        if self.checkpoint['backup_timer']['ActiveState'] == 'active':
-            self.host.run('sudo systemctl start noebs-backup.timer')
         self.host.kube(['delete', 'configmap/' + MARKER])
         self.checkpoint['phase'] = 'resumed' if self.checkpoint.get('snapshot_completed_at') else 'snapshot-failed'
         self.save()

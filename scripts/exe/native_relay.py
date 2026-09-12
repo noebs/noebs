@@ -80,7 +80,7 @@ def verify_native_handoff(source, worker):
     if any(state != 'inactive' for state in unit_states(source).values()):
         raise ValueError('Source native peer has not fully stopped')
     source.run('! ip link show dev noebsml >/dev/null 2>&1')
-    enabled = source.run('sudo systemctl show ' + shlex.join(UNITS) + ' -p UnitFileState --value').decode().splitlines()
+    enabled = source.run('sudo systemctl show ' + shlex.join(UNITS) + ' -p UnitFileState --value').decode().split()
     if len(enabled) != len(UNITS) or any(state != 'disabled' for state in enabled):
         raise ValueError('Source native peer must remain disabled across restart')
     if any(state != 'active' for state in unit_states(worker).values()):

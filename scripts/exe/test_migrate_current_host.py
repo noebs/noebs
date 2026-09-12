@@ -48,6 +48,20 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(before[1]['handle'][0]['handler'], 'source-site')
         self.assertEqual(migration.api_route(original)['apps']['http']['servers']['shared']['routes'][1]['handle'][0]['status_code'], 503)
 
+    def test_edge_json_mount_avoids_caddyfile_filename_auto_adapter(self):
+        self.run.plan['source'] = {'edge': {'spec': {'template': {'spec': {
+            'volumes': [{'name': 'config', 'configMap': {'name': 'original'}}],
+            'containers': [{'name': 'caddy', 'args': ['caddy', 'run', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile'],
+                'volumeMounts': [{'name': 'config', 'mountPath': '/etc/caddy/Caddyfile', 'subPath': 'Caddyfile'}]}]}}}}}
+        self.run.install_edge(migration.api_route(edge_config()), 'maintenance')
+        document = json.loads(self.source.kube.call_args_list[0].args[1])
+        self.assertIn('Caddyfile', document['data'])
+        patch_args = self.source.kube.call_args_list[1].args[0]
+        template = json.loads(patch_args[patch_args.index('-p') + 1])['spec']['template']['spec']
+        container = template['containers'][0]
+        self.assertEqual(container['args'], ['caddy', 'run', '--config', '/etc/caddy/migration.json'])
+        self.assertEqual(container['volumeMounts'][0], {'name': 'config', 'mountPath': '/etc/caddy/migration.json', 'subPath': 'Caddyfile'})
+
     def test_forwarding_rejects_public_upstream_and_ambiguous_site(self):
         with self.assertRaises(ValueError):
             migration.api_route(edge_config(), '203.0.113.1')
@@ -181,7 +195,7 @@ class MigrationTests(unittest.TestCase):
         self.source.run.assert_not_called()
 
     def test_database_acl_and_per_role_settings_are_preserved(self):
-        database = {'acl': [
+        database = {'owner': 'owner', 'acl': [
             {'grantee': 'owner', 'grantor': 'owner', 'privilege': 'CONNECT', 'grantable': True},
             {'grantee': 'wallet_runtime', 'grantor': 'owner', 'privilege': 'CONNECT', 'grantable': False}],
             'settings': [{'role': 'wallet_runtime', 'values': ['search_path=public', 'statement_timeout=30s']}]}
@@ -191,17 +205,10 @@ class MigrationTests(unittest.TestCase):
         self.assertIn('ALTER ROLE "wallet_runtime" IN DATABASE "staging" SET "statement_timeout" TO \'30s\';', sql)
         self.assertNotIn('DROP', sql)
 
-    def test_backup_timer_resumes_only_after_successful_activation(self):
-        self.run.plan['restored_databases'] = []
-        self.run.plan['destination_backup_timer'] = {'ActiveState': 'active'}
-        self.run.assert_stopped = Mock()
-        with patch.object(migration.subprocess, 'run', side_effect=RuntimeError('promotion failed')):
-            with self.assertRaises(RuntimeError):
-                self.run.activate()
-        self.destination.run.assert_not_called()
-        with patch.object(migration.subprocess, 'run'):
-            self.run.activate()
-        self.destination.run.assert_called_once_with('sudo systemctl start noebs-backup.timer')
+    def test_empty_database_acl_removes_default_public_and_owner_grants(self):
+        sql = migration.database_permissions({'owner': 'database_owner', 'acl': [], 'settings': []}, 'restored')
+        self.assertEqual(sql, 'REVOKE ALL ON DATABASE "restored" FROM PUBLIC;\n'
+                             'REVOKE ALL ON DATABASE "restored" FROM "database_owner";')
 
     def test_existing_staging_marker_requires_only_known_fixture_identity(self):
         self.destination.get.return_value = {'metadata': {'uid': 'release-uid'},
@@ -235,12 +242,26 @@ class MigrationTests(unittest.TestCase):
               'collate': 'en_US.utf8', 'ctype': 'en_US.utf8', 'acl': [], 'settings': []}
         self.run.plan.update({'destination': {'cluster_uid': 'target-cluster', 'volumes': {}},
             'destination_staging': marker, 'source': {'authorities': {'postgres': {'databases': [db]}}},
-            'archives': {}})
+            'archives': {}, 'off_host_archives': {}})
+        for name, payload in [('postgres-wallet_ledger', b'source encrypted database archive'),
+                              ('destination-before-postgres', b'encrypted original staging archive')]:
+            filename = name + '.age'
+            (self.directory / filename).write_bytes(payload)
+            self.run.plan['archives'][name] = {'file': filename, 'sha256': migration.digest(payload)}
+            self.run.plan['off_host_archives'][name] = '/backup/' + filename
+        backup = Mock()
+        backup.run.return_value = ''.join(self.run.plan['archives'][name]['sha256'] + '  ' + path + '\n'
+            for name, path in reversed(list(self.run.plan['off_host_archives'].items()))).encode()
+        self.run.volume_hosts['noebs-backup'] = backup
+        decrypt = Mock()
         def replacing(*args):
             self.assertIn('destination_replacement_started_at', json.loads((self.directory / 'plan.json').read_text()))
+            self.assertEqual(decrypt.call_count, 2)
         self.destination.sql.side_effect = replacing
-        with patch.object(migration, 'reject_backup_checkpoint'), patch.object(migration, 'staging_marker', return_value=marker):
+        with patch.object(migration, 'reject_backup_checkpoint'), patch.object(migration, 'staging_marker', return_value=marker), \
+             patch.object(migration.subprocess, 'run', decrypt):
             self.run.restore()
+        backup.run.assert_called_once_with('sudo sha256sum -- /backup/postgres-wallet_ledger.age /backup/destination-before-postgres.age')
         sql = self.destination.sql.call_args_list[0].args[2]
         self.assertIn('DROP DATABASE "wallet_ledger";\nCREATE DATABASE "wallet_ledger"', sql)
         self.assertNotIn('noebs_restore_', sql)
@@ -260,13 +281,26 @@ class MigrationTests(unittest.TestCase):
         self.run.assert_stopped = Mock()
         marker = {'users': ['fixture']}
         backup = Mock()
-        backup.run.return_value = b'wrong-checksum  /backup/source.age\n'
         self.run.volume_hosts['noebs-backup'] = backup
+        payload = b'encrypted source database archive'
+        (self.directory / 'source.age').write_bytes(payload)
+        expected = migration.digest(payload)
         self.run.plan.update({'destination': {'cluster_uid': 'target'}, 'destination_staging': marker,
-            'archives': {'source': {'sha256': 'expected-checksum'}}, 'off_host_archives': {'source': '/backup/source.age'}})
-        with patch.object(migration, 'reject_backup_checkpoint'), patch.object(migration, 'staging_marker', return_value=marker):
-            with self.assertRaisesRegex(ValueError, 'Off-host encrypted snapshot checksum'):
-                self.run.restore()
+            'archives': {'source': {'file': 'source.age', 'sha256': expected}},
+            'off_host_archives': {'source': '/backup/source.age'}})
+        for label, received in [('changed checksum', '0' * 64 + '  /backup/source.age\n'),
+                                ('missing archive', ''),
+                                ('unexpected archive', expected + '  /backup/source.age\n' + expected + '  /backup/other.age\n')]:
+            with self.subTest(label=label):
+                backup.reset_mock()
+                backup.run.return_value = received.encode()
+                with patch.object(migration, 'reject_backup_checkpoint'), patch.object(migration, 'staging_marker', return_value=marker), \
+                     patch.object(migration.subprocess, 'run') as decrypt:
+                    with self.assertRaisesRegex(ValueError, 'Off-host encrypted snapshot checksum'):
+                        self.run.restore()
+                    decrypt.assert_not_called()
+                backup.run.assert_called_once_with('sudo sha256sum -- /backup/source.age')
+                self.assertNotIn('destination_replacement_started_at', self.run.plan)
         self.destination.sql.assert_not_called()
 
     def test_publish_archive_checks_received_bytes_before_finalizing(self):
@@ -285,6 +319,27 @@ class MigrationTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('NOEBS_TEST_POSTGRES_URL'), 'set NOEBS_TEST_POSTGRES_URL for SQL integration')
 class FingerprintPostgresTests(unittest.TestCase):
+    def test_empty_catalog_acl_serializes_and_restores_as_an_empty_list(self):
+        binary = os.environ.get('PSQL', 'psql')
+        url = os.environ['NOEBS_TEST_POSTGRES_URL']
+        source = 'migration_acl_source_' + uuid.uuid4().hex
+        target = 'migration_acl_target_' + uuid.uuid4().hex
+        def sql(query):
+            return subprocess.check_output([binary, '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '--dbname', url], input=query.encode())
+        owner = sql('SELECT current_user;').decode().strip()
+        sql('CREATE DATABASE ' + migration.identifier(source) + ';\nCREATE DATABASE ' + migration.identifier(target) + ';')
+        try:
+            sql('REVOKE ALL ON DATABASE ' + migration.identifier(source) + ' FROM PUBLIC;\n'
+                'REVOKE ALL ON DATABASE ' + migration.identifier(source) + ' FROM ' + migration.identifier(owner) + ';')
+            catalog = {row['name']: row for row in migration.lines_json(sql(migration.DATABASES_SQL))}
+            self.assertEqual(catalog[source]['acl'], [])
+            self.assertTrue(catalog[target]['acl'])
+            sql(migration.database_permissions(catalog[source], target))
+            restored = {row['name']: row for row in migration.lines_json(sql(migration.DATABASES_SQL))}
+            self.assertEqual(restored[target]['acl'], [])
+        finally:
+            sql('DROP DATABASE ' + migration.identifier(source) + ';\nDROP DATABASE ' + migration.identifier(target) + ';')
+
     def test_real_psql_fingerprints_are_parseable_and_detect_evidence_balance_and_sequence_changes(self):
         binary = os.environ.get('PSQL', 'psql')
         url = os.environ['NOEBS_TEST_POSTGRES_URL']

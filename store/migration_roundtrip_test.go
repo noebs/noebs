@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -29,14 +30,13 @@ func TestDurableLifecycleMigrationsRejectDestructiveRollback(t *testing.T) {
 		table   string
 	}{
 		{MigrationScopeWalletLedger, 7, "transaction_status_events"},
+		{MigrationScopeWalletLedger, 8, "transaction_status_events"},
 		{MigrationScopeIdentityAuth, 4, "identity_verifications"},
 	} {
-		t.Run(tc.scope, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%d", tc.scope, tc.version), func(t *testing.T) {
 			db := newMigrationAuthorityDB(t, tc.scope)
 			migrateTestScopeThroughVersion(t, db, tc.scope, tc.version-1)
-			if err := MigrateScope(t.Context(), db, tc.scope); err != nil {
-				t.Fatalf("upgrade existing schema: %v", err)
-			}
+			migrateTestScopeThroughVersion(t, db, tc.scope, tc.version)
 			contract := migrationAuthorityContracts[tc.scope]
 			gooseMigrationMu.Lock()
 			defer gooseMigrationMu.Unlock()

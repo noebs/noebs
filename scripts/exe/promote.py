@@ -83,8 +83,14 @@ def promote(args, lease):
         return ssh(key,server,'sudo k3s kubectl '+shlex.join(command),input=payload,capture_output=capture)
 
     def apply(objects):
-        payload=json.dumps({'apiVersion':'v1','kind':'List','items':objects}).encode()
-        kubectl(['apply','--server-side','--field-manager=noebs-release','-f','-'],payload)
+        for resume in [False, True]:
+            batch=[obj for obj in objects if
+                   (bool(args.migration_id) and obj['kind'] in ['Deployment','StatefulSet','CronJob']) == resume]
+            if not batch:
+                continue
+            payload=json.dumps({'apiVersion':'v1','kind':'List','items':batch}).encode()
+            flags=['--force-conflicts'] if resume else []
+            kubectl(['apply','--server-side','--field-manager=noebs-release',*flags,'-f','-'],payload)
 
     def phase(name):
         result=kubectl(['-n','noebs','get','job',name,'--ignore-not-found','-o','json'],capture=True).stdout

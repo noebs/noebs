@@ -103,6 +103,23 @@ func TestEdgeCaddyNeverForwardsCredentialBearingReferrers(t *testing.T) {
 	}
 }
 
+func TestExeEdgePreservesIncomingHostForBackoffice(t *testing.T) {
+	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "exe-edge", "Caddyfile")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const upstream = "reverse_proxy https://api-gateway.noebs.svc.cluster.local:8080 {"
+	_, api, found := strings.Cut(string(data), upstream)
+	if !found {
+		t.Fatal("EXE edge is missing the HTTPS API upstream")
+	}
+	headers, _, _ := strings.Cut(api, "transport http {")
+	if !strings.Contains(headers, "header_up Host {http.request.hostport}") {
+		t.Fatal("HTTPS proxy must preserve the incoming Host for exact backoffice host validation")
+	}
+}
+
 func readEdgeSecurityFile(t *testing.T, name string) string {
 	t.Helper()
 	path := filepath.Join("..", "deploy", "kubernetes", "edge", name)

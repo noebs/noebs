@@ -67,6 +67,7 @@
 		respond @keycloak_private 404
 
 		reverse_proxy https://api-gateway.noebs.svc.cluster.local:8080 {
+			header_up Host {http.request.hostport}
 			header_up X-Forwarded-Proto https
 			header_up X-Forwarded-Host api.noebs.sd
 			transport http {

@@ -19,7 +19,7 @@ def run(args, **kwargs):
 
 def ssh_args(key, destination):
     return ["ssh", "-i", str(key), "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
-            "-o", "UserKnownHostsFile="+str(ROOT/'deploy/exe/known_hosts'), "-o", "ConnectTimeout=20",
+            "-o", "UserKnownHostsFile="+str(ROOT/'deploy/exe/known_hosts'), "-o", "ConnectTimeout=20", "-o", "ConnectionAttempts=3",
             "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2", destination]
 
 
