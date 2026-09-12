@@ -52,6 +52,7 @@ func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
 
 func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/principals/resolve", h.ResolveProfileProjection)
+	router.Post("/accounts/display-name", h.ResolveAccountDisplayName)
 }
 
 // RegisterIdentityPrincipalRoutes contains bootstrap operations that have a

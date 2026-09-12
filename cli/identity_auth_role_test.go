@@ -72,6 +72,7 @@ func TestIdentityAuthActiveRoutesAreOwnedByIdentityAuth(t *testing.T) {
 		})
 	}
 	assertFiberRoutePresent(t, app, http.MethodPost, "/internal/identity-auth/principals/resolve")
+	assertFiberRoutePresent(t, app, http.MethodPost, "/internal/identity-auth/accounts/display-name")
 }
 
 func TestIdentityAuthRemovedRoutesAreAbsent(t *testing.T) {

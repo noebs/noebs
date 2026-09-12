@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
+	walletfees "github.com/adonese/noebs/wallet/fees"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -49,7 +50,7 @@ func (s *Server) ListWalletProviders(ctx context.Context, req *walletv1.ListWall
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	tenant, _, err := s.walletIdentity(ctx, req.TenantId)
+	tenant, owner, err := s.walletIdentity(ctx, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +77,38 @@ func (s *Server) ListWalletProviders(ctx context.Context, req *walletv1.ListWall
 				p.Capabilities.Send, p.TransferMode = true, "withdrawal"
 			}
 		}
+	}
+	if s.localTransferConfigured() {
+		if _, exists := providers["noebs"]; exists {
+			return nil, status.Error(codes.FailedPrecondition, "duplicate payment provider identity")
+		}
+		userID, err := strconv.ParseInt(owner, 10, 64)
+		if err != nil || userID <= 0 {
+			return nil, status.Error(codes.Unauthenticated, "invalid user identity")
+		}
+		wallets, err := s.Service.Store.ListUserWallets(ctx, tenant, userID)
+		if err != nil {
+			return nil, mapError(err)
+		}
+		p := &walletv1.WalletProvider{Id: "noebs", Name: "NoEBS account transfer",
+			Capabilities: &walletv1.WalletProviderCapabilities{}, TransferMode: "wallet_p2p", FundingMode: "account_transfer"}
+		for i := range wallets {
+			w := &wallets[i]
+			if !isPersonalP2PWallet(w) || w.OwnerID != owner || w.Status != walletstore.WalletStatusActive {
+				continue
+			}
+			p.Capabilities.Receive, p.Capabilities.Funding = true, true
+			if !slices.Contains(p.Currencies, w.Currency) {
+				p.Currencies = append(p.Currencies, w.Currency)
+			}
+			eligible, err := s.p2pSendingConfigured(ctx, tenant, w)
+			if err != nil {
+				return nil, mapError(err)
+			}
+			p.Capabilities.Send = p.Capabilities.Send || eligible
+		}
+		p.Available = p.Capabilities.Send || p.Capabilities.Receive
+		providers[p.Id] = p
 	}
 	binding, err := s.Service.Store.GetInteropBinding(ctx, tenant)
 	if err != nil && !errors.Is(err, walletstore.ErrInteropDisabled) {
@@ -131,6 +164,23 @@ func (s *Server) ListWalletFundingMethods(ctx context.Context, req *walletv1.Lis
 		return nil, mapError(err)
 	}
 	response := &walletv1.ListWalletFundingMethodsResponse{Methods: make([]*walletv1.WalletFundingMethod, 0, len(methods)+1)}
+	if s.localTransferConfigured() {
+		m := &walletv1.WalletFundingMethod{Id: "noebs:receive", ProviderId: "noebs",
+			Label: "NoEBS account transfer", Currency: w.Currency,
+			CurrencyUnitVersion: strconv.FormatInt(w.CurrencyUnitID, 10), Mode: "account_transfer"}
+		switch {
+		case w.Status != walletstore.WalletStatusActive:
+			m.UnavailableReason, m.Instructions = "wallet_inactive", "Your account must be active to receive a transfer."
+		case !isPersonalP2PWallet(w):
+			m.UnavailableReason, m.Instructions = "recipient_unavailable", "Receiving details are unavailable for this account."
+		default:
+			m.Available, m.AccountIdentifier = true, w.ID.String()
+			// The gateway enriches only this owned reference using identity-auth.
+			// The ledger never reads the identity database or invents a name.
+			m.Instructions = "Share this account reference with another NoEBS customer. They can review your account name before sending."
+		}
+		response.Methods = append(response.Methods, m)
+	}
 	for _, method := range methods {
 		label := method.DisplayName
 		if label == "" {
@@ -176,6 +226,56 @@ func (s *Server) ListWalletFundingMethods(ctx context.Context, req *walletv1.Lis
 	}
 	response.Methods = append(response.Methods, m)
 	return response, nil
+}
+
+// Discovery advertises configured runtime capability. It does not start a
+// workflow or claim that a worker/amount is currently available; command
+// admission and durable settlement remain authoritative.
+func (s *Server) localTransferConfigured() bool {
+	return s != nil && s.TemporalOptions.Validate() == nil
+}
+
+func isPersonalP2PWallet(w *walletstore.Wallet) bool {
+	return w != nil && w.OwnerType == walletstore.OwnerTypeUser && w.UserID.Valid &&
+		w.UserID.Int64 > 0 && w.OwnerID == strconv.FormatInt(w.UserID.Int64, 10)
+}
+
+func (s *Server) p2pSendingConfigured(ctx context.Context, tenant string, w *walletstore.Wallet) (bool, error) {
+	limit, err := s.Service.Store.GetLimits(ctx, tenant, w.KYCTier, "p2p", w.Currency, w.CurrencyUnitID)
+	if errors.Is(err, walletstore.ErrTransactionLimitNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	const pageSize = 100
+	fees := walletfees.FeeEngine{Store: s.Service.Store}
+	for offset := 0; ; offset += pageSize {
+		configs, err := s.Service.Store.ListFeeConfigs(ctx, walletstore.FeeConfigFilter{
+			TenantID: tenant, TransactionType: "p2p", Currency: w.Currency, CurrencyUnitID: w.CurrencyUnitID,
+			ActiveOnly: true, Limit: pageSize, Offset: offset})
+		if err != nil {
+			return false, err
+		}
+		for _, config := range configs {
+			amount := max(int64(1), config.TierMin)
+			if amount > limit.PerTransactionLimit || (config.TierMax.Valid && amount > config.TierMax.Int64) {
+				continue
+			}
+			fee, err := fees.Calculate(ctx, tenant, "p2p", w.Currency, w.CurrencyUnitID, amount)
+			if err != nil {
+				return false, err
+			}
+			// Prove that at least one configured positive amount fits the limit.
+			// Account balance and remaining period usage are checked at preview.
+			if fee.TotalFee >= 0 && fee.TotalFee <= limit.PerTransactionLimit-amount {
+				return true, nil
+			}
+		}
+		if len(configs) < pageSize {
+			return false, nil
+		}
+	}
 }
 
 // Pagination belongs at this API boundary; stores receive explicit limits and
