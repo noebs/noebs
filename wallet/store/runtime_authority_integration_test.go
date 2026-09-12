@@ -170,4 +170,48 @@ func TestRuntimeAuthorityReservesImmutableCommands(t *testing.T) {
 	); err != nil {
 		t.Fatalf("record deposit run: %v", err)
 	}
+	if _, err := migrationDB.ExecContext(ctx, `UPDATE psp_transactions SET status = 'pending' WHERE tenant_id = $1 AND client_reference = $2`, tenantID, deposit.IntentReference); err != nil {
+		t.Fatal(err)
+	}
+	transaction, err := runtimeStore.GetPSPTransactionByReference(ctx, tenantID, deposit.IntentReference)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, err := runtimeStore.ResolvePSPTransaction(ctx, lifecycleTestCommand(transaction, approver.ID))
+	if err != nil {
+		t.Fatalf("runtime resolve transaction through immutable command: %v", err)
+	}
+	if resolved.Substatus != "settlement_pending" || resolved.StatusVersion != transaction.StatusVersion+1 {
+		t.Fatalf("resolved lifecycle = %+v", resolved)
+	}
+	if _, err := runtimeDB.ExecContext(ctx, `UPDATE psp_transactions SET status = 'failed'`); err == nil {
+		t.Fatal("runtime must not update transaction outcomes directly")
+	}
+	if _, err := runtimeDB.ExecContext(ctx, `UPDATE psp_manual_resolutions SET evidence_reference = 'rewritten'`); err == nil {
+		t.Fatal("runtime must not rewrite resolution evidence")
+	}
+	if _, err := runtimeDB.ExecContext(ctx, `INSERT INTO transaction_status_events(tenant_id,aggregate_id,version,status,substatus) VALUES('tenant-runtime-authority','forged',1,'completed','offline')`); err == nil {
+		t.Fatal("runtime must not forge transition events")
+	}
+	workerURL, err := container.DatabaseURLForRole(databaseName, "wallet_ledger_worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	workerDB, err := basestore.OpenFromConfig(workerURL, basestore.DriverPostgres)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = workerDB.Close() })
+	outbox, err := NewStatusEventOutbox(New(workerDB), "noebs.status.changed.v1", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := outbox.ClaimPendingTransactionEvents(ctx, 20)
+	if err != nil || len(events) == 0 {
+		t.Fatalf("worker claim events = %+v, %v", events, err)
+	}
+	if err := outbox.MarkTransactionEventPublished(ctx, events[0].ID); err != nil {
+		t.Fatalf("worker ack event: %v", err)
+	}
 }

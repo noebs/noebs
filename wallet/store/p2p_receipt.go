@@ -45,14 +45,16 @@ func (s *Store) GetP2PRecipient(ctx context.Context, tenant string, id uuid.UUID
 }
 
 type P2PReceipt struct {
-	Command        *P2PCommand
-	Payload        P2PCommandPayload
-	Status         string
-	ErrorCode      string
-	TransactionID  int64
-	Fee            int64
-	CurrencyUnitID int64
-	CreatedAt      time.Time
+	Command         *P2PCommand
+	Payload         P2PCommandPayload
+	Status          string
+	LifecycleStatus string
+	Substatus       string
+	ErrorCode       string
+	TransactionID   int64
+	Fee             int64
+	CurrencyUnitID  int64
+	CreatedAt       time.Time
 }
 
 // A receipt proves completion from the committed ledger, not workflow state.
@@ -71,9 +73,11 @@ func (s *Store) GetP2PReceipt(ctx context.Context, tenant, owner, key string) (*
 	if err != nil {
 		return nil, err
 	}
-	r := &P2PReceipt{Command: c, Payload: p, Status: "reserved", CreatedAt: c.CreatedAt}
+	r := &P2PReceipt{Command: c, Payload: p, Status: "reserved", LifecycleStatus: "pending", Substatus: "created", CreatedAt: c.CreatedAt}
 	if c.RunID.Valid {
 		r.Status = "running"
+		r.LifecycleStatus = "processing"
+		r.Substatus = "workflow_running"
 	}
 	if p.ExpectedFeeAmount != nil {
 		r.Fee = *p.ExpectedFeeAmount
@@ -105,6 +109,8 @@ func (s *Store) GetP2PReceipt(ctx context.Context, tenant, owner, key string) (*
 			return nil, err
 		}
 		r.Status = "completed"
+		r.LifecycleStatus = "completed"
+		r.Substatus = "automated"
 		r.TransactionID = settled.TransactionID
 		r.Fee = fee
 		r.CurrencyUnitID = settled.Unit
@@ -116,6 +122,8 @@ func (s *Store) GetP2PReceipt(ctx context.Context, tenant, owner, key string) (*
 	err = db.GetContext(ctx, &r.ErrorCode, db.Rebind(`SELECT error_code FROM p2p_command_failures WHERE tenant_id=? AND idempotency_key=?`), tenant, key)
 	if err == nil {
 		r.Status = "failed"
+		r.LifecycleStatus = "failed"
+		r.Substatus = r.ErrorCode
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}

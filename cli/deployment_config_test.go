@@ -418,6 +418,7 @@ func TestCurrentHostDatabaseConsumersWaitForPostgres(t *testing.T) {
 		"ebs-adapter":                     false,
 		"ebs-adapter-events":              false,
 		"identity-auth":                   false,
+		"identity-worker":                 false,
 		"notification-chat":               false,
 		"psp-webhook":                     false,
 		"wallet-api":                      false,
@@ -1097,12 +1098,12 @@ func TestPostDeploySmokeRequiresExactFreshMigrationSets(t *testing.T) {
 	text := string(payload)
 	for _, required := range []string{
 		`string_agg(version_id::text || chr(58) || is_applied::text, chr(44) ORDER BY version_id, id)`,
-		`$identity_migrations|0:true,1:true,2:true,3:true|identity-auth`,
+		`$identity_migrations|0:true,1:true,2:true,3:true,4:true|identity-auth`,
 		`$card_vault_migrations|0:true,1:true|card-vault`,
 		`$ebs_adapter_migrations|0:true,1:true|ebs-adapter`,
 		`$admin_reporting_migrations|0:true,1:true|admin-reporting`,
-		`$notification_chat_migrations|0:true,1:true|notification-chat`,
-		`$wallet_ledger_migrations|0:true,1:true,2:true,3:true,4:true,5:true,6:true|wallet-ledger`,
+		`$notification_chat_migrations|0:true,1:true,2:true|notification-chat`,
+		`$wallet_ledger_migrations|0:true,1:true,2:true,3:true,4:true,5:true,6:true,7:true|wallet-ledger`,
 		`$workload_auth_migrations|0:true,1:true|workload-auth`,
 		`$gateway_auth_migrations|0:true,1:true,2:true|gateway-auth`,
 		`migration set is $actual, want exactly $expected`,
@@ -1414,11 +1415,11 @@ func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 	}{
 		"api-gateway-ingress":                        {targetPod: "api-gateway", port: 8080, allowedSources: []string{"ip:10.42.0.1/32"}},
 		"postgres-ingress":                           {targetPod: "postgres", port: 5432},
-		"kafka-ingress":                              {targetPod: "kafka", port: 9092, allowedSources: []string{"ebs-adapter-events", "admin-reporting-projector", "kafka-topics"}},
+		"kafka-ingress":                              {targetPod: "kafka", port: 9092, allowedSources: []string{"ebs-adapter-events", "admin-reporting-projector", "kafka-topics", "identity-worker", "wallet-worker", "notification-chat"}},
 		"temporal-postgres-ingress":                  {targetPod: "temporal-postgres", port: 5432, allowedSources: []string{"temporal", "temporal-schema-migrate"}},
-		"temporal-frontend-ingress":                  {targetPod: "temporal", port: 7233, allowedSources: []string{"wallet-ledger", "wallet-worker", "temporal-namespace-bootstrap"}},
+		"temporal-frontend-ingress":                  {targetPod: "temporal", port: 7233, allowedSources: []string{"wallet-ledger", "wallet-worker", "identity-auth", "identity-worker", "temporal-namespace-bootstrap"}},
 		"keycloak-postgres-ingress":                  {targetPod: "keycloak-postgres", port: 5432, allowedSources: []string{"keycloak"}},
-		"keycloak-https-ingress":                     {targetPod: "keycloak", port: 8443, allowedSources: []string{"ip:10.42.0.1/32", "api-gateway", "keycloak-reconciler", "temporal", "temporal-namespace-bootstrap", "wallet-ledger", "wallet-worker"}},
+		"keycloak-https-ingress":                     {targetPod: "keycloak", port: 8443, allowedSources: []string{"ip:10.42.0.1/32", "api-gateway", "keycloak-reconciler", "temporal", "temporal-namespace-bootstrap", "wallet-ledger", "wallet-worker", "identity-auth", "identity-worker"}},
 		"keycloak-management-ingress":                {targetPod: "keycloak", port: 9000, allowedSources: []string{"ip:10.42.0.1/32"}},
 		"keycloak-cluster-transport-ingress":         {targetPod: "keycloak", port: 7800, allowedSources: []string{"keycloak"}},
 		"keycloak-cluster-failure-detection-ingress": {targetPod: "keycloak", port: 57800, allowedSources: []string{"keycloak"}},
@@ -1463,7 +1464,7 @@ func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 
 func TestPostgresNetworkPolicyMatchesExactDatabaseConsumers(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
-	consumers := make(map[string]bool)
+	consumers := map[string]bool{"identity-worker": true}
 	for _, spec := range allPostgresRoleSpecs() {
 		if spec.service == "" {
 			continue
@@ -2379,6 +2380,7 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 		"ebs-adapter-events":        true,
 		"admin-reporting-projector": true,
 		"wallet-worker":             true,
+		"identity-worker":           true,
 	}
 	signedHTTPReceivers := map[string]bool{
 		"identity-auth":     true,
@@ -3183,6 +3185,7 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 	expectedRuntimeDeployments := map[string]bool{
 		"api-gateway":               false,
 		"identity-auth":             false,
+		"identity-worker":           false,
 		"card-vault":                false,
 		"ebs-adapter":               false,
 		"ebs-adapter-events":        false,
@@ -3198,6 +3201,7 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 		"ebs-adapter-events":        true,
 		"admin-reporting-projector": true,
 		"wallet-worker":             true,
+		"identity-worker":           true,
 	}
 	expectedCleanup := map[string]bool{
 		"noebs-workload-auth-cleanup": false,
@@ -3595,6 +3599,7 @@ func TestFoundationTerraformVariablesRequireExplicitInputs(t *testing.T) {
 func renderedKubernetesSecretNames() map[string]bool {
 	secrets := map[string]bool{
 		"noebs-release-manifest":                   true,
+		"identity-worker-secrets":                  true,
 		"postgres-credentials":                     true,
 		"service-postgres-roles":                   true,
 		"workload-auth-postgres-roles":             true,
@@ -3618,6 +3623,7 @@ func renderedKubernetesSecretNames() map[string]bool {
 func renderedKubernetesSecretKeys() map[string]map[string]bool {
 	secrets := map[string]map[string]bool{
 		"noebs-release-manifest":                   {kubernetesReleaseManifestFile: true},
+		"identity-worker-secrets":                  {"secrets.yaml": true},
 		"postgres-credentials":                     {"ca.pem": true, "tls.crt": true, "tls.key": true},
 		"service-postgres-roles":                   {"passwords.env": true, "bootstrap.sql": true, "roles.yaml": true},
 		"workload-auth-postgres-roles":             {"roles.yaml": true},
@@ -3760,8 +3766,9 @@ func requireServiceIdentityConfig(t *testing.T, label string, config mountedNoeb
 	} else if config.Noebs.DatabaseDriver != "" {
 		t.Fatalf("%s noebs.db_driver = %q, want empty for no-database role %s", label, config.Noebs.DatabaseDriver, role)
 	}
-	if config.Noebs.OtelServiceName != string(role) {
-		t.Fatalf("%s noebs.otel_service_name = %q, want %q", label, config.Noebs.OtelServiceName, role)
+	telemetryName := strings.TrimSuffix(strings.TrimSuffix(filepath.Base(label), ".yaml"), ".service")
+	if config.Noebs.OtelServiceName != telemetryName {
+		t.Fatalf("%s noebs.otel_service_name = %q, want %q", label, config.Noebs.OtelServiceName, telemetryName)
 	}
 }
 

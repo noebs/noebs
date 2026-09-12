@@ -136,6 +136,7 @@ locals {
     "noebs-release-manifest",
     "api-gateway-secrets",
     "identity-auth-secrets",
+    "identity-worker-secrets",
     "card-vault-secrets",
     "ebs-adapter-secrets",
     "ebs-adapter-events-secrets",
@@ -179,6 +180,9 @@ locals {
       "secrets.yaml",
     ]
     "identity-auth-secrets" = [
+      "secrets.yaml",
+    ]
+    "identity-worker-secrets" = [
       "secrets.yaml",
     ]
     "card-vault-secrets" = [

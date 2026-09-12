@@ -1,1 +1,2 @@
 noebs-ebs-transactions-v1 3 1
+noebs.status.changed.v1 3 1

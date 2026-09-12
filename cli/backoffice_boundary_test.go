@@ -380,7 +380,7 @@ func TestBackofficeProxyAuthenticatesScopesRewritesAndSigns(t *testing.T) {
 	previousSigners := workloadSigners
 	previousTLS := internalTransportClientTLS
 	workloadSigners = newTestWorkloadSigners(t, string(serviceRoleAPIGateway),
-		string(serviceRoleWalletAPI), string(serviceRoleAdminReporting))
+		string(serviceRoleWalletAPI), string(serviceRoleAdminReporting), string(serviceRoleIdentityAuth))
 	internalTransportClientTLS = nil
 	t.Cleanup(func() {
 		workloadSigners = previousSigners
@@ -389,6 +389,7 @@ func TestBackofficeProxyAuthenticatesScopesRewritesAndSigns(t *testing.T) {
 	cfg := ebs_fields.NoebsConfig{ServiceDiscovery: map[string]string{
 		string(serviceRoleWalletAPI):      upstream.URL,
 		string(serviceRoleAdminReporting): upstream.URL,
+		string(serviceRoleIdentityAuth):   upstream.URL,
 	}}
 	app := fiber.New()
 	if err := registerBackofficeLifecycleRoutes(app, fixture.handler); err != nil {
@@ -520,12 +521,13 @@ func TestBackofficeProxyEnforcesTenantRolePermissionAndCSRF(t *testing.T) {
 	defer upstream.Close()
 	previousSigners := workloadSigners
 	workloadSigners = newTestWorkloadSigners(t, string(serviceRoleAPIGateway),
-		string(serviceRoleWalletAPI), string(serviceRoleAdminReporting))
+		string(serviceRoleWalletAPI), string(serviceRoleAdminReporting), string(serviceRoleIdentityAuth))
 	t.Cleanup(func() { workloadSigners = previousSigners })
 	app := fiber.New()
 	if err := registerBackofficeProxyRoutes(app, ebs_fields.NoebsConfig{ServiceDiscovery: map[string]string{
 		string(serviceRoleWalletAPI):      upstream.URL,
 		string(serviceRoleAdminReporting): upstream.URL,
+		string(serviceRoleIdentityAuth):   upstream.URL,
 	}}, fixture.handler); err != nil {
 		t.Fatal(err)
 	}
@@ -712,6 +714,13 @@ func TestBackofficeRoutePermissionMatrixIsExact(t *testing.T) {
 		{http.MethodPost, "/backoffice/t/:tenant/wallet/approve/:workflow_id", "/admin/wallet/approve/:workflow_id", serviceRoleWalletAPI, tenantauth.PermissionWalletWorkflowApprove, true},
 		{http.MethodPost, "/backoffice/t/:tenant/wallet/reject/:workflow_id", "/admin/wallet/reject/:workflow_id", serviceRoleWalletAPI, tenantauth.PermissionWalletWorkflowReject, true},
 	}
+	expected = append(expected,
+		expectedRoute{http.MethodGet, "/backoffice/t/:tenant/verifications", "/admin/identity", serviceRoleIdentityAuth, tenantauth.PermissionIdentityReviewRead, false},
+		expectedRoute{http.MethodGet, "/backoffice/t/:tenant/verifications/:user_id/:session_id", "/admin/identity/:user_id/:session_id", serviceRoleIdentityAuth, tenantauth.PermissionIdentityReviewRead, false},
+		expectedRoute{http.MethodGet, "/backoffice/t/:tenant/verifications/:user_id/:session_id/evidence/:kind", "/admin/identity/:user_id/:session_id/evidence/:kind", serviceRoleIdentityAuth, tenantauth.PermissionIdentityReviewRead, false},
+		expectedRoute{http.MethodPost, "/backoffice/t/:tenant/verifications/:user_id/:session_id/decision", "/admin/identity/:user_id/:session_id/decision", serviceRoleIdentityAuth, tenantauth.PermissionIdentityReviewDecide, true},
+		expectedRoute{http.MethodPost, "/backoffice/t/:tenant/wallet/transactions/:client_reference/resolve", "/admin/wallet/transactions/:client_reference/resolve", serviceRoleWalletAPI, tenantauth.PermissionWalletTransactionResolve, true},
+	)
 	actual := backofficeRouteSpecs()
 	if len(actual) != len(expected) {
 		t.Fatalf("route count = %d, want %d", len(actual), len(expected))

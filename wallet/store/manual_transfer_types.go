@@ -72,6 +72,9 @@ type ManualTransfer struct {
 	CurrencyUnitID         int64          `db:"currency_unit_version_id"`
 	Reason                 string         `db:"reason"`
 	Status                 string         `db:"status"`
+	LifecycleStatus        string         `db:"lifecycle_status"`
+	Substatus              string         `db:"substatus"`
+	StatusVersion          int64          `db:"status_version"`
 	RequestedByOperatorID  int64          `db:"requested_by_operator_id"`
 	ApprovedByOperatorID   sql.NullInt64  `db:"approved_by_operator_id"`
 	ProofOfPayment         sql.NullString `db:"proof_of_payment"`

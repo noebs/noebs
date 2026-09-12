@@ -86,6 +86,7 @@ func TestDockerComposeServiceSecretsHaveExplicitExamples(t *testing.T) {
 	expectedOwners := map[string][]string{
 		"api-gateway":               {"api-gateway"},
 		"identity-auth":             {"identity-auth"},
+		"identity-worker":           {"identity-auth"},
 		"card-vault":                {"card-vault"},
 		"ebs-adapter":               {"ebs-adapter"},
 		"ebs-adapter-events":        {"ebs-adapter"},
@@ -131,6 +132,19 @@ func TestDockerComposeServiceSecretsHaveExplicitExamples(t *testing.T) {
 		}
 		seenExamples[serviceName] = true
 		requireServiceDatabaseOwners(t, examplePath, example.Noebs, owners)
+		if serviceName == "identity-worker" {
+			for _, key := range []string{"database_ca_certificate", "temporal_client_secret", "temporal_ca_certificate", "keycloak_ca_certificate"} {
+				if !strings.HasPrefix(firstString(example.Noebs, key), "REPLACE_WITH_") {
+					t.Fatalf("%s missing %s", examplePath, key)
+				}
+			}
+			if example.Noebs["internal_transport"] != nil || example.Noebs["workload_auth"] != nil {
+				t.Fatal("identity-worker must not carry HTTP workload credentials")
+			}
+			requireDockerExampleDatabaseURL(t, examplePath, getMap(example.Noebs, "service_databases")["identity-auth"], "identity_auth_runtime", "identity_auth")
+			requirePlaceholderStrings(t, examplePath, example.Noebs)
+			continue
+		}
 		role, err := parseServiceRole(serviceName)
 		if err != nil {
 			t.Fatal(err)

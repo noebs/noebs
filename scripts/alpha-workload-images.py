@@ -13,7 +13,7 @@ import sys
 DEPLOYMENTS = {
     name: [name] for name in (
         'admin-reporting', 'admin-reporting-projector', 'api-gateway', 'card-vault',
-        'ebs-adapter', 'ebs-adapter-events', 'identity-auth', 'notification-chat',
+        'ebs-adapter', 'ebs-adapter-events', 'identity-auth', 'identity-worker', 'notification-chat',
         'psp-webhook', 'wallet-api', 'wallet-ledger', 'wallet-worker',
     )
 }

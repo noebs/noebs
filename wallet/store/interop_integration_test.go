@@ -684,6 +684,23 @@ func (n *interopTenant) transfer(t *testing.T, id uuid.UUID) *InteropTransfer {
 	t.Helper()
 	tr, err := n.f.runtime.GetInteropTransfer(n.f.ctx, n.id, n.user.OwnerID, id, "")
 	interopMust(t, err)
+	expected := map[string][2]string{
+		"REQUESTED": {"pending", "created"}, "ARMED": {"processing", "funds_held"},
+		"PENDING": {"processing", "provider_pending"}, "IN_DOUBT": {"processing", "outcome_unknown"},
+		"SUSPENSE": {"processing", "reconciliation_required"}, "SUCCEEDED": {"completed", "automated"}, "FAILED": {"failed", "provider_failed"},
+	}[tr.Status]
+	if tr.LifecycleStatus != expected[0] || tr.Substatus != expected[1] {
+		t.Fatalf("interop lifecycle = %+v", tr)
+	}
+	var event struct {
+		Status    string `db:"status"`
+		Substatus string `db:"substatus"`
+		Version   int64  `db:"version"`
+	}
+	interopMust(t, n.f.runtime.DB.GetContext(n.f.ctx, &event, `SELECT status,substatus,version FROM transaction_status_events WHERE tenant_id=$1 AND aggregate_id=$2 ORDER BY version DESC LIMIT 1`, n.id, "interop:"+id.String()))
+	if event.Status != tr.LifecycleStatus || event.Substatus != tr.Substatus || event.Version != tr.StatusVersion {
+		t.Fatalf("event %+v differs from transfer %+v", event, tr)
+	}
 	return tr
 }
 

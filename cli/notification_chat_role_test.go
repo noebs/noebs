@@ -20,6 +20,7 @@ func notificationRemovedRoutes() []roleRoute {
 func TestNotificationChatGatewayCatalogIsExact(t *testing.T) {
 	assertGatewayRoleCatalogExact(t, serviceRoleNotification, []gatewayRouteExpectation{
 		{method: http.MethodGet, path: "/ws", auth: gatewayAuthMobileUser, websocket: true},
+		{method: http.MethodGet, path: "/consumer/status-notifications", auth: gatewayAuthMobileUser},
 	})
 }
 

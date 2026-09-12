@@ -17,8 +17,9 @@ const (
 	temporalAudience               = "noebs-temporal"
 	temporalLedgerClientID         = "noebs-temporal-wallet-ledger"
 	temporalWorkerClientID         = "noebs-temporal-wallet-worker"
+	temporalIdentityClientID       = "noebs-temporal-identity-auth"
+	temporalIdentityWorkerClientID = "noebs-temporal-identity-worker"
 	temporalBootstrapClientID      = "noebs-temporal-namespace-bootstrap"
-	walletAuthorizationCallbackURI = "https://api.noebs.sd/wallet/authorizations/oauth/callback"
 	googleACR                      = "urn:noebs:acr:google"
 	googleTOTPACR                  = "urn:noebs:acr:google-totp"
 	acrLoAMap                      = `{"urn:noebs:acr:google":1,"urn:noebs:acr:google-totp":2}`
@@ -233,11 +234,11 @@ func (c Config) Validate() error {
 		clientNames[name] = struct{}{}
 	}
 	if !exactStringSet(clientNames, "noebs-keycloak-reconciler", "noebs-backoffice", walletAuthorizerClientID,
-		temporalLedgerClientID, temporalWorkerClientID, temporalBootstrapClientID) {
+		temporalLedgerClientID, temporalWorkerClientID, temporalIdentityClientID, temporalIdentityWorkerClientID, temporalBootstrapClientID) {
 		return fmt.Errorf("%w: client_credentials must contain the exact repository-owned client set", ErrInvalidConfig)
 	}
 	for _, name := range []string{"noebs-keycloak-reconciler", "noebs-backoffice", walletAuthorizerClientID,
-		temporalLedgerClientID, temporalWorkerClientID, temporalBootstrapClientID} {
+		temporalLedgerClientID, temporalWorkerClientID, temporalIdentityClientID, temporalIdentityWorkerClientID, temporalBootstrapClientID} {
 		credential := c.ClientCredentials[name]
 		if err := validateValue("client_credentials."+name+".client_secret", credential.ClientSecret); err != nil {
 			return fmt.Errorf("%w: %v", ErrInvalidConfig, err)
@@ -357,6 +358,7 @@ func (s DesiredState) Validate() error {
 		"user", "backoffice", "tenant-admin",
 		"reporting:read", "wallet:read", "wallet:audit:read", "wallet:manual:create",
 		"wallet:fees:write", "wallet:rates:write", "wallet:workflow:approve", "wallet:workflow:reject",
+		"identity:review:read", "identity:review:decide", "wallet:transaction:resolve",
 	) {
 		return fmt.Errorf("%w: resource_client.roles must contain the exact membership and route permission vocabulary", ErrInvalidDesiredState)
 	}
@@ -409,23 +411,27 @@ func (s DesiredState) Validate() error {
 	if len(interactiveClientIDs) != 3 {
 		return fmt.Errorf("%w: interactive_clients must contain only noebs-mobile, noebs-backoffice, and %s", ErrInvalidDesiredState, walletAuthorizerClientID)
 	}
+	origin, err := s.PublicOrigin()
+	if err != nil {
+		return err
+	}
 	for _, client := range s.InteractiveClients {
 		switch client.ClientID {
 		case "noebs-mobile":
 			if client.Name != "Noebs Mobile" || client.AccessType != "public" || client.Credential != "" || client.AuthenticationLevel != 1 ||
-				!equalStrings(client.RedirectURIs, []string{"https://api.noebs.sd/mobile/oauth/callback"}) ||
+				!equalStrings(client.RedirectURIs, []string{origin + "/mobile/oauth/callback"}) ||
 				len(client.PostLogoutRedirectURIs) != 0 || len(client.WebOrigins) != 0 {
 				return fmt.Errorf("%w: noebs-mobile must declare the exact public LoA1 client", ErrInvalidDesiredState)
 			}
 		case "noebs-backoffice":
 			if client.Name != "Noebs Backoffice" || client.AccessType != "confidential" || client.Credential != "noebs-backoffice" || client.AuthenticationLevel != 1 ||
-				!equalStrings(client.RedirectURIs, []string{"https://api.noebs.sd/backoffice/oauth/callback"}) ||
-				!equalStrings(client.PostLogoutRedirectURIs, []string{"https://api.noebs.sd/backoffice/oauth/logout/callback"}) || len(client.WebOrigins) != 0 {
+				!equalStrings(client.RedirectURIs, []string{origin + "/backoffice/oauth/callback"}) ||
+				!equalStrings(client.PostLogoutRedirectURIs, []string{origin + "/backoffice/oauth/logout/callback"}) || len(client.WebOrigins) != 0 {
 				return fmt.Errorf("%w: noebs-backoffice must declare the exact confidential LoA1 client", ErrInvalidDesiredState)
 			}
 		case walletAuthorizerClientID:
 			if client.Name != "Noebs Wallet Authorizer" || client.AccessType != "confidential" || client.Credential != walletAuthorizerClientID || client.AuthenticationLevel != 2 ||
-				!equalStrings(client.RedirectURIs, []string{walletAuthorizationCallbackURI}) ||
+				!equalStrings(client.RedirectURIs, []string{origin + "/wallet/authorizations/oauth/callback"}) ||
 				len(client.PostLogoutRedirectURIs) != 0 || len(client.WebOrigins) != 0 {
 				return fmt.Errorf("%w: %s must declare the exact confidential one-request LoA2 client", ErrInvalidDesiredState, walletAuthorizerClientID)
 			}
@@ -466,7 +472,7 @@ func (s DesiredState) Validate() error {
 		}
 		serviceClientIDs[client.ClientID] = struct{}{}
 	}
-	if !exactStringSet(serviceClientIDs, temporalLedgerClientID, temporalWorkerClientID, temporalBootstrapClientID) {
+	if !exactStringSet(serviceClientIDs, temporalLedgerClientID, temporalWorkerClientID, temporalIdentityClientID, temporalIdentityWorkerClientID, temporalBootstrapClientID) {
 		return fmt.Errorf("%w: service_clients must contain the exact Temporal client set", ErrInvalidDesiredState)
 	}
 	if len(s.IdentityProviders) == 0 {
@@ -583,13 +589,14 @@ func (s DesiredState) Validate() error {
 					return fmt.Errorf("%w: organization user group must map only user", ErrInvalidDesiredState)
 				}
 			case "backoffice":
-				if !exactStringSet(mapped, "backoffice", "reporting:read", "wallet:read", "wallet:audit:read") {
+				if !exactStringSet(mapped, "backoffice", "reporting:read", "wallet:read", "wallet:audit:read", "identity:review:read") {
 					return fmt.Errorf("%w: organization backoffice group must map the read permission set", ErrInvalidDesiredState)
 				}
 			case "tenant-admin":
 				if !exactStringSet(mapped,
 					"tenant-admin", "reporting:read", "wallet:read", "wallet:audit:read", "wallet:manual:create",
 					"wallet:fees:write", "wallet:rates:write", "wallet:workflow:approve", "wallet:workflow:reject",
+					"identity:review:read", "identity:review:decide", "wallet:transaction:resolve",
 				) {
 					return fmt.Errorf("%w: organization tenant-admin group must map every route permission", ErrInvalidDesiredState)
 				}
@@ -614,6 +621,22 @@ func (s DesiredState) Validate() error {
 		}
 	}
 	return nil
+}
+
+// The mobile callback names the public deployment origin; all browser clients
+// must use this same origin and their fixed callback paths.
+func (s DesiredState) PublicOrigin() (string, error) {
+	for _, client := range s.InteractiveClients {
+		if client.ClientID != "noebs-mobile" || len(client.RedirectURIs) != 1 {
+			continue
+		}
+		parsed, err := url.Parse(client.RedirectURIs[0])
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Path != "/mobile/oauth/callback" || parsed.RawPath != "" || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || strings.ContainsAny(parsed.Host, "* \t\r\n") {
+			break
+		}
+		return "https://" + parsed.Host, nil
+	}
+	return "", fmt.Errorf("%w: mobile callback must declare an exact HTTPS deployment origin", ErrInvalidDesiredState)
 }
 
 func validateRedirectURIs(path string, values []string) error {

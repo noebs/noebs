@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adonese/noebs/internal/identitystate"
+
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -42,6 +44,7 @@ type IdentitySession struct {
 	DocumentType      string                     `json:"document_type"`
 	Synthetic         bool                       `json:"synthetic"`
 	Status            string                     `json:"status"`
+	Verification      identitystate.State        `json:"verification"`
 	Revision          int64                      `json:"revision"`
 	Evidence          []IdentityEvidenceMetadata `json:"evidence"`
 	CreatedAt         time.Time                  `json:"created_at"`
@@ -256,6 +259,9 @@ func (s *Store) SubmitIdentitySession(ctx context.Context, owner IdentityOwner, 
 	if result.Status != "draft" || submission.Revision != result.Revision {
 		return IdentitySession{}, ErrIdentityConflict
 	}
+	if err := identityTransition(result.Status, "submitted"); err != nil {
+		return IdentitySession{}, err
+	}
 	kinds := map[string]bool{}
 	for _, evidence := range result.Evidence {
 		kinds[evidence.Kind] = true
@@ -302,6 +308,9 @@ func (s *Store) DiscardIdentitySession(ctx context.Context, owner IdentityOwner,
 	if result.Status != "draft" || revision != result.Revision {
 		return IdentitySession{}, ErrIdentityConflict
 	}
+	if err := identityTransition(result.Status, "discarded"); err != nil {
+		return IdentitySession{}, err
+	}
 	_, err = tx.ExecContext(ctx, `DELETE FROM identity_evidence WHERE tenant_id=$1 AND user_id=$2 AND session_id=$3`, owner.TenantID, owner.UserID, id)
 	if err != nil {
 		return IdentitySession{}, err
@@ -338,6 +347,10 @@ func identitySnapshot(ctx context.Context, tx *sqlx.Tx, owner IdentityOwner, id 
 		WHERE tenant_id=$1 AND user_id=$2 AND id=$3`+lock, owner.TenantID, owner.UserID, id).Scan(
 		&result.ID, &result.DocumentType, &result.Synthetic, &result.Status, &result.Revision,
 		&result.CreatedAt, &result.UpdatedAt, &submission, &result.submissionHash, &previous, &review)
+	if err != nil {
+		return IdentitySession{}, err
+	}
+	result.Verification, err = identitystate.FromSession(result.Status)
 	if err != nil {
 		return IdentitySession{}, err
 	}

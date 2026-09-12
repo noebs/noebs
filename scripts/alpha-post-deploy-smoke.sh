@@ -224,12 +224,12 @@ topology_drift_count="$("${kubectl_cmd[@]}" -n "$namespace" exec postgres-0 -- s
 [[ "$authority_marker_status" == current ]] || fail "Postgres authority marker is missing"
 [[ "$topology_drift_count" == 0 ]] || fail "Postgres role or service-database topology drift count is $topology_drift_count"
 for actual_expected_label in \
-    "$identity_migrations|0:true,1:true,2:true,3:true|identity-auth" \
+    "$identity_migrations|0:true,1:true,2:true,3:true,4:true|identity-auth" \
     "$card_vault_migrations|0:true,1:true|card-vault" \
     "$ebs_adapter_migrations|0:true,1:true|ebs-adapter" \
     "$admin_reporting_migrations|0:true,1:true|admin-reporting" \
-    "$notification_chat_migrations|0:true,1:true|notification-chat" \
-    "$wallet_ledger_migrations|0:true,1:true,2:true,3:true,4:true,5:true,6:true|wallet-ledger" \
+    "$notification_chat_migrations|0:true,1:true,2:true|notification-chat" \
+    "$wallet_ledger_migrations|0:true,1:true,2:true,3:true,4:true,5:true,6:true,7:true|wallet-ledger" \
     "$workload_auth_migrations|0:true,1:true|workload-auth" \
     "$gateway_auth_migrations|0:true,1:true,2:true|gateway-auth"
 do

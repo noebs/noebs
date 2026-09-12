@@ -19,10 +19,13 @@ templ adminLayout(title string, tenantID string) {
 		<head>
 			<meta name="viewport" content="width=device-width, initial-scale=1">
 			<title>{ title }</title>
+            <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"includeIndicatorStyles":false,"historyCacheSize":0}'>
+            <script defer src="/backoffice/assets/htmx.min.js"></script>
+            <script defer src="/backoffice/assets/operations.js"></script>
 			<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
 			<link rel="stylesheet" href="/backoffice/assets/style.css">
 		</head>
-		<body>
+		<body hx-history="false">
 			<nav class="navbar navbar-dark fixed-top bg-dark">
 				<div class="container">
 					<a class="navbar-brand" href={ adminWalletPath(tenantID, "") }>Wallet Admin</a>
@@ -32,7 +35,7 @@ templ adminLayout(title string, tenantID string) {
 					</form>
 				</div>
 			</nav>
-			<main role="main" class="container">
+			<main role="main" id="wallet-main" class="container">
 				<div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
 					<div>
 						<h1 class="h3 mb-1">{ title }</h1>
@@ -356,8 +359,8 @@ templ AuditLogPage(data AuditLogView) {
 }
 
 templ PSPTransactionsPage(data PSPTransactionsView) {
-	@adminLayout("PSP Transactions", data.TenantID) {
-		<form method="get" class="mb-3">
+ @adminLayout("PSP Transactions", data.TenantID) {
+  <form method="get" class="mb-3" hx-get={ adminWalletPath(data.TenantID, "/transactions") } hx-target="#wallet-main" hx-select="#wallet-main" hx-swap="outerHTML" hx-push-url="true">
 			<div class="form-row">
 				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="status" placeholder="Status" value={ data.Filter.Status }>
@@ -401,7 +404,9 @@ templ PSPTransactionsPage(data PSPTransactionsView) {
 							<th>Client Ref</th>
 							<th>Provider</th>
 							<th>Direction</th>
-							<th>Provider status</th>
+							<th>Status</th>
+ <th>Substatus</th>
+ <th>Provider status</th>
 							<th>Amount (minor units)</th>
 							<th>Currency / unit version</th>
 							<th>Orchestration workflow</th>
@@ -414,7 +419,9 @@ templ PSPTransactionsPage(data PSPTransactionsView) {
 								<td><a href={ adminWalletPath(data.TenantID, "/transactions/" + txn.ClientReference) }>{ txn.ClientReference }</a></td>
 								<td>{ txn.PSPProvider }</td>
 								<td>{ txn.Direction }</td>
-								<td>{ txn.Status }</td>
+								<td>{ txn.LifecycleStatus }</td>
+ <td>{ txn.Substatus }</td>
+ <td>{ txn.Status }</td>
 								<td>{ txn.Amount }</td>
 								<td>{ txn.Currency } / { txn.CurrencyUnitID }</td>
 								<td>{ formatNullString(txn.WorkflowID) }</td>
@@ -438,7 +445,9 @@ templ PSPTransactionDetailPage(data PSPTransactionDetailView) {
 				</div>
 				<p class="card-text">Provider: { data.Transaction.PSPProvider }</p>
 				<p class="card-text">Direction: { data.Transaction.Direction }</p>
-				<p class="card-text">Provider status: { data.Transaction.Status }</p>
+				<p class="card-text">Status: { data.Transaction.LifecycleStatus } / { data.Transaction.Substatus }</p>
+ <p class="card-text">Version: { data.Transaction.StatusVersion }</p>
+ <p class="card-text">Provider status: { data.Transaction.Status }</p>
 				<p class="card-text">Amount (minor units): { data.Transaction.Amount } { data.Transaction.Currency }</p>
 				<p class="card-text">Currency unit version: { data.Transaction.CurrencyUnitID }</p>
 				<p class="card-text">Orchestration workflow: { formatNullString(data.Transaction.WorkflowID) }</p>
@@ -451,6 +460,8 @@ templ PSPTransactionDetailPage(data PSPTransactionDetailView) {
 			</div>
 		</div>
 		<p class="text-muted">Raw provider payloads are not shown in this view.</p>
+        @PSPTransactionResolution(data)
+
 	}
 }
 
@@ -829,4 +840,30 @@ templ RatesPage(data RateView) {
 			</div>
 		}
 	}
+}
+
+templ PSPTransactionResolution(data PSPTransactionDetailView) {
+ <div id="review-feedback" role="status" aria-live="polite"></div>
+ if data.CanResolve && canResolveTransaction(data.Transaction) {
+  <section class="card mb-3"><div class="card-body">
+   <h2 class="h5">Record an external outcome</h2>
+   <p>Record the result of manual intervention or offline fulfillment. The workflow will apply the corresponding ledger settlement.</p>
+   <form method="post" action={ adminWalletPath(data.TenantID, "/transactions/" + data.Transaction.ClientReference + "/resolve") } hx-post={ adminWalletPath(data.TenantID, "/transactions/" + data.Transaction.ClientReference + "/resolve") } hx-target="#review-feedback" hx-disabled-elt="find button">
+    <input type="hidden" name="_csrf" value={ backofficeCSRF(ctx) }>
+    <input type="hidden" name="idempotency_key" value={ data.IdempotencyKey }>
+    <input type="hidden" name="expected_version" value={ data.Transaction.StatusVersion }>
+    <div class="form-group"><label for="resolution-status">Outcome</label><select class="form-control" id="resolution-status" name="status" required><option value="">Choose an outcome</option><option value="success">Fulfilled</option><option value="failed">Failed</option></select></div>
+    <div class="form-group"><label for="resolution-method">Fulfillment method</label><select class="form-control" id="resolution-method" name="fulfillment_method" required><option value="">Choose a method</option><option value="manual">Manual intervention</option><option value="offline">Offline</option></select></div>
+    <div class="form-group"><label for="resolution-reason">Reason</label><textarea class="form-control" id="resolution-reason" name="reason" rows="3" maxlength="4096" required></textarea></div>
+    <div class="form-group"><label for="resolution-evidence">Evidence reference</label><input class="form-control" id="resolution-evidence" name="evidence_reference" maxlength="4096" required></div>
+    <div class="form-group"><label for="resolution-settlement">Settlement reference (required when fulfilled; leave empty when failed)</label><input class="form-control" id="resolution-settlement" name="settlement_reference" maxlength="255"></div>
+    <button class="btn btn-primary" type="submit">Record outcome</button>
+   </form>
+  </div></section>
+ }
+ <section><h2 class="h5">Status history</h2><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Time</th><th>Status</th><th>Substatus</th><th>Version</th><th>Operator</th><th>Reason</th><th>Evidence</th></tr></thead><tbody>
+ for _, event := range data.Events {
+  <tr><td>{ formatTime(event.CreatedAt) }</td><td>{ event.Status }</td><td>{ event.Substatus }</td><td>{ event.Version }</td><td>{ formatNullInt(event.OperatorID) }</td><td>{ formatNullString(event.Reason) }</td><td>{ formatNullString(event.EvidenceReference) }</td></tr>
+ }
+ </tbody></table></div></section>
 }

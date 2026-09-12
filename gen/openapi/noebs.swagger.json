@@ -693,7 +693,8 @@
         "ADMIN_WALLET_ACTION_LIST_RATES",
         "ADMIN_WALLET_ACTION_CREATE_RATE",
         "ADMIN_WALLET_ACTION_APPROVE_TRANSFER",
-        "ADMIN_WALLET_ACTION_REJECT_TRANSFER"
+        "ADMIN_WALLET_ACTION_REJECT_TRANSFER",
+        "ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION"
       ],
       "default": "ADMIN_WALLET_ACTION_UNSPECIFIED"
     },
@@ -1141,6 +1142,12 @@
         },
         "updatedAt": {
           "type": "string"
+        },
+        "lifecycleStatus": {
+          "type": "string"
+        },
+        "substatus": {
+          "type": "string"
         }
       }
     },
@@ -1351,6 +1358,12 @@
           "type": "string"
         },
         "toOwnerId": {
+          "type": "string"
+        },
+        "lifecycleStatus": {
+          "type": "string"
+        },
+        "substatus": {
           "type": "string"
         }
       }

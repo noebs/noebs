@@ -437,6 +437,10 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 			noebs["internal_transport"] = transport.configForRole(role)
 		}
 		switch role {
+		case serviceRoleIdentityAuth:
+			noebs["temporal_client_secret"] = testCanonicalReleaseSecret(72)
+			noebs["temporal_ca_certificate"] = transport.caCertificate
+			noebs["keycloak_ca_certificate"] = transport.caCertificate
 		case serviceRoleWalletLedger:
 			noebs["temporal_client_secret"] = testCanonicalReleaseSecret(70)
 			noebs["temporal_ca_certificate"] = transport.caCertificate

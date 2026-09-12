@@ -43,6 +43,7 @@ const (
 	AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_RATE            AdminWalletAction = 14
 	AdminWalletAction_ADMIN_WALLET_ACTION_APPROVE_TRANSFER       AdminWalletAction = 15
 	AdminWalletAction_ADMIN_WALLET_ACTION_REJECT_TRANSFER        AdminWalletAction = 16
+	AdminWalletAction_ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION    AdminWalletAction = 17
 )
 
 // Enum value maps for AdminWalletAction.
@@ -65,6 +66,7 @@ var (
 		14: "ADMIN_WALLET_ACTION_CREATE_RATE",
 		15: "ADMIN_WALLET_ACTION_APPROVE_TRANSFER",
 		16: "ADMIN_WALLET_ACTION_REJECT_TRANSFER",
+		17: "ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION",
 	}
 	AdminWalletAction_value = map[string]int32{
 		"ADMIN_WALLET_ACTION_UNSPECIFIED":            0,
@@ -84,6 +86,7 @@ var (
 		"ADMIN_WALLET_ACTION_CREATE_RATE":            14,
 		"ADMIN_WALLET_ACTION_APPROVE_TRANSFER":       15,
 		"ADMIN_WALLET_ACTION_REJECT_TRANSFER":        16,
+		"ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION":    17,
 	}
 )
 
@@ -1596,6 +1599,8 @@ type P2PTransferStatus struct {
 	ErrorCode           string                 `protobuf:"bytes,13,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
 	CreatedAt           string                 `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	ToOwnerId           string                 `protobuf:"bytes,15,opt,name=to_owner_id,json=toOwnerId,proto3" json:"to_owner_id,omitempty"`
+	LifecycleStatus     string                 `protobuf:"bytes,16,opt,name=lifecycle_status,json=lifecycleStatus,proto3" json:"lifecycle_status,omitempty"`
+	Substatus           string                 `protobuf:"bytes,17,opt,name=substatus,proto3" json:"substatus,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -1731,6 +1736,20 @@ func (x *P2PTransferStatus) GetCreatedAt() string {
 func (x *P2PTransferStatus) GetToOwnerId() string {
 	if x != nil {
 		return x.ToOwnerId
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetLifecycleStatus() string {
+	if x != nil {
+		return x.LifecycleStatus
+	}
+	return ""
+}
+
+func (x *P2PTransferStatus) GetSubstatus() string {
+	if x != nil {
+		return x.Substatus
 	}
 	return ""
 }
@@ -4830,6 +4849,8 @@ type InteropTransfer struct {
 	ErrorCode           string                 `protobuf:"bytes,9,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
 	CreatedAt           string                 `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt           string                 `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	LifecycleStatus     string                 `protobuf:"bytes,12,opt,name=lifecycle_status,json=lifecycleStatus,proto3" json:"lifecycle_status,omitempty"`
+	Substatus           string                 `protobuf:"bytes,13,opt,name=substatus,proto3" json:"substatus,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -4937,6 +4958,20 @@ func (x *InteropTransfer) GetCreatedAt() string {
 func (x *InteropTransfer) GetUpdatedAt() string {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *InteropTransfer) GetLifecycleStatus() string {
+	if x != nil {
+		return x.LifecycleStatus
+	}
+	return ""
+}
+
+func (x *InteropTransfer) GetSubstatus() string {
+	if x != nil {
+		return x.Substatus
 	}
 	return ""
 }
@@ -5687,7 +5722,7 @@ const file_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	" \x01(\tR\x13currencyUnitVersion\"c\n" +
 	"\x1bGetP2PTransferStatusRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12'\n" +
-	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\"\xb4\x04\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\"\xfd\x04\n" +
 	"\x11P2PTransferStatus\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12'\n" +
 	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12!\n" +
@@ -5707,7 +5742,9 @@ const file_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"error_code\x18\r \x01(\tR\terrorCode\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\x0e \x01(\tR\tcreatedAt\x12\x1e\n" +
-	"\vto_owner_id\x18\x0f \x01(\tR\ttoOwnerId\"T\n" +
+	"\vto_owner_id\x18\x0f \x01(\tR\ttoOwnerId\x12)\n" +
+	"\x10lifecycle_status\x18\x10 \x01(\tR\x0flifecycleStatus\x12\x1c\n" +
+	"\tsubstatus\x18\x11 \x01(\tR\tsubstatus\"T\n" +
 	"\x1aRequestP2PTransferResponse\x12\x1f\n" +
 	"\vworkflow_id\x18\x01 \x01(\tR\n" +
 	"workflowId\x12\x15\n" +
@@ -5984,7 +6021,7 @@ const file_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1f\n" +
 	"\vtransfer_id\x18\x02 \x01(\tR\n" +
 	"transferId\x12'\n" +
-	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"\x86\x03\n" +
+	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"\xcf\x03\n" +
 	"\x0fInteropTransfer\x12\x1f\n" +
 	"\vtransfer_id\x18\x01 \x01(\tR\n" +
 	"transferId\x12\x19\n" +
@@ -6001,7 +6038,9 @@ const file_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"created_at\x18\n" +
 	" \x01(\tR\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\v \x01(\tR\tupdatedAt\"6\n" +
+	"updated_at\x18\v \x01(\tR\tupdatedAt\x12)\n" +
+	"\x10lifecycle_status\x18\f \x01(\tR\x0flifecycleStatus\x12\x1c\n" +
+	"\tsubstatus\x18\r \x01(\tR\tsubstatus\"6\n" +
 	"\x17GetWalletAccountRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\"x\n" +
 	"\rWalletAccount\x12\x17\n" +
@@ -6046,7 +6085,7 @@ const file_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\x15currency_unit_version\x18\v \x01(\tR\x13currencyUnitVersion\x12*\n" +
 	"\x11input_schema_json\x18\f \x01(\tR\x0finputSchemaJson\"b\n" +
 	" ListWalletFundingMethodsResponse\x12>\n" +
-	"\amethods\x18\x01 \x03(\v2$.noebs.wallet.v1.WalletFundingMethodR\amethods*\xc7\x05\n" +
+	"\amethods\x18\x01 \x03(\v2$.noebs.wallet.v1.WalletFundingMethodR\amethods*\xf4\x05\n" +
 	"\x11AdminWalletAction\x12#\n" +
 	"\x1fADMIN_WALLET_ACTION_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dADMIN_WALLET_ACTION_DASHBOARD\x10\x01\x12$\n" +
@@ -6065,7 +6104,8 @@ const file_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\x1eADMIN_WALLET_ACTION_LIST_RATES\x10\r\x12#\n" +
 	"\x1fADMIN_WALLET_ACTION_CREATE_RATE\x10\x0e\x12(\n" +
 	"$ADMIN_WALLET_ACTION_APPROVE_TRANSFER\x10\x0f\x12'\n" +
-	"#ADMIN_WALLET_ACTION_REJECT_TRANSFER\x10\x102\xc0\x1e\n" +
+	"#ADMIN_WALLET_ACTION_REJECT_TRANSFER\x10\x10\x12+\n" +
+	"'ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION\x10\x112\xc0\x1e\n" +
 	"\x13WalletPublicService\x12^\n" +
 	"\x10GetWalletAccount\x12(.noebs.wallet.v1.GetWalletAccountRequest\x1a\x1e.noebs.wallet.v1.WalletAccount\"\x00\x12r\n" +
 	"\x13ListWalletProviders\x12+.noebs.wallet.v1.ListWalletProvidersRequest\x1a,.noebs.wallet.v1.ListWalletProvidersResponse\"\x00\x12\x81\x01\n" +

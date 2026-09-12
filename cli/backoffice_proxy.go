@@ -277,5 +277,12 @@ func backofficeRouteSpecs() []backofficeRouteSpec {
 		write("/backoffice/t/:tenant/wallet/approve/:workflow_id", "/admin/wallet/approve/:workflow_id", tenantauth.PermissionWalletWorkflowApprove),
 		write("/backoffice/t/:tenant/wallet/reject/:workflow_id", "/admin/wallet/reject/:workflow_id", tenantauth.PermissionWalletWorkflowReject),
 	}
+	identityBase := "/backoffice/t/:tenant/verifications"
+	for _, suffix := range []string{"", "/:user_id/:session_id", "/:user_id/:session_id/evidence/:kind"} {
+		routes = append(routes, read(http.MethodGet, identityBase+suffix, "/admin/identity"+suffix, serviceRoleIdentityAuth, tenantauth.PermissionIdentityReviewRead))
+	}
+	routes = append(routes, backofficeRouteSpec{method: http.MethodPost, path: identityBase + "/:user_id/:session_id/decision", upstreamPath: "/admin/identity/:user_id/:session_id/decision", role: serviceRoleIdentityAuth, permission: tenantauth.PermissionIdentityReviewDecide, roles: backofficeWriteRoles})
+	routes = append(routes, write("/backoffice/t/:tenant/wallet/transactions/:client_reference/resolve", "/admin/wallet/transactions/:client_reference/resolve", tenantauth.PermissionWalletTransactionResolve))
+
 	return routes
 }

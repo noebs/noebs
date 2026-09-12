@@ -241,6 +241,7 @@ func TestServiceRoleDatabaseOwnerKeys(t *testing.T) {
 
 func TestServiceRoleTemporalOwnership(t *testing.T) {
 	temporalRoles := []serviceRole{
+		serviceRoleIdentityAuth,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
 	}
@@ -317,6 +318,10 @@ func validWalletRuntimeConfig(role serviceRole) ebs_fields.NoebsConfig {
 		WalletReconciliationCron:                   "0 3 * * *",
 		WalletReconciliationBatchSize:              500,
 		WalletReconciliationLookbackHours:          24,
+		KafkaBrokers:                               []string{"kafka:9092"},
+		KafkaStatusTopic:                           "noebs.status.changed.v1",
+		StatusEventBatchSize:                       100,
+		StatusEventPollIntervalMs:                  1000,
 	})
 }
 
@@ -541,7 +546,11 @@ func kafkaProjectionRuntimeConfig() ebs_fields.NoebsConfig {
 }
 
 func identityAuthRuntimeConfig() ebs_fields.NoebsConfig {
-	return runtimeConfigForRole(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{})
+	return runtimeConfigForRole(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{
+		TemporalEnabled: true, TemporalHost: "temporal-frontend", TemporalPort: "7233", TemporalNamespace: "default", TemporalServerName: "temporal-frontend",
+		TemporalCACertificate: testKeycloakCACertificate, TemporalTokenURL: "https://identity.example/realms/noebs/protocol/openid-connect/token",
+		TemporalClientID: temporalIdentityClientID, TemporalClientSecret: "identity-auth-secret", KeycloakCACertificate: testKeycloakCACertificate,
+	})
 }
 
 func TestServiceRoleRuntimeConfigRequiresExplicitWalletConfig(t *testing.T) {

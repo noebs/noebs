@@ -114,6 +114,7 @@ enum AdminWalletAction {
   ADMIN_WALLET_ACTION_CREATE_RATE = 14;
   ADMIN_WALLET_ACTION_APPROVE_TRANSFER = 15;
   ADMIN_WALLET_ACTION_REJECT_TRANSFER = 16;
+  ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION = 17;
 }
 
 message RenderWalletAdminRequest {
@@ -288,6 +289,8 @@ message P2PTransferStatus {
   string error_code = 13;
   string created_at = 14;
   string to_owner_id = 15;
+  string lifecycle_status = 16;
+  string substatus = 17;
 }
 
 message RequestP2PTransferResponse {
@@ -595,6 +598,7 @@ message InteropTransfer {
  string hub_state = 4; string amount_minor = 5; string currency = 6;
  string currency_unit_version = 7; string ledger_transaction_id = 8;
  string error_code = 9; string created_at = 10; string updated_at = 11;
+ string lifecycle_status = 12; string substatus = 13;
 }
 
 // Account restoration and provider discovery use the same NoEBS identity as all

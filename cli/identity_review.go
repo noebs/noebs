@@ -12,7 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/verification"
 	"github.com/adonese/noebs/store"
+	walletworker "github.com/adonese/noebs/wallet/worker"
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 )
@@ -26,6 +29,7 @@ type identityReviewCommandOptions struct {
 	limit, offset                                                                               int
 	evidenceReviewed                                                                            bool
 	kind                                                                                        string
+	config, service                                                                             string
 }
 
 func parseIdentityReviewOptions(args []string) (identityReviewCommandOptions, error) {
@@ -33,6 +37,8 @@ func parseIdentityReviewOptions(args []string) (identityReviewCommandOptions, er
 	flags := flag.NewFlagSet("identity-review", flag.ContinueOnError)
 	flags.StringVar(&options.action, "action", "", "queue, case, evidence, or decide")
 	flags.StringVar(&options.secrets, "secrets", "", "identity-auth runtime secrets YAML")
+	flags.StringVar(&options.config, "config", defaultConfigPath, "application YAML for Temporal decisions")
+	flags.StringVar(&options.service, "service", defaultServiceConfigPath, "identity-auth service YAML for Temporal decisions")
 	flags.StringVar(&options.tenant, "tenant", "", "explicit tenant to review")
 	flags.StringVar(&options.reviewer, "reviewer", "", "accountable reviewer identity (recorded with the database login)")
 	flags.StringVar(&options.session, "session", "", "canonical case UUID")
@@ -130,17 +136,26 @@ func runIdentityReview(args []string, stdout io.Writer, openDB func(string) (*st
 			return errors.New("decision reason must contain 1–2000 bytes")
 		}
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	reviewer := store.IdentityReviewer{TenantID: options.tenant, Actor: options.reviewer}
+	owner := store.IdentityOwner{TenantID: options.tenant, UserID: options.userID}
+	session, _ := uuid.Parse(options.session)
+	if options.action == "decide" {
+		operation, _ := uuid.Parse(options.operation)
+		decision := store.IdentityReviewDecisionParams{Reviewer: reviewer, Owner: owner, SessionID: session, OperationID: operation, Revision: options.revision, Decision: options.decision, Reason: reason, PolicyReference: options.policy, EvidenceReviewed: options.evidenceReviewed}
+		result, err := executeIdentityReviewDecision(ctx, options, decision)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(stdout).Encode(map[string]any{"session_id": result.ID, "status": result.Status, "revision": result.Revision, "operation_id": operation})
+	}
 	db, err := openDB(options.secrets)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = db.Close() }()
 	identityStore := store.New(db)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	reviewer := store.IdentityReviewer{TenantID: options.tenant, Actor: options.reviewer}
-	owner := store.IdentityOwner{TenantID: options.tenant, UserID: options.userID}
-	session, _ := uuid.Parse(options.session)
 	switch options.action {
 	case "queue":
 		cases, err := identityStore.ListIdentityReviewQueue(ctx, reviewer, options.limit, options.offset)
@@ -164,14 +179,6 @@ func runIdentityReview(args []string, stdout io.Writer, openDB func(string) (*st
 		if _, err = output.Write(payload); err != nil {
 			return err
 		}
-	case "decide":
-		operation, _ := uuid.Parse(options.operation)
-		result, err := identityStore.DecideIdentityReview(ctx, store.IdentityReviewDecisionParams{Reviewer: reviewer, Owner: owner, SessionID: session, OperationID: operation, Revision: options.revision, Decision: options.decision, Reason: reason, PolicyReference: options.policy, EvidenceReviewed: options.evidenceReviewed})
-		if err != nil {
-			return err
-		}
-		// Customer claims, evidence and review reason are not emitted into command logs.
-		return json.NewEncoder(stdout).Encode(map[string]any{"session_id": result.ID, "status": result.Status, "revision": result.Revision, "operation_id": operation})
 	}
 	if err = output.Sync(); err != nil {
 		return err
@@ -182,6 +189,51 @@ func runIdentityReview(args []string, stdout io.Writer, openDB func(string) (*st
 	completed = true
 	_, err = fmt.Fprintln(stdout, "Private review file created.")
 	return err
+}
+
+func executeIdentityReviewDecision(ctx context.Context, options identityReviewCommandOptions, decision store.IdentityReviewDecisionParams) (store.IdentitySession, error) {
+	if err := store.ValidateIdentityReviewDecision(decision); err != nil {
+		return store.IdentitySession{}, err
+	}
+	merged := map[string]interface{}{}
+	for _, path := range []string{options.config, options.service, options.secrets} {
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			return store.IdentitySession{}, errors.New("cannot read identity decision runtime configuration")
+		}
+		var document map[string]interface{}
+		if err := yaml.Unmarshal(payload, &document); err != nil {
+			return store.IdentitySession{}, errors.New("invalid identity decision runtime configuration")
+		}
+		merged = mergeConfig(merged, document).(map[string]interface{})
+	}
+	payload, err := json.Marshal(getMap(merged, "noebs"))
+	if err != nil {
+		return store.IdentitySession{}, err
+	}
+	var cfg ebs_fields.NoebsConfig
+	if err := json.Unmarshal(payload, &cfg); err != nil {
+		return store.IdentitySession{}, err
+	}
+	if cfg.ServiceRole != string(serviceRoleIdentityAuth) {
+		return store.IdentitySession{}, errors.New("identity decisions require identity-auth runtime configuration")
+	}
+	opts, err := buildTemporalOptions(ctx, cfg, walletworker.TaskQueue(verification.TaskQueue), temporalIdentityClientID)
+	if err != nil {
+		return store.IdentitySession{}, err
+	}
+	connection, err := walletworker.NewClient(ctx, opts)
+	if err != nil {
+		return store.IdentitySession{}, err
+	}
+	defer connection.Close()
+	db, err := openIdentityReviewDatabase(options.secrets)
+	if err != nil {
+		return store.IdentitySession{}, err
+	}
+	defer db.Close()
+	workflow := &verification.Client{Temporal: connection, Sessions: store.New(db)}
+	return workflow.Execute(ctx, verification.Command{Action: "decide", Owner: decision.Owner, SessionID: decision.SessionID, Decision: decision})
 }
 
 func identityReviewOutputPath(path string) (string, error) {

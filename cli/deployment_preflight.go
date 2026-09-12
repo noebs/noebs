@@ -981,13 +981,17 @@ func validateKeycloakConfig(path string, requirePublicContract bool) error {
 	if !requirePublicContract {
 		return validateKeycloakDatabaseConfig(values)
 	}
+	if _, err := keycloakPublicOrigin(values["hostname"]); err != nil {
+		return err
+	}
+	if err := validateKeycloakProxyAddress(values["proxy-trusted-addresses"]); err != nil {
+		return err
+	}
 	for key, expected := range map[string]string{
 		"http-relative-path":           "/auth",
-		"hostname":                     "https://api.noebs.sd/auth",
 		"hostname-strict":              "true",
 		"hostname-backchannel-dynamic": "false",
 		"proxy-headers":                "xforwarded",
-		"proxy-trusted-addresses":      "10.42.0.1/32",
 	} {
 		if values[key] != expected {
 			return fmt.Errorf("keycloak config %s must be %q", key, expected)

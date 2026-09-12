@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/verification"
 	"github.com/adonese/noebs/store"
 	walletworker "github.com/adonese/noebs/wallet/worker"
 )
@@ -143,7 +144,7 @@ func (r serviceRole) opensDatabase() bool {
 }
 
 func (r serviceRole) requiresTemporal() bool {
-	return r == serviceRoleWalletLedger || r == serviceRoleWalletWorker
+	return r == serviceRoleIdentityAuth || r == serviceRoleWalletLedger || r == serviceRoleWalletWorker
 }
 
 func validateRoleDatabaseConfig(role serviceRole, dbURL, driver string) error {
@@ -237,10 +238,15 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 			return fmt.Errorf("%w: %s", errTemporalNotEnabled, role)
 		}
 		expectedClientID := temporalLedgerClientID
+		taskQueue := walletworker.TaskQueueMain
+		if role == serviceRoleIdentityAuth {
+			expectedClientID = temporalIdentityClientID
+			taskQueue = walletworker.TaskQueue(verification.TaskQueue)
+		}
 		if role == serviceRoleWalletWorker {
 			expectedClientID = temporalWorkerClientID
 		}
-		if _, err := buildTemporalOptions(context.Background(), cfg, walletworker.TaskQueueMain, expectedClientID); err != nil {
+		if _, err := buildTemporalOptions(context.Background(), cfg, taskQueue, expectedClientID); err != nil {
 			return fmt.Errorf("%s temporal config: %w", role, err)
 		}
 	}
@@ -365,19 +371,14 @@ func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) erro
 }
 
 func validateKafkaRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	if role == serviceRoleWalletWorker || role == serviceRoleNotification {
+		return validateStatusKafkaRuntimeConfig(cfg, role == serviceRoleWalletWorker)
+	}
 	if role != serviceRoleEBSAdapter && role != serviceRoleEBSAdapterEvents && role != serviceRoleAdminReportingProjector {
 		return nil
 	}
-	if len(cfg.KafkaBrokers) == 0 {
-		return fmt.Errorf("%w: noebs.kafka_brokers", errMissingKafkaConfig)
-	}
-	for i, broker := range cfg.KafkaBrokers {
-		if strings.TrimSpace(broker) == "" {
-			return fmt.Errorf("%w: noebs.kafka_brokers[%d]", errMissingKafkaConfig, i)
-		}
-		if err := validateHostPortServiceDiscoveryEndpoint(fmt.Sprintf("noebs.kafka_brokers[%d]", i), broker); err != nil {
-			return err
-		}
+	if err := validateKafkaBrokers(cfg.KafkaBrokers); err != nil {
+		return err
 	}
 	if strings.TrimSpace(cfg.KafkaTransactionTopic) == "" {
 		return fmt.Errorf("%w: noebs.kafka_transaction_topic", errMissingKafkaConfig)
@@ -494,4 +495,55 @@ func (r serviceRole) migrationScope() (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func validateKafkaBrokers(brokers []string) error {
+	if len(brokers) == 0 {
+		return fmt.Errorf("%w: noebs.kafka_brokers", errMissingKafkaConfig)
+	}
+	for index, broker := range brokers {
+		if strings.TrimSpace(broker) == "" {
+			return fmt.Errorf("%w: noebs.kafka_brokers[%d]", errMissingKafkaConfig, index)
+		}
+		if err := validateHostPortServiceDiscoveryEndpoint(fmt.Sprintf("noebs.kafka_brokers[%d]", index), broker); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateStatusKafkaRuntimeConfig(cfg ebs_fields.NoebsConfig, publisher bool) error {
+	if err := validateKafkaBrokers(cfg.KafkaBrokers); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.KafkaStatusTopic) == "" {
+		return fmt.Errorf("%w: noebs.kafka_status_topic", errMissingKafkaConfig)
+	}
+	if publisher {
+		if cfg.StatusEventBatchSize <= 0 {
+			return fmt.Errorf("%w: noebs.status_event_batch_size", errMissingKafkaConfig)
+		}
+		if cfg.StatusEventPollIntervalMs <= 0 {
+			return fmt.Errorf("%w: noebs.status_event_poll_interval_ms", errMissingKafkaConfig)
+		}
+	} else if strings.TrimSpace(cfg.StatusNotificationConsumerGroup) == "" {
+		return fmt.Errorf("%w: noebs.status_notification_consumer_group", errMissingKafkaConfig)
+	}
+	return nil
+}
+
+func validateIdentityWorkerDependencies(cfg ebs_fields.NoebsConfig) error {
+	if cfg.ServiceRole != string(serviceRoleIdentityAuth) {
+		return fmt.Errorf("identity-worker requires identity-auth service database configuration")
+	}
+	if strings.TrimSpace(cfg.Port) == "" {
+		return fmt.Errorf("%w: identity-worker requires noebs.port", errMissingHealthPort)
+	}
+	if !cfg.TemporalEnabled {
+		return fmt.Errorf("%w: identity-worker", errTemporalNotEnabled)
+	}
+	if _, err := buildTemporalOptions(context.Background(), cfg, walletworker.TaskQueue(verification.TaskQueue), temporalIdentityWorkerClientID); err != nil {
+		return err
+	}
+	return validateStatusKafkaRuntimeConfig(cfg, true)
 }

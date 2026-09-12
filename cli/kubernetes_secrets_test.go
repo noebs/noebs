@@ -47,6 +47,7 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 		"keycloak-transport-ca":                    false,
 		"keycloak-reconciler-credentials":          false,
 		"ghcr-credentials":                         false,
+		"identity-worker-secrets":                  false,
 	}
 	for _, source := range kubernetesServiceSecretSources {
 		expectedNames[source.secretName] = false
@@ -99,6 +100,11 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 	}
 	requireRenderedSecretContains(t, secrets, "ghcr-credentials", ".dockerconfigjson", `"ghcr.io"`)
 	requireRenderedSecretContains(t, secrets, "ebs-adapter-secrets", "secrets.yaml", "consumer_endpoint")
+	requireRenderedSecretContains(t, secrets, "identity-auth-secrets", "secrets.yaml", testCanonicalReleaseSecret(31))
+	requireRenderedSecretContains(t, secrets, "identity-worker-secrets", "secrets.yaml", testCanonicalReleaseSecret(32))
+	if strings.Contains(secretByName(t, secrets, "identity-worker-secrets").StringData["secrets.yaml"], testCanonicalReleaseSecret(31)) {
+		t.Fatal("identity worker received the API's Temporal credential")
+	}
 	for _, test := range []struct {
 		secretName string
 		wantKey    string

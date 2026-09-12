@@ -28,14 +28,17 @@ const (
 type Permission string
 
 const (
-	PermissionReportingRead         Permission = "reporting:read"
-	PermissionWalletRead            Permission = "wallet:read"
-	PermissionWalletAuditRead       Permission = "wallet:audit:read"
-	PermissionWalletManualCreate    Permission = "wallet:manual:create"
-	PermissionWalletFeesWrite       Permission = "wallet:fees:write"
-	PermissionWalletRatesWrite      Permission = "wallet:rates:write"
-	PermissionWalletWorkflowApprove Permission = "wallet:workflow:approve"
-	PermissionWalletWorkflowReject  Permission = "wallet:workflow:reject"
+	PermissionIdentityReviewRead       Permission = "identity:review:read"
+	PermissionIdentityReviewDecide     Permission = "identity:review:decide"
+	PermissionWalletTransactionResolve Permission = "wallet:transaction:resolve"
+	PermissionReportingRead            Permission = "reporting:read"
+	PermissionWalletRead               Permission = "wallet:read"
+	PermissionWalletAuditRead          Permission = "wallet:audit:read"
+	PermissionWalletManualCreate       Permission = "wallet:manual:create"
+	PermissionWalletFeesWrite          Permission = "wallet:fees:write"
+	PermissionWalletRatesWrite         Permission = "wallet:rates:write"
+	PermissionWalletWorkflowApprove    Permission = "wallet:workflow:approve"
+	PermissionWalletWorkflowReject     Permission = "wallet:workflow:reject"
 )
 
 func ParseTenantRole(raw string) (Role, error) {
@@ -49,7 +52,7 @@ func ParseTenantRole(raw string) (Role, error) {
 
 func ParsePermission(raw string) (Permission, error) {
 	switch Permission(raw) {
-	case PermissionReportingRead,
+	case PermissionIdentityReviewRead, PermissionIdentityReviewDecide, PermissionWalletTransactionResolve, PermissionReportingRead,
 		PermissionWalletRead,
 		PermissionWalletAuditRead,
 		PermissionWalletManualCreate,

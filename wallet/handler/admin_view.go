@@ -73,8 +73,11 @@ type PSPTransactionsView struct {
 }
 
 type PSPTransactionDetailView struct {
-	TenantID    string
-	Transaction walletstore.PSPTransaction
+	Events         []walletstore.TransactionStatusEvent
+	IdempotencyKey string
+	CanResolve     bool
+	TenantID       string
+	Transaction    walletstore.PSPTransaction
 }
 
 type PSPTransactionFilterView struct {
@@ -237,4 +240,15 @@ func adminWalletPath(tenantID, suffix string) string {
 
 func displayTenant(tenantID string) string {
 	return tenantID
+}
+
+func canResolveTransaction(transaction walletstore.PSPTransaction) bool {
+	return walletstore.CanResolvePSPTransaction(&transaction)
+}
+
+func formatNullInt(value sql.NullInt64) string {
+	if !value.Valid {
+		return "—"
+	}
+	return strconv.FormatInt(value.Int64, 10)
 }

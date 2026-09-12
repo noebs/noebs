@@ -245,6 +245,24 @@ func renderKubernetesSecrets(w io.Writer, root, namespace string, decrypt deploy
 			"secrets.yaml": string(payload),
 		}))
 	}
+	identityPayload, err := decrypt(filepath.Join(root, "secrets", "identity-auth.secrets.yaml"), ageKeyPath)
+	if err != nil {
+		return err
+	}
+	var identityWorkerSecret map[string]interface{}
+	if err := yaml.Unmarshal(identityPayload, &identityWorkerSecret); err != nil {
+		return err
+	}
+	identityValues, ok := identityWorkerSecret["noebs"].(map[string]interface{})
+	if !ok {
+		return errors.New("identity-auth release secrets require noebs configuration")
+	}
+	identityValues["temporal_client_secret"] = steadyKeycloak.ClientCredentials[temporalIdentityWorkerClientID].ClientSecret
+	identityPayload, err = yaml.Marshal(identityWorkerSecret)
+	if err != nil {
+		return err
+	}
+	manifests = append(manifests, newOpaqueSecret(namespace, "identity-worker-secrets", map[string]string{"secrets.yaml": string(identityPayload)}))
 	manifests = append(manifests,
 		newOpaqueSecret(namespace, "noebs-release-manifest", map[string]string{kubernetesReleaseManifestFile: releaseManifest}),
 		newOpaqueSecret(namespace, "postgres-credentials", map[string]string{

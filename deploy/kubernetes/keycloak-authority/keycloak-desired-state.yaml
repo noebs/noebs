@@ -66,6 +66,12 @@ resource_client:
       description: Approve tenant workflows
     - name: wallet:workflow:reject
       description: Reject tenant workflows
+    - name: identity:review:read
+      description: Read tenant verification cases
+    - name: identity:review:decide
+      description: Decide tenant verification cases
+    - name: wallet:transaction:resolve
+      description: Resolve tenant transactions manually
 interactive_clients:
   - client_id: noebs-mobile
     name: Noebs Mobile
@@ -105,6 +111,18 @@ service_clients:
   - client_id: noebs-temporal-wallet-worker
     name: Noebs Temporal Wallet Worker
     credential: noebs-temporal-wallet-worker
+    audience: noebs-temporal
+    permissions:
+      - default:write
+  - client_id: noebs-temporal-identity-auth
+    name: Noebs Temporal Identity Auth
+    credential: noebs-temporal-identity-auth
+    audience: noebs-temporal
+    permissions:
+      - default:write
+  - client_id: noebs-temporal-identity-worker
+    name: Noebs Temporal Identity Worker
+    credential: noebs-temporal-identity-worker
     audience: noebs-temporal
     permissions:
       - default:write
@@ -155,6 +173,7 @@ organizations:
           - reporting:read
           - wallet:read
           - wallet:audit:read
+          - identity:review:read
       - name: tenant-admin
         description: Tenant administrators
         attributes: {}
@@ -163,11 +182,14 @@ organizations:
           - reporting:read
           - wallet:read
           - wallet:audit:read
+          - identity:review:read
           - wallet:manual:create
           - wallet:fees:write
           - wallet:rates:write
           - wallet:workflow:approve
           - wallet:workflow:reject
+          - identity:review:decide
+          - wallet:transaction:resolve
   - alias: tenant-mojaloop
     name: Mojaloop Synthetic Demo
     attributes: {}
@@ -185,6 +207,7 @@ organizations:
           - reporting:read
           - wallet:read
           - wallet:audit:read
+          - identity:review:read
       - name: tenant-admin
         description: Tenant administrators
         attributes: {}
@@ -193,11 +216,14 @@ organizations:
           - reporting:read
           - wallet:read
           - wallet:audit:read
+          - identity:review:read
           - wallet:manual:create
           - wallet:fees:write
           - wallet:rates:write
           - wallet:workflow:approve
           - wallet:workflow:reject
+          - identity:review:decide
+          - wallet:transaction:resolve
   - alias: tenant-sandbox
     name: Tenant Sandbox
     attributes: {}
@@ -215,6 +241,7 @@ organizations:
           - reporting:read
           - wallet:read
           - wallet:audit:read
+          - identity:review:read
       - name: tenant-admin
         description: Tenant administrators
         attributes: {}
@@ -223,8 +250,11 @@ organizations:
           - reporting:read
           - wallet:read
           - wallet:audit:read
+          - identity:review:read
           - wallet:manual:create
           - wallet:fees:write
           - wallet:rates:write
           - wallet:workflow:approve
           - wallet:workflow:reject
+          - identity:review:decide
+          - wallet:transaction:resolve

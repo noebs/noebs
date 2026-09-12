@@ -43,12 +43,14 @@ type kubernetesReleaseNoebsInputs struct {
 }
 
 type kubernetesReleaseKeycloakInputs struct {
-	ReconcilerClientSecret        string `yaml:"reconciler_client_secret"`
-	BackofficeClientSecret        string `yaml:"backoffice_client_secret"`
-	WalletAuthorizerClientSecret  string `yaml:"wallet_authorizer_client_secret"`
-	TemporalLedgerClientSecret    string `yaml:"temporal_ledger_client_secret"`
-	TemporalWorkerClientSecret    string `yaml:"temporal_worker_client_secret"`
-	TemporalBootstrapClientSecret string `yaml:"temporal_bootstrap_client_secret"`
+	ReconcilerClientSecret             string `yaml:"reconciler_client_secret"`
+	BackofficeClientSecret             string `yaml:"backoffice_client_secret"`
+	WalletAuthorizerClientSecret       string `yaml:"wallet_authorizer_client_secret"`
+	TemporalLedgerClientSecret         string `yaml:"temporal_ledger_client_secret"`
+	TemporalWorkerClientSecret         string `yaml:"temporal_worker_client_secret"`
+	TemporalIdentityClientSecret       string `yaml:"temporal_identity_client_secret"`
+	TemporalIdentityWorkerClientSecret string `yaml:"temporal_identity_worker_client_secret"`
+	TemporalBootstrapClientSecret      string `yaml:"temporal_bootstrap_client_secret"`
 }
 
 type kubernetesReleaseGatewayAuthInputs struct {
@@ -101,12 +103,14 @@ type preparedKubernetesRelease struct {
 }
 
 type preparedKeycloakRelease struct {
-	reconcilerClientSecret        string
-	backofficeClientSecret        string
-	walletAuthorizerClientSecret  string
-	temporalLedgerClientSecret    string
-	temporalWorkerClientSecret    string
-	temporalBootstrapClientSecret string
+	reconcilerClientSecret             string
+	backofficeClientSecret             string
+	walletAuthorizerClientSecret       string
+	temporalLedgerClientSecret         string
+	temporalWorkerClientSecret         string
+	temporalIdentityClientSecret       string
+	temporalIdentityWorkerClientSecret string
+	temporalBootstrapClientSecret      string
 }
 
 type preparedGatewayAuthRelease struct {
@@ -583,6 +587,7 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
+	r.addTemporalClientAuthority(identityAuth, r.keycloak.temporalIdentityClientSecret)
 	setSecret("identity-auth", identityAuth)
 
 	cardVault, err := withDB(serviceRoleCardVault)
@@ -778,6 +783,26 @@ func (r preparedKubernetesRelease) keycloakConfig() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	configPayload, err := configMapDataValue(r.configData, "config.yaml")
+	if err != nil {
+		return "", err
+	}
+	var config map[string]interface{}
+	if err := yaml.Unmarshal([]byte(configPayload), &config); err != nil {
+		return "", err
+	}
+	issuer := firstString(getMap(getMap(config, "noebs"), "oidc"), "issuer")
+	if !strings.HasSuffix(issuer, "/auth/realms/noebs") {
+		return "", errors.New("release OIDC issuer must target /auth/realms/noebs")
+	}
+	origin, err := keycloakPublicOrigin(strings.TrimSuffix(issuer, "/realms/noebs"))
+	if err != nil {
+		return "", err
+	}
+	proxyAddress := firstString(getMap(config, "noebs"), "keycloak_proxy_trusted_addresses")
+	if err := validateKeycloakProxyAddress(proxyAddress); err != nil {
+		return "", err
+	}
 	return fmt.Sprintf(`http-enabled=false
 http-relative-path=/auth
 https-port=8443
@@ -787,11 +812,11 @@ https-protocols=TLSv1.3
 http-management-scheme=http
 http-management-port=9000
 http-management-relative-path=/
-hostname=https://api.noebs.sd/auth
+hostname=%s/auth
 hostname-strict=true
 hostname-backchannel-dynamic=false
 proxy-headers=xforwarded
-proxy-trusted-addresses=10.42.0.1/32
+proxy-trusted-addresses=%s
 health-enabled=true
 metrics-enabled=true
 
@@ -802,6 +827,8 @@ db-password=%s
 db-tls-mode=verify-server
 db-tls-trust-store-file=/opt/keycloak/conf/db-ca.pem
 `,
+		origin,
+		proxyAddress,
 		postgresPassword,
 	), nil
 }
@@ -827,11 +854,19 @@ func prepareKeycloakRelease(inputs kubernetesReleaseKeycloakInputs) (preparedKey
 	if err != nil {
 		return preparedKeycloakRelease{}, err
 	}
+	temporalIdentitySecret, err := requireCanonicalReleaseSecret("Keycloak Temporal identity-auth client secret", inputs.TemporalIdentityClientSecret)
+	if err != nil {
+		return preparedKeycloakRelease{}, err
+	}
+	temporalIdentityWorkerSecret, err := requireCanonicalReleaseSecret("Keycloak Temporal identity-worker client secret", inputs.TemporalIdentityWorkerClientSecret)
+	if err != nil {
+		return preparedKeycloakRelease{}, err
+	}
 	temporalBootstrapSecret, err := requireCanonicalReleaseSecret("Keycloak Temporal namespace bootstrap client secret", inputs.TemporalBootstrapClientSecret)
 	if err != nil {
 		return preparedKeycloakRelease{}, err
 	}
-	secrets := []string{reconcilerSecret, backofficeSecret, walletAuthorizerSecret, temporalLedgerSecret, temporalWorkerSecret, temporalBootstrapSecret}
+	secrets := []string{reconcilerSecret, backofficeSecret, walletAuthorizerSecret, temporalLedgerSecret, temporalWorkerSecret, temporalIdentitySecret, temporalIdentityWorkerSecret, temporalBootstrapSecret}
 	seen := make(map[string]struct{}, len(secrets))
 	for _, secret := range secrets {
 		seen[secret] = struct{}{}
@@ -840,12 +875,14 @@ func prepareKeycloakRelease(inputs kubernetesReleaseKeycloakInputs) (preparedKey
 		return preparedKeycloakRelease{}, errors.New("keycloak client secrets must be distinct")
 	}
 	return preparedKeycloakRelease{
-		reconcilerClientSecret:        reconcilerSecret,
-		backofficeClientSecret:        backofficeSecret,
-		walletAuthorizerClientSecret:  walletAuthorizerSecret,
-		temporalLedgerClientSecret:    temporalLedgerSecret,
-		temporalWorkerClientSecret:    temporalWorkerSecret,
-		temporalBootstrapClientSecret: temporalBootstrapSecret,
+		reconcilerClientSecret:             reconcilerSecret,
+		backofficeClientSecret:             backofficeSecret,
+		walletAuthorizerClientSecret:       walletAuthorizerSecret,
+		temporalLedgerClientSecret:         temporalLedgerSecret,
+		temporalWorkerClientSecret:         temporalWorkerSecret,
+		temporalIdentityClientSecret:       temporalIdentitySecret,
+		temporalIdentityWorkerClientSecret: temporalIdentityWorkerSecret,
+		temporalBootstrapClientSecret:      temporalBootstrapSecret,
 	}, nil
 }
 
@@ -939,12 +976,14 @@ func (r preparedKubernetesRelease) keycloakReconcilerConfig() (string, error) {
 		ClientID:     "noebs-keycloak-reconciler",
 		ClientSecret: r.keycloak.reconcilerClientSecret,
 		ClientCredentials: map[string]keycloakadmin.ClientCredential{
-			"noebs-keycloak-reconciler": {ClientSecret: r.keycloak.reconcilerClientSecret},
-			"noebs-backoffice":          {ClientSecret: r.keycloak.backofficeClientSecret},
-			"noebs-wallet-authorizer":   {ClientSecret: r.keycloak.walletAuthorizerClientSecret},
-			temporalLedgerClientID:      {ClientSecret: r.keycloak.temporalLedgerClientSecret},
-			temporalWorkerClientID:      {ClientSecret: r.keycloak.temporalWorkerClientSecret},
-			temporalBootstrapClientID:   {ClientSecret: r.keycloak.temporalBootstrapClientSecret},
+			"noebs-keycloak-reconciler":    {ClientSecret: r.keycloak.reconcilerClientSecret},
+			"noebs-backoffice":             {ClientSecret: r.keycloak.backofficeClientSecret},
+			"noebs-wallet-authorizer":      {ClientSecret: r.keycloak.walletAuthorizerClientSecret},
+			temporalLedgerClientID:         {ClientSecret: r.keycloak.temporalLedgerClientSecret},
+			temporalWorkerClientID:         {ClientSecret: r.keycloak.temporalWorkerClientSecret},
+			temporalIdentityClientID:       {ClientSecret: r.keycloak.temporalIdentityClientSecret},
+			temporalIdentityWorkerClientID: {ClientSecret: r.keycloak.temporalIdentityWorkerClientSecret},
+			temporalBootstrapClientID:      {ClientSecret: r.keycloak.temporalBootstrapClientSecret},
 		},
 		IdentityProviders: map[string]keycloakadmin.IdentityProviderCredential{
 			"google": {ClientID: googleClientID, ClientSecret: googleClientSecret},

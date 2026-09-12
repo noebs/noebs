@@ -84,6 +84,7 @@ func (s *Server) GetP2PTransferStatus(ctx context.Context, r *walletv1.GetP2PTra
 		return nil, mapError(walletstore.ErrAmountOverflow)
 	}
 	response := &walletv1.P2PTransferStatus{Status: receipt.Status, IdempotencyKey: c.IdempotencyKey, ReferenceId: p.ReferenceID, FromWalletId: c.FromWalletID.String(), ToWalletId: c.ToWalletID.String(), ToOwnerId: c.ToOwnerID, AmountMinor: strconv.FormatInt(p.Amount, 10), FeeAmountMinor: strconv.FormatInt(receipt.Fee, 10), TotalDebitMinor: strconv.FormatInt(p.Amount+receipt.Fee, 10), Currency: p.Currency, CurrencyUnitVersion: strconv.FormatInt(receipt.CurrencyUnitID, 10), ErrorCode: receipt.ErrorCode, CreatedAt: receipt.CreatedAt.UTC().Format(time.RFC3339Nano)}
+	response.LifecycleStatus, response.Substatus = receipt.LifecycleStatus, receipt.Substatus
 	if receipt.TransactionID > 0 {
 		response.TransactionId = strconv.FormatInt(receipt.TransactionID, 10)
 	}

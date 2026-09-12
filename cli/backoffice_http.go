@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"html/template"
 	"net/http"
 	"net/url"
 	"slices"
@@ -160,7 +159,7 @@ func (h *backofficeHTTP) loggedOut(writer http.ResponseWriter, request *http.Req
 	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write([]byte("<!doctype html><title>Signed out</title><p>You are signed out.</p>"))
+	_ = backofficeSignedOutPage().Render(request.Context(), writer)
 }
 
 func (h *backofficeHTTP) home(writer http.ResponseWriter, request *http.Request) {
@@ -203,14 +202,15 @@ func (h *backofficeHTTP) home(writer http.ResponseWriter, request *http.Request)
 		if slices.Contains(membership.Permissions, tenantauth.PermissionWalletRead) {
 			entry.WalletURL = backofficeTenantPath(membership.TenantID, "wallet")
 		}
-		if entry.ReportingURL != "" || entry.WalletURL != "" {
+		if slices.Contains(membership.Permissions, tenantauth.PermissionIdentityReviewRead) {
+			entry.VerificationURL = backofficeTenantPath(membership.TenantID, "verifications")
+		}
+		if entry.ReportingURL != "" || entry.WalletURL != "" || entry.VerificationURL != "" {
 			page.Tenants = append(page.Tenants, entry)
 		}
 	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := backofficeHomeTemplate.Execute(writer, page); err != nil {
-		return
-	}
+	_ = backofficeHomePage(page).Render(ctx, writer)
 }
 
 func (h *backofficeHTTP) redirectToLogin(writer http.ResponseWriter, request *http.Request, returnPath string) {
@@ -232,19 +232,11 @@ type backofficeHomeView struct {
 }
 
 type backofficeTenantView struct {
-	TenantID     string
-	ReportingURL string
-	WalletURL    string
+	TenantID        string
+	ReportingURL    string
+	WalletURL       string
+	VerificationURL string
 }
-
-var backofficeHomeTemplate = template.Must(template.New("backoffice-home").Parse(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Noebs back office</title><link rel="stylesheet" href="/backoffice/assets/style.css"></head><body>
-<main><h1>Noebs back office</h1>{{if .Tenants}}<ul>{{range .Tenants}}<li><strong>{{.TenantID}}</strong>
-{{if .ReportingURL}}<a href="{{.ReportingURL}}">Reporting</a>{{end}}
-{{if .WalletURL}}<a href="{{.WalletURL}}">Wallet</a>{{end}}</li>{{end}}</ul>{{else}}<p>No authorized tenant tools.</p>{{end}}
-<form method="post" action="/backoffice/logout"><input type="hidden" name="_csrf" value="{{.CSRFToken}}"><button type="submit">Sign out</button></form>
-</main></body></html>`))
 
 type queryCardinality struct {
 	minimum int

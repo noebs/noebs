@@ -177,6 +177,7 @@ func TestWalletAuthorityClassifiesEveryPublicTable(t *testing.T) {
 		"psp_config_overrides",
 		"psp_configs",
 		"psp_interactions",
+		"psp_manual_resolutions",
 		"psp_transaction_amounts",
 		"psp_transactions",
 		"shared_outbound_limits",
@@ -184,6 +185,7 @@ func TestWalletAuthorityClassifiesEveryPublicTable(t *testing.T) {
 		"transaction_limit_period_usage",
 		"transaction_limit_reservations",
 		"transaction_limits",
+		"transaction_status_events",
 		"wallet_audit_log",
 		"wallets",
 		"withdrawal_destinations",
@@ -796,6 +798,8 @@ func assertWalletCorePrivileges(t *testing.T, db *DB) {
 		workerUpdates  []string
 	}{
 		{name: "operator_identities", runtime: []string{"SELECT", "INSERT"}, worker: []string{"SELECT"}},
+		{name: "psp_manual_resolutions", runtime: []string{"SELECT", "INSERT"}},
+		{name: "transaction_status_events", runtime: []string{"SELECT"}, worker: []string{"SELECT"}, workerUpdates: []string{"claim_token", "claimed_until", "last_error", "publish_attempts", "published_at"}},
 		{
 			name: "wallets", runtime: []string{"SELECT", "INSERT"}, worker: []string{"SELECT", "INSERT"},
 			workerUpdates: []string{"available_balance", "balance", "updated_at", "version"},

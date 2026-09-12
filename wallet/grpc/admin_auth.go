@@ -46,7 +46,7 @@ func walletOperatorPrincipal(md metadata.MD) (gateway.PrincipalIdentity, error) 
 
 func isWalletWritePermission(permission tenantauth.Permission) bool {
 	switch permission {
-	case tenantauth.PermissionWalletManualCreate,
+	case tenantauth.PermissionWalletTransactionResolve, tenantauth.PermissionWalletManualCreate,
 		tenantauth.PermissionWalletFeesWrite,
 		tenantauth.PermissionWalletRatesWrite,
 		tenantauth.PermissionWalletWorkflowApprove,

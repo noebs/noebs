@@ -46,8 +46,11 @@ var migrationAuthorityContracts = map[string]migrationAuthorityContract{
 		broadDMLRoles: []string{"identity_auth_runtime"},
 		sequenceRoles: []string{"identity_auth_runtime"},
 		specialGrants: []string{
+			`REVOKE INSERT, UPDATE, DELETE ON TABLE public.identity_verifications FROM identity_auth_runtime`,
 			`REVOKE INSERT, UPDATE, DELETE ON TABLE public.identity_review_events FROM identity_auth_runtime`,
 			`GRANT INSERT (id, tenant_id, user_id, session_id, actor, action, revision, request_sha256, details) ON TABLE public.identity_review_events TO identity_auth_runtime`,
+			`REVOKE INSERT, UPDATE, DELETE ON TABLE public.identity_status_events FROM identity_auth_runtime`,
+			`GRANT UPDATE (published_at, claimed_until, claim_token, publish_attempts, last_error) ON TABLE public.identity_status_events TO identity_auth_runtime`,
 		},
 	},
 	MigrationScopeCardVault: {
@@ -361,6 +364,10 @@ func migrationAuthoritySQL(scope string) string {
 
 func walletAuthorityGrants() []string {
 	return []string{
+		`GRANT EXECUTE ON FUNCTION public.wallet_psp_lifecycle(TEXT,TIMESTAMPTZ,TEXT) TO wallet_ledger_runtime, wallet_ledger_worker, wallet_ledger_webhook`,
+		`GRANT SELECT, INSERT ON TABLE public.psp_manual_resolutions TO wallet_ledger_runtime`,
+		`GRANT SELECT ON TABLE public.transaction_status_events TO wallet_ledger_runtime, wallet_ledger_worker`,
+		`GRANT UPDATE (publish_attempts, published_at, claim_token, claimed_until, last_error) ON TABLE public.transaction_status_events TO wallet_ledger_worker`,
 		`GRANT SELECT ON TABLE public.interop_bindings, public.interop_aliases TO wallet_ledger_runtime, wallet_ledger_worker`,
 		`GRANT SELECT ON TABLE public.interop_quotes, public.interop_transfers TO wallet_ledger_runtime`,
 		`GRANT SELECT ON TABLE public.interop_quote_closures TO wallet_ledger_runtime, wallet_ledger_worker`,

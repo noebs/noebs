@@ -512,6 +512,7 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/consumer/auth/profile", role: serviceRoleIdentityAuth, auth: gatewayAuthMobilePrincipal},
 		{method: fiber.MethodPost, path: "/consumer/kyc", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPost, path: "/consumer/identity/sessions", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/consumer/identity/verification", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/consumer/identity/sessions/latest", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/consumer/identity/sessions/:session_id", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodPut, path: "/consumer/identity/sessions/:session_id/evidence/:kind", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
@@ -545,6 +546,7 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodGet, path: "/consumer/transactions", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
 
 		{method: fiber.MethodGet, path: "/ws", role: serviceRoleNotification, auth: gatewayAuthMobileUser, websocket: true},
+		{method: fiber.MethodGet, path: "/consumer/status-notifications", role: serviceRoleNotification, auth: gatewayAuthMobileUser},
 
 		{method: fiber.MethodPost, path: "/psp/webhooks/:callback_id", capabilityPath: "/psp/webhooks/:provider", role: serviceRolePSPWebhook, auth: gatewayAuthTenantWebhook},
 

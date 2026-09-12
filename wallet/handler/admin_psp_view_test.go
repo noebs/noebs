@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"strings"
 	"testing"
 
@@ -57,6 +58,30 @@ func TestPSPAdminViewsNameProviderStateAndHideRawPayloads(t *testing.T) {
 	for _, secret := range []string{"request-secret", "response-secret", "Raw Request", "Raw Response"} {
 		if strings.Contains(detail, secret) {
 			t.Fatalf("PSP detail exposed %q", secret)
+		}
+	}
+}
+
+func TestPSPResolutionFormPreservesVersionAndOnlyOffersAllowedStates(t *testing.T) {
+	transaction := walletstore.PSPTransaction{TenantID: "tenant-a", ClientReference: "reference-a", Status: "pending", StatusVersion: 4, WorkflowID: sql.NullString{String: "workflow-a", Valid: true}}
+	view := PSPTransactionDetailView{TenantID: "tenant-a", Transaction: transaction, CanResolve: true, IdempotencyKey: "stable-command", Events: []walletstore.TransactionStatusEvent{{Status: "processing", Substatus: "provider_pending", Reason: sql.NullString{String: `<script>bad</script>`, Valid: true}}}}
+	var output bytes.Buffer
+	if err := PSPTransactionDetailPage(view).Render(WithAdminCSRFToken(context.Background(), walletAdminBoundaryCSRF), &output); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`name="expected_version" value="4"`, `name="idempotency_key" value="stable-command"`, `name="_csrf" value="` + walletAdminBoundaryCSRF + `"`, `hx-post="/backoffice/t/tenant-a/wallet/transactions/reference-a/resolve"`, `provider_pending`, `&lt;script&gt;`} {
+		if !strings.Contains(output.String(), want) {
+			t.Errorf("missing %s", want)
+		}
+	}
+	for _, state := range []string{"initiated", "held", "success", "failed", "cancelled"} {
+		view.Transaction.Status = state
+		output.Reset()
+		if err := PSPTransactionDetailPage(view).Render(context.Background(), &output); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(output.String(), `name="expected_version"`) {
+			t.Errorf("resolution offered in %s", state)
 		}
 	}
 }

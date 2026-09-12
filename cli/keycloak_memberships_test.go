@@ -388,6 +388,10 @@ client_credentials:
     client_secret: temporal-wallet-ledger-secret
   noebs-temporal-wallet-worker:
     client_secret: temporal-wallet-worker-secret
+  noebs-temporal-identity-auth:
+    client_secret: temporal-identity-secret
+  noebs-temporal-identity-worker:
+    client_secret: temporal-identity-worker-secret
   noebs-temporal-namespace-bootstrap:
     client_secret: temporal-namespace-bootstrap-secret
 identity_providers:
@@ -482,17 +486,20 @@ func cliMembershipGroups(organizationID string) []map[string]any {
 
 func cliMembershipClientRoles() []map[string]any {
 	descriptions := map[string]string{
-		"user":                    "Tenant user",
-		"backoffice":              "Tenant back-office operator",
-		"tenant-admin":            "Tenant administrator",
-		"reporting:read":          "Read tenant reports",
-		"wallet:read":             "Read tenant wallet state",
-		"wallet:audit:read":       "Audit tenant wallet activity",
-		"wallet:manual:create":    "Create manual operations",
-		"wallet:fees:write":       "Change tenant fee configuration",
-		"wallet:rates:write":      "Change tenant rate configuration",
-		"wallet:workflow:approve": "Approve tenant workflows",
-		"wallet:workflow:reject":  "Reject tenant workflows",
+		"identity:review:read":       "Read tenant verification cases",
+		"identity:review:decide":     "Decide tenant verification cases",
+		"wallet:transaction:resolve": "Resolve tenant transactions manually",
+		"user":                       "Tenant user",
+		"backoffice":                 "Tenant back-office operator",
+		"tenant-admin":               "Tenant administrator",
+		"reporting:read":             "Read tenant reports",
+		"wallet:read":                "Read tenant wallet state",
+		"wallet:audit:read":          "Audit tenant wallet activity",
+		"wallet:manual:create":       "Create manual operations",
+		"wallet:fees:write":          "Change tenant fee configuration",
+		"wallet:rates:write":         "Change tenant rate configuration",
+		"wallet:workflow:approve":    "Approve tenant workflows",
+		"wallet:workflow:reject":     "Reject tenant workflows",
 	}
 	roles := make([]map[string]any, 0, len(descriptions))
 	for name, description := range descriptions {
@@ -510,11 +517,11 @@ func cliMembershipRoleMappings(groupID string) map[string]any {
 	case strings.HasSuffix(groupID, "-user"):
 		names = []string{"user"}
 	case strings.HasSuffix(groupID, "-backoffice"):
-		names = []string{"backoffice", "reporting:read", "wallet:read", "wallet:audit:read"}
+		names = []string{"backoffice", "reporting:read", "wallet:read", "wallet:audit:read", "identity:review:read"}
 	case strings.HasSuffix(groupID, "-tenant-admin"):
 		names = []string{
 			"tenant-admin", "reporting:read", "wallet:read", "wallet:audit:read", "wallet:manual:create",
-			"wallet:fees:write", "wallet:rates:write", "wallet:workflow:approve", "wallet:workflow:reject",
+			"wallet:fees:write", "wallet:rates:write", "wallet:workflow:approve", "wallet:workflow:reject", "identity:review:read", "identity:review:decide", "wallet:transaction:resolve",
 		}
 	default:
 		panic("unexpected membership group " + groupID)

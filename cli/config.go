@@ -454,6 +454,7 @@ func registerAdminReportingRoutes(route *fiber.App, tenantIdentity fiber.Handler
 }
 
 func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, chatEnabled bool, consumerHandler *consumerhandler.Handler) {
+	route.Get("/consumer/status-notifications", userIdentity, consumerHandler.StatusNotifications)
 	if chatEnabled {
 		route.Get("/ws", userIdentity, chatWebSocketHandler(hub))
 	}
@@ -499,6 +500,7 @@ func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
 }
 
 func registerIdentityAuthRoutes(route *fiber.App, principalIdentity fiber.Handler, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+	consumerhandler.RegisterIdentityReviewRoutes(route.Group("/admin/identity", principalIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityInternalRoutes(route.Group("/internal/identity-auth", principalIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityPrincipalRoutes(route.Group("/consumer", principalIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityAuthedRoutes(route.Group("/consumer", userIdentity), consumerHandler)
@@ -796,6 +798,14 @@ func initConfig() {
 	if err := initRoleServices(role); err != nil {
 		logrusLogger.Fatalf("error initializing role services: %v", err)
 	}
+	if role == serviceRoleIdentityAuth {
+		ctx, cancel := context.WithTimeout(context.Background(), temporalWorkerDialTimeout)
+		err := initIdentityWorkflow(ctx, noebsConfig)
+		cancel()
+		if err != nil {
+			logrusLogger.Fatalf("error initializing identity workflows: %v", err)
+		}
+	}
 	if role.startsEBSEventPublisher() {
 		writer, err := eventing.NewKafkaWriter(noebsConfig.KafkaBrokers, noebsConfig.KafkaTransactionTopic)
 		if err != nil {
@@ -856,6 +866,10 @@ func initConfig() {
 			logrusLogger.Fatalf("error starting wallet worker: %v", err)
 		}
 		walletWorker = runner
+		walletStatusEventPublisher, err = newWalletStatusEventPublisher(walletService.Store, noebsConfig)
+		if err != nil {
+			logrusLogger.Fatalf("error creating wallet status event publisher: %v", err)
+		}
 		tenants, err := storeSvc.ListTenants(context.Background())
 		if err != nil {
 			logrusLogger.Fatalf("error listing tenants for wallet schedules: %v", err)

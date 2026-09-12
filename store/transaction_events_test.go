@@ -1,9 +1,11 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -52,6 +54,7 @@ func TestStoreCreateTransactionWithEventOutboxLifecycle(t *testing.T) {
 	if events[0].Topic != event.Topic || events[0].EventKey != event.EventKey || events[0].EventType != event.EventType {
 		t.Fatalf("event = %+v, want topic/key/type from create request", events[0])
 	}
+	originalEvent := events[0]
 	var transactions int
 	if err := db.DB.GetContext(ctx, &transactions, db.DB.Rebind(`SELECT COUNT(*) FROM transactions WHERE tenant_id = ? AND uuid = ?`), tenantID, "tx-1"); err != nil {
 		t.Fatalf("count transactions: %v", err)
@@ -78,6 +81,17 @@ func TestStoreCreateTransactionWithEventOutboxLifecycle(t *testing.T) {
 	}
 	if err := storeSvc.MarkTransactionEventPublished(ctx, eventsIDNotFound); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("missing published id error = %v, want %v", err, sql.ErrNoRows)
+	}
+	recovery, err := os.ReadFile("../scripts/exe/recovery/ebs_adapter.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, string(recovery)); err != nil {
+		t.Fatal(err)
+	}
+	replay, err := storeSvc.ClaimPendingTransactionEvents(ctx, 10)
+	if err != nil || len(replay) != 1 || replay[0].ID != originalEvent.ID || !bytes.Equal(replay[0].Payload, originalEvent.Payload) {
+		t.Fatalf("recovered projection event=%+v error=%v", replay, err)
 	}
 }
 

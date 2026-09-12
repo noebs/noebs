@@ -50,6 +50,10 @@ noebs:
   kafka_brokers:
     - "kafka:9092"
   kafka_transaction_topic: "noebs-ebs-transactions-v1"
+  kafka_status_topic: "noebs.status.changed.v1"
+  status_event_batch_size: 100
+  status_event_poll_interval_ms: 1000
+  status_notification_consumer_group: "noebs-status-notifications"
   admin_reporting_kafka_consumer_group: "admin-reporting-projections"
   ebs_transaction_event_publisher_batch_size: 100
   ebs_transaction_event_publisher_poll_interval_ms: 1000

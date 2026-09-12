@@ -12,6 +12,7 @@ func identityAuthActiveRoutes() []gatewayRouteExpectation {
 		{method: http.MethodPost, path: "/consumer/kyc", auth: gatewayAuthMobileUser},
 		{method: http.MethodPost, path: "/consumer/identity/sessions", auth: gatewayAuthMobileUser},
 		{method: http.MethodGet, path: "/consumer/identity/sessions/latest", auth: gatewayAuthMobileUser},
+		{method: http.MethodGet, path: "/consumer/identity/verification", auth: gatewayAuthMobileUser},
 		{method: http.MethodGet, path: "/consumer/identity/sessions/:session_id", auth: gatewayAuthMobileUser},
 		{method: http.MethodPut, path: "/consumer/identity/sessions/:session_id/evidence/:kind", auth: gatewayAuthMobileUser},
 		{method: http.MethodPost, path: "/consumer/identity/sessions/:session_id/submit", auth: gatewayAuthMobileUser},

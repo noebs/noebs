@@ -190,6 +190,7 @@ spec:
                 operator: In
                 values:
                   - identity-auth
+                  - identity-worker
                   - api-gateway
                   - card-vault
                   - ebs-adapter
@@ -231,6 +232,12 @@ spec:
             matchLabels: {app.kubernetes.io/name: admin-reporting-projector}
         - podSelector:
             matchLabels: {app.kubernetes.io/name: kafka-topics}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: identity-worker}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: wallet-worker}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: notification-chat}
       ports:
         - {protocol: TCP, port: 9092}
 ---
@@ -267,6 +274,10 @@ spec:
             matchLabels: {app.kubernetes.io/name: wallet-ledger}
         - podSelector:
             matchLabels: {app.kubernetes.io/name: wallet-worker}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: identity-auth}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: identity-worker}
         - podSelector:
             matchLabels: {app.kubernetes.io/name: temporal-namespace-bootstrap}
       ports:
@@ -312,6 +323,10 @@ spec:
             matchLabels: {app.kubernetes.io/name: wallet-ledger}
         - podSelector:
             matchLabels: {app.kubernetes.io/name: wallet-worker}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: identity-auth}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: identity-worker}
       ports:
         - {protocol: TCP, port: 8443}
 ---
@@ -371,6 +386,7 @@ spec:
         operator: In
         values:
           - identity-auth
+          - identity-worker
           - api-gateway
           - card-vault
           - ebs-adapter
@@ -409,7 +425,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [ebs-adapter-events, admin-reporting-projector, kafka-topics]
+        values: [ebs-adapter-events, admin-reporting-projector, kafka-topics, identity-worker, wallet-worker, notification-chat]
   policyTypes: [Egress]
   egress:
     - to:
@@ -445,7 +461,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [wallet-ledger, wallet-worker, temporal-namespace-bootstrap]
+        values: [wallet-ledger, wallet-worker, temporal-namespace-bootstrap, identity-auth, identity-worker]
   policyTypes: [Egress]
   egress:
     - to:
@@ -463,7 +479,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [temporal, temporal-namespace-bootstrap, wallet-ledger, wallet-worker]
+        values: [temporal, temporal-namespace-bootstrap, wallet-ledger, wallet-worker, identity-auth, identity-worker]
   policyTypes: [Egress]
   egress:
     - to:

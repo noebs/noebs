@@ -163,6 +163,7 @@ func interopQuoteProto(q *walletstore.InteropQuote) *walletv1.InteropQuote {
 }
 func interopTransferProto(t *walletstore.InteropTransfer, q *walletstore.InteropQuote) *walletv1.InteropTransfer {
 	r := &walletv1.InteropTransfer{TransferId: t.ID.String(), QuoteId: t.QuoteID.String(), Status: t.Status, HubState: t.HubState, AmountMinor: strconv.FormatInt(q.Amount, 10), Currency: q.Currency, CurrencyUnitVersion: strconv.FormatInt(q.CurrencyUnitID, 10), ErrorCode: t.ErrorCode.String, CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: t.UpdatedAt.UTC().Format(time.RFC3339Nano)}
+	r.LifecycleStatus, r.Substatus = t.LifecycleStatus, t.Substatus
 	if t.LedgerTransactionID.Valid {
 		r.LedgerTransactionId = strconv.FormatInt(t.LedgerTransactionID.Int64, 10)
 	}

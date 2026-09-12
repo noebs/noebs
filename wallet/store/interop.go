@@ -73,6 +73,9 @@ type InteropTransfer struct {
 	OwnerID             string         `db:"owner_id"`
 	IdempotencyKey      string         `db:"idempotency_key"`
 	Status              string         `db:"status"`
+	LifecycleStatus     string         `db:"lifecycle_status"`
+	Substatus           string         `db:"substatus"`
+	StatusVersion       int64          `db:"status_version"`
 	HubState            string         `db:"hub_state"`
 	HoldID              sql.NullInt64  `db:"hold_id"`
 	LedgerTransactionID sql.NullInt64  `db:"ledger_transaction_id"`

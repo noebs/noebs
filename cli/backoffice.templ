@@ -1,0 +1,52 @@
+package main
+
+templ backofficePage(title string) {
+ <!doctype html>
+ <html lang="en">
+  <head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width,initial-scale=1">
+   <title>{ title }</title>
+   <link rel="stylesheet" href="/backoffice/assets/style.css">
+  </head>
+  <body>
+   <main>{ children... }</main>
+  </body>
+ </html>
+}
+
+templ backofficeHomePage(data backofficeHomeView) {
+ @backofficePage("Noebs back office") {
+  <h1>Noebs back office</h1>
+  if len(data.Tenants) > 0 {
+   <ul>
+    for _, tenant := range data.Tenants {
+     <li>
+      <strong>{ tenant.TenantID }</strong>
+      if tenant.ReportingURL != "" {
+       <a href={ tenant.ReportingURL }>Reporting</a>
+      }
+      if tenant.WalletURL != "" {
+       <a href={ tenant.WalletURL }>Wallet</a>
+      }
+      if tenant.VerificationURL != "" {
+       <a href={ tenant.VerificationURL }>Verifications</a>
+      }
+     </li>
+    }
+   </ul>
+  } else {
+   <p>No authorized tenant tools.</p>
+  }
+  <form method="post" action="/backoffice/logout">
+   <input type="hidden" name="_csrf" value={ data.CSRFToken }>
+   <button type="submit">Sign out</button>
+  </form>
+ }
+}
+
+templ backofficeSignedOutPage() {
+ @backofficePage("Signed out") {
+  <p>You are signed out.</p>
+ }
+}

@@ -44,6 +44,7 @@ data:
     kafka:9092
   topics.txt: |
     noebs-ebs-transactions-v1 3 1
+    noebs.status.changed.v1 3 1
   start.sh: |
     #!/usr/bin/env bash
     set -euo pipefail

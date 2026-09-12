@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	"github.com/adonese/noebs/internal/verification"
 
 	"github.com/adonese/noebs/store"
 	"github.com/google/uuid"
@@ -34,7 +35,7 @@ func (s *Service) WithdrawIdentitySession(ctx context.Context, owner store.Ident
 	if s == nil || s.Store == nil {
 		return store.IdentitySession{}, ErrMissingStore
 	}
-	return s.Store.WithdrawIdentitySession(ctx, owner, id, revision)
+	return s.IdentityWorkflow.Execute(ctx, verification.Command{Action: "withdraw", Owner: owner, SessionID: id, Revision: revision})
 }
 
 func (s *Service) PutIdentityEvidence(ctx context.Context, params store.PutIdentityEvidenceParams) (store.IdentitySession, error) {
@@ -48,12 +49,25 @@ func (s *Service) SubmitIdentitySession(ctx context.Context, owner store.Identit
 	if s == nil || s.Store == nil {
 		return store.IdentitySession{}, ErrMissingStore
 	}
-	return s.Store.SubmitIdentitySession(ctx, owner, id, submission)
+	return s.IdentityWorkflow.Execute(ctx, verification.Command{Action: "submit", Owner: owner, SessionID: id, Submission: submission})
 }
 
 func (s *Service) DiscardIdentitySession(ctx context.Context, owner store.IdentityOwner, id uuid.UUID, revision int64) (store.IdentitySession, error) {
 	if s == nil || s.Store == nil {
 		return store.IdentitySession{}, ErrMissingStore
 	}
-	return s.Store.DiscardIdentitySession(ctx, owner, id, revision)
+	return s.IdentityWorkflow.Execute(ctx, verification.Command{Action: "discard", Owner: owner, SessionID: id, Revision: revision})
+}
+
+func (s *Service) ListIdentityReviewQueue(ctx context.Context, reviewer store.IdentityReviewer, limit, offset int) ([]store.IdentityReviewQueueItem, error) {
+	return s.Store.ListIdentityReviewQueue(ctx, reviewer, limit, offset)
+}
+func (s *Service) ReadIdentityReviewCase(ctx context.Context, reviewer store.IdentityReviewer, owner store.IdentityOwner, id uuid.UUID) (store.IdentityReviewCase, error) {
+	return s.Store.ReadIdentityReviewCase(ctx, reviewer, owner, id)
+}
+func (s *Service) ReadIdentityReviewEvidence(ctx context.Context, reviewer store.IdentityReviewer, owner store.IdentityOwner, id uuid.UUID, revision int64, kind string) ([]byte, error) {
+	return s.Store.ReadIdentityReviewEvidence(ctx, reviewer, owner, id, revision, kind)
+}
+func (s *Service) DecideIdentityReview(ctx context.Context, params store.IdentityReviewDecisionParams) (store.IdentitySession, error) {
+	return s.IdentityWorkflow.Execute(ctx, verification.Command{Action: "decide", Owner: params.Owner, SessionID: params.SessionID, Decision: params})
 }

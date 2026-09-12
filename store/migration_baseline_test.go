@@ -10,12 +10,12 @@ import (
 
 func TestPostgresMigrationsAreFreshCanonicalBaselines(t *testing.T) {
 	expectedFiles := map[string][]string{
-		MigrationScopeIdentityAuth:     {"001_identity_auth.sql", "002_identity_evidence.sql", "003_identity_review.sql"},
+		MigrationScopeIdentityAuth:     {"001_identity_auth.sql", "002_identity_evidence.sql", "003_identity_review.sql", "004_verification_lifecycle.sql"},
 		MigrationScopeCardVault:        {"001_card_vault.sql"},
 		MigrationScopeEBSAdapter:       {"001_ebs_adapter.sql"},
 		MigrationScopeAdminReporting:   {"001_admin_reporting.sql"},
-		MigrationScopeNotificationChat: {"001_notification_chat.sql"},
-		MigrationScopeWalletLedger:     {"001_wallet_ledger.sql", "002_groosh_money.sql", "003_mojaloop_interop.sql", "004_interop_admission_closure.sql", "005_p2p_receipts.sql", "006_shared_outbound_limits.sql"},
+		MigrationScopeNotificationChat: {"001_notification_chat.sql", "002_status_notifications.sql"},
+		MigrationScopeWalletLedger:     {"001_wallet_ledger.sql", "002_groosh_money.sql", "003_mojaloop_interop.sql", "004_interop_admission_closure.sql", "005_p2p_receipts.sql", "006_shared_outbound_limits.sql", "007_transaction_lifecycle.sql"},
 		MigrationScopeWorkloadAuth:     {"001_workload_auth.sql"},
 		MigrationScopeGatewayAuth:      {"001_gateway_auth.sql", "002_mojaloop_interop.sql"},
 	}

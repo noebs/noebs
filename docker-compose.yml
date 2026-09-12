@@ -51,6 +51,13 @@ x-identity-auth-secret: &identity-auth-secret
   gid: "10001"
   mode: 0400
 
+x-identity-worker-secret: &identity-worker-secret
+  source: identity-worker-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
 x-card-vault-secret: &card-vault-secret
   source: card-vault-secrets
   target: /app/secrets.yaml
@@ -487,6 +494,8 @@ services:
         condition: service_completed_successfully
       workload-auth-migrate:
         condition: service_completed_successfully
+      temporal-namespace-bootstrap:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/identity-auth.yaml:/app/service.yaml:ro"
@@ -494,9 +503,40 @@ services:
       - *identity-auth-secret
     networks:
       - backend
+      - temporal-control
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "/usr/local/bin/noebs", "internal-healthcheck"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    user: "10001:10001"
+
+  identity-worker:
+    <<: [*service-defaults, *web-hardening]
+    build:
+      context: .
+    init: true
+    command: ["identity-worker"]
+    depends_on:
+      identity-auth-migrate:
+        condition: service_completed_successfully
+      temporal-namespace-bootstrap:
+        condition: service_completed_successfully
+      kafka-topics:
+        condition: service_completed_successfully
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/identity-worker.yaml:/app/service.yaml:ro"
+    secrets:
+      - *identity-worker-secret
+    networks:
+      - backend
+      - temporal-control
+    stop_grace_period: 45s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -699,6 +739,8 @@ services:
         condition: service_completed_successfully
       workload-auth-migrate:
         condition: service_completed_successfully
+      kafka-topics:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/notification-chat.yaml:/app/service.yaml:ro"
@@ -752,6 +794,8 @@ services:
         condition: service_completed_successfully
       temporal-namespace-bootstrap:
         condition: service_completed_successfully
+      kafka-topics:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-worker.yaml:/app/service.yaml:ro"
@@ -788,6 +832,8 @@ secrets:
     file: ./deploy/docker/secrets/api-gateway.secrets.yaml
   identity-auth-secrets:
     file: ./deploy/docker/secrets/identity-auth.secrets.yaml
+  identity-worker-secrets:
+    file: ./deploy/docker/secrets/identity-worker.secrets.yaml
   card-vault-secrets:
     file: ./deploy/docker/secrets/card-vault.secrets.yaml
   ebs-adapter-secrets:

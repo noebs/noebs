@@ -9,6 +9,28 @@ import (
 	"github.com/adonese/noebs/internal/tenantcatalog"
 )
 
+const walletAuthorizationCallbackURI = "https://api.noebs.sd/wallet/authorizations/oauth/callback"
+
+func TestDesiredStateUsesOneExplicitDeploymentOrigin(t *testing.T) {
+	state := repositoryDesiredState(t)
+	for index := range state.InteractiveClients {
+		client := &state.InteractiveClients[index]
+		for i, uri := range client.RedirectURIs {
+			client.RedirectURIs[i] = strings.ReplaceAll(uri, "https://api.noebs.sd", "https://noebs-workers.exe.xyz")
+		}
+		for i, uri := range client.PostLogoutRedirectURIs {
+			client.PostLogoutRedirectURIs[i] = strings.ReplaceAll(uri, "https://api.noebs.sd", "https://noebs-workers.exe.xyz")
+		}
+	}
+	if err := state.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	state.InteractiveClients[1].RedirectURIs[0] = "https://elsewhere.example/backoffice/oauth/callback"
+	if err := state.Validate(); err == nil {
+		t.Fatal("accepted browser clients on different origins")
+	}
+}
+
 func TestRepositoryDesiredStateContract(t *testing.T) {
 	file, err := os.Open("../../deploy/kubernetes/keycloak-authority/keycloak-desired-state.yaml")
 	if err != nil {
@@ -362,12 +384,14 @@ func validTestConfig(baseURL string) Config {
 		ClientID:     BootstrapClientID,
 		ClientSecret: "temporary-bootstrap-secret",
 		ClientCredentials: map[string]ClientCredential{
-			"noebs-keycloak-reconciler": {ClientSecret: "steady-reconciler-secret"},
-			"noebs-backoffice":          {ClientSecret: "backoffice-secret"},
-			walletAuthorizerClientID:    {ClientSecret: "wallet-authorizer-secret"},
-			temporalLedgerClientID:      {ClientSecret: "temporal-ledger-secret"},
-			temporalWorkerClientID:      {ClientSecret: "temporal-worker-secret"},
-			temporalBootstrapClientID:   {ClientSecret: "temporal-bootstrap-secret"},
+			"noebs-keycloak-reconciler":    {ClientSecret: "steady-reconciler-secret"},
+			"noebs-backoffice":             {ClientSecret: "backoffice-secret"},
+			walletAuthorizerClientID:       {ClientSecret: "wallet-authorizer-secret"},
+			temporalLedgerClientID:         {ClientSecret: "temporal-ledger-secret"},
+			temporalWorkerClientID:         {ClientSecret: "temporal-worker-secret"},
+			temporalIdentityClientID:       {ClientSecret: "temporal-identity-secret"},
+			temporalIdentityWorkerClientID: {ClientSecret: "temporal-identity-worker-secret"},
+			temporalBootstrapClientID:      {ClientSecret: "temporal-bootstrap-secret"},
 		},
 		IdentityProviders: map[string]IdentityProviderCredential{
 			"google": {ClientID: "google-client", ClientSecret: "google-secret"},

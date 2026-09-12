@@ -1,0 +1,144 @@
+package operationsui
+
+import "github.com/adonese/noebs/store"
+
+templ IdentityPage(data IdentityView) {
+ <!doctype html>
+ <html lang="en">
+  <head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width,initial-scale=1">
+   <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"includeIndicatorStyles":false,"historyCacheSize":0}'>
+   <title>Account verification · Noebs</title>
+   <link rel="stylesheet" href="/backoffice/assets/operations.css">
+   <script defer src="/backoffice/assets/htmx.min.js"></script>
+   <script defer src="/backoffice/assets/operations.js"></script>
+  </head>
+  <body hx-history="false">
+   <header>
+    <a href="/backoffice/home">Noebs back office</a>
+    <span>Tenant: { data.TenantID }</span>
+    <form method="post" action="/backoffice/logout">
+     <input type="hidden" name="_csrf" value={ data.CSRFToken }>
+     <button>Sign out</button>
+    </form>
+   </header>
+   <main id="review-main">
+    <nav>@identityLink(IdentityPath(data.TenantID), "Verification queue")</nav>
+    <div id="review-feedback" role="status" aria-live="polite"></div>
+    if data.Case != nil {
+     @identityCase(data, *data.Case)
+    } else {
+     @identityQueue(data)
+    }
+   </main>
+  </body>
+ </html>
+}
+
+templ identityLink(path string, label string) {
+ <a href={ path } hx-get={ path } hx-target="#review-main" hx-select="#review-main" hx-swap="outerHTML" hx-push-url="true">{ label }</a>
+}
+
+templ identityCase(data IdentityView, review store.IdentityReviewCase) {
+ <h1>Account verification</h1>
+ <p>User { review.Owner.UserID } · Case { review.Session.ID.String() } · Revision { review.Session.Revision }</p>
+ <dl>
+  <dt>Account verification status</dt><dd>{ review.AccountVerification.Status + " / " + review.AccountVerification.Substatus }</dd>
+  <dt>Session verification status</dt><dd>{ review.Session.Verification.Status + " / " + review.Session.Verification.Substatus }</dd>
+  <dt>Document type</dt><dd>{ review.Session.DocumentType }</dd>
+  <dt>Holder name</dt><dd>{ data.Submission.HolderName }</dd>
+  <dt>Document number</dt><dd>{ data.Submission.DocumentNumber }</dd>
+ </dl>
+ if review.Session.Review != nil {
+  <section>
+   <h2>Review decision</h2>
+   <p>{ review.Session.Review.Decision } · { review.Session.Review.Method } · { identityTime(review.Session.Review.ReviewedAt) }</p>
+   <p>{ review.Session.Review.Reason }</p>
+  </section>
+ }
+ <section>
+  <h2>Submitted documents</h2>
+  <div class="evidence">
+   for _, evidence := range review.Session.Evidence {
+    <figure>
+     <a href={ identityEvidencePath(data.TenantID, review, evidence.Kind) } target="_blank" rel="noopener">
+      <img src={ identityEvidencePath(data.TenantID, review, evidence.Kind) } alt={ evidence.Kind }>
+     </a>
+     <figcaption>{ evidence.Kind } · { evidence.Bytes } bytes</figcaption>
+    </figure>
+   }
+   if len(review.Session.Evidence) == 0 {
+    <p>No retained documents.</p>
+   }
+  </div>
+ </section>
+ if data.CanDecide && review.Session.Status == "submitted" {
+  @identityDecision(data, review)
+ }
+ <section>
+  <h2>Status and review history</h2>
+  <table>
+   <thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Revision</th></tr></thead>
+   <tbody>
+    for _, event := range review.Events {
+     <tr><td>{ identityTime(event.CreatedAt) }</td><td>{ event.Action }</td><td>{ event.Actor }</td><td>{ event.Revision }</td></tr>
+    }
+    if len(review.Events) == 0 {
+     <tr><td colspan="4">No review history.</td></tr>
+    }
+   </tbody>
+  </table>
+ </section>
+}
+
+templ identityDecision(data IdentityView, review store.IdentityReviewCase) {
+ <section>
+  <h2>Review account</h2>
+  <form method="post" action={ IdentityCasePath(data.TenantID, review.Owner.UserID, review.Session.ID.String()) + "/decision" } hx-post={ IdentityCasePath(data.TenantID, review.Owner.UserID, review.Session.ID.String()) + "/decision" } hx-target="#review-feedback" hx-disabled-elt="find button" class="review-form">
+   <input type="hidden" name="_csrf" value={ data.CSRFToken }>
+   <input type="hidden" name="operation_id" value={ data.OperationID }>
+   <input type="hidden" name="revision" value={ review.Session.Revision }>
+   <label>
+    Decision
+    <select name="decision" required>
+     <option value="">Choose a decision</option>
+     <option value="approved">Approve</option>
+     <option value="needs_information">Request more information</option>
+     <option value="rejected">Reject</option>
+    </select>
+   </label>
+   <label>Reason shown to the customer<textarea name="reason" maxlength="2000" rows="4" required></textarea></label>
+   <label>Review policy reference<input name="policy_reference" maxlength="256" required></label>
+   <label class="check"><input type="checkbox" name="evidence_reviewed" value="true" required>I reviewed the submitted claims and each document above.</label>
+   <button type="submit">Record decision</button>
+  </form>
+ </section>
+}
+
+templ identityQueue(data IdentityView) {
+ <h1>Verification queue</h1>
+ <p>Accounts awaiting document review.</p>
+ <table>
+  <thead><tr><th>User</th><th>Document type</th><th>Submitted</th><th>Revision</th><th>Case</th></tr></thead>
+  <tbody>
+   for _, item := range data.Queue {
+    <tr>
+     <td>{ item.UserID }</td><td>{ item.DocumentType }</td><td>{ identityTime(item.SubmittedAt) }</td><td>{ item.Revision }</td>
+     <td>@identityLink(IdentityCasePath(data.TenantID, item.UserID, item.SessionID.String()), "Review documents")</td>
+    </tr>
+   }
+   if len(data.Queue) == 0 {
+    <tr><td colspan="5">No accounts awaiting review.</td></tr>
+   }
+  </tbody>
+ </table>
+ <nav class="pagination">
+  if data.Offset > 0 {
+   @identityLink(identityQueuePath(data.TenantID, data.Limit, 0), "First page")
+  }
+  if data.HasNext {
+   @identityLink(identityQueuePath(data.TenantID, data.Limit, data.Offset + data.Limit), "Next page")
+  }
+ </nav>
+}

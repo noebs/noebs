@@ -914,6 +914,7 @@ type NoebsConfig struct {
 	OIDC                                       oidcauth.RuntimeConfig     `json:"oidc"`
 	KeycloakCACertificate                      string                     `json:"keycloak_ca_certificate"`
 	BackofficeClientSecret                     string                     `json:"backoffice_client_secret"`
+	KeycloakProxyTrustedAddresses              string                     `json:"keycloak_proxy_trusted_addresses"`
 	BackofficeRedirectURL                      string                     `json:"backoffice_redirect_url"`
 	BackofficePostLogoutURL                    string                     `json:"backoffice_post_logout_url"`
 	WalletAuthorizerClientSecret               string                     `json:"wallet_authorizer_client_secret"`
@@ -927,6 +928,10 @@ type NoebsConfig struct {
 	PSPWebhookRoutes                           map[string]PSPWebhookRoute `json:"psp_webhook_routes"`
 	KafkaBrokers                               []string                   `json:"kafka_brokers"`
 	KafkaTransactionTopic                      string                     `json:"kafka_transaction_topic"`
+	KafkaStatusTopic                           string                     `json:"kafka_status_topic"`
+	StatusEventBatchSize                       int                        `json:"status_event_batch_size"`
+	StatusEventPollIntervalMs                  int                        `json:"status_event_poll_interval_ms"`
+	StatusNotificationConsumerGroup            string                     `json:"status_notification_consumer_group"`
 	AdminReportingKafkaConsumerGroup           string                     `json:"admin_reporting_kafka_consumer_group"`
 	EBSTransactionEventPublisherBatchSize      int                        `json:"ebs_transaction_event_publisher_batch_size"`
 	EBSTransactionEventPublisherPollIntervalMs int                        `json:"ebs_transaction_event_publisher_poll_interval_ms"`

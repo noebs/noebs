@@ -13,6 +13,10 @@ client_credentials:
     client_secret: REPLACE_WITH_TEMPORAL_WALLET_LEDGER_CLIENT_SECRET
   noebs-temporal-wallet-worker:
     client_secret: REPLACE_WITH_TEMPORAL_WALLET_WORKER_CLIENT_SECRET
+  noebs-temporal-identity-auth:
+    client_secret: REPLACE_WITH_TEMPORAL_IDENTITY_AUTH_CLIENT_SECRET
+  noebs-temporal-identity-worker:
+    client_secret: REPLACE_WITH_TEMPORAL_IDENTITY_WORKER_CLIENT_SECRET
   noebs-temporal-namespace-bootstrap:
     client_secret: REPLACE_WITH_TEMPORAL_NAMESPACE_BOOTSTRAP_CLIENT_SECRET
 identity_providers:

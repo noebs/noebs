@@ -19,6 +19,7 @@ resources:
   - gateway-auth-cleanup.yaml
   - api-gateway.yaml
   - identity-auth.yaml
+  - identity-worker.yaml
   - card-vault.yaml
   - ebs-adapter.yaml
   - ebs-adapter-events.yaml

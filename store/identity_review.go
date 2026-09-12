@@ -39,9 +39,10 @@ type IdentityReviewEvent struct {
 }
 
 type IdentityReviewCase struct {
-	Owner   IdentityOwner         `json:"owner"`
-	Session IdentitySession       `json:"session"`
-	Events  []IdentityReviewEvent `json:"events"`
+	Owner               IdentityOwner         `json:"owner"`
+	Session             IdentitySession       `json:"session"`
+	AccountVerification IdentityVerification  `json:"account_verification"`
+	Events              []IdentityReviewEvent `json:"events"`
 }
 
 type IdentityReviewQueueItem struct {
@@ -151,6 +152,9 @@ func (s *Store) WithdrawIdentitySession(ctx context.Context, owner IdentityOwner
 	if result.Status == "discarded" || result.Status == "withdrawn" || result.Revision != revision {
 		return IdentitySession{}, ErrIdentityConflict
 	}
+	if err := identityTransition(result.Status, "withdrawn"); err != nil {
+		return IdentitySession{}, err
+	}
 	// Keep metadata hashes in the event; delete live image bytes and submitted
 	// claims atomically. This cannot promise erasure from database backups.
 	details := map[string]any{"session_id": id, "previous_status": result.Status, "evidence": result.Evidence}
@@ -226,7 +230,7 @@ func (s *Store) ReadIdentityReviewCase(ctx context.Context, reviewer IdentityRev
 	if err != nil {
 		return IdentityReviewCase{}, err
 	}
-	tx, err := db.BeginTxx(ctx, nil)
+	tx, err := db.BeginTxx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return IdentityReviewCase{}, err
 	}
@@ -242,7 +246,11 @@ func (s *Store) ReadIdentityReviewCase(ctx context.Context, reviewer IdentityRev
 	if err != nil {
 		return IdentityReviewCase{}, err
 	}
-	return IdentityReviewCase{Owner: owner, Session: result, Events: events}, tx.Commit()
+	account, err := readIdentityVerification(ctx, tx, owner)
+	if err != nil {
+		return IdentityReviewCase{}, err
+	}
+	return IdentityReviewCase{Owner: owner, Session: result, AccountVerification: account, Events: events}, tx.Commit()
 }
 
 // Evidence bytes are available only through the trusted operator command. Every
@@ -320,6 +328,9 @@ func (s *Store) DecideIdentityReview(ctx context.Context, p IdentityReviewDecisi
 	}
 	if result.Status != "submitted" || result.Revision != p.Revision {
 		return IdentitySession{}, ErrIdentityConflict
+	}
+	if err := identityTransition(result.Status, p.Decision); err != nil {
+		return IdentitySession{}, err
 	}
 	if result.Synthetic && p.Decision == "approved" {
 		return IdentitySession{}, ErrInvalidIdentityEvidence

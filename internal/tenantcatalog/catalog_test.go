@@ -22,6 +22,7 @@ func TestRepositoryCatalog(t *testing.T) {
 	}
 	want := []Tenant{
 		{ID: "tenant-cutover", Name: "Tenant Cutover"},
+		{ID: "tenant-mojaloop", Name: "Mojaloop Synthetic Demo"},
 		{ID: "tenant-sandbox", Name: "Tenant Sandbox"},
 	}
 	if got := catalog.All(); !slices.Equal(got, want) {

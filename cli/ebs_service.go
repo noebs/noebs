@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -23,6 +24,7 @@ import (
 	walletworker "github.com/adonese/noebs/wallet/worker"
 	"github.com/sirupsen/logrus"
 	chat "github.com/tutipay/ws"
+	"golang.org/x/sync/errgroup"
 )
 
 var noebsConfig ebs_fields.NoebsConfig
@@ -39,6 +41,7 @@ var pspWebhookStore *walletstore.Store
 var walletWorker *walletworker.Runner
 var interopWorker *walletinterop.Worker
 var ebsEventPublisher *eventing.OutboxPublisher
+var walletStatusEventPublisher *eventing.OutboxPublisher
 var adminReportingProjector *eventing.AdminReportingProjector
 var walletPSPRegistry *walletpsp.Registry
 var walletPSPLoader *walletpsp.Loader
@@ -56,6 +59,14 @@ func main() {
 }
 
 func runMain() error {
+	if isIdentityWorkerCommand() {
+		return runIdentityWorker()
+	}
+	defer func() {
+		if identityTemporalClient != nil {
+			identityTemporalClient.Close()
+		}
+	}()
 	if isIdentityReviewCommand() {
 		return identityReviewCommand()
 	}
@@ -205,9 +216,11 @@ func runService(ctx context.Context, role serviceRole) error {
 		if walletWorker == nil {
 			return fmt.Errorf("wallet-worker role requires an initialized temporal worker")
 		}
-		<-ctx.Done()
-		walletWorker.Stop()
-		return nil
+		defer walletWorker.Stop()
+		if walletStatusEventPublisher == nil {
+			return errors.New("wallet status publisher is required")
+		}
+		return walletStatusEventPublisher.Run(ctx)
 	}
 	if role.startsEBSEventPublisher() {
 		if ebsEventPublisher == nil {
@@ -247,6 +260,17 @@ func runService(ctx context.Context, role serviceRole) error {
 	}
 	if internalTransportServerTLS != nil {
 		listener = tls.NewListener(listener, internalTransportServerTLS.Clone())
+	}
+	if role == serviceRoleNotification {
+		notifications, err := newStatusNotificationConsumer(noebsConfig, storeSvc)
+		if err != nil {
+			listener.Close()
+			return err
+		}
+		group, runCtx := errgroup.WithContext(ctx)
+		group.Go(func() error { return notifications.Run(runCtx) })
+		group.Go(func() error { return runHTTPServer(runCtx, GetMainEngine(), listener, applicationShutdownTimeout) })
+		return group.Wait()
 	}
 	return runHTTPServer(ctx, GetMainEngine(), listener, applicationShutdownTimeout)
 }

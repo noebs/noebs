@@ -167,6 +167,11 @@ type PSPTransaction struct {
 	Currency                  string         `db:"currency"`
 	CurrencyUnitID            int64          `db:"currency_unit_version_id"`
 	Status                    string         `db:"status"`
+	LifecycleStatus           string         `db:"lifecycle_status"`
+	Substatus                 string         `db:"substatus"`
+	StatusVersion             int64          `db:"status_version"`
+	FulfillmentMethod         string         `db:"fulfillment_method"`
+	SettledAt                 sql.NullTime   `db:"settled_at"`
 	WorkflowID                sql.NullString `db:"workflow_id"`
 	ResponseCode              sql.NullString `db:"response_code"`
 	ResponseMessage           sql.NullString `db:"response_message"`

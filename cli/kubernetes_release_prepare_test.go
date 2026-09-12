@@ -547,12 +547,14 @@ func newTestKubernetesReleaseInputs(t *testing.T, tenantID string) kubernetesRel
 		KeycloakPostgresPassword: "keycloak-postgres-password",
 		GHCRDockerConfigJSON:     `{"auths":{"ghcr.io":{"auth":"` + base64.StdEncoding.EncodeToString([]byte("noebs:test-token")) + `"}}}`,
 		Keycloak: kubernetesReleaseKeycloakInputs{
-			ReconcilerClientSecret:        testCanonicalReleaseSecret(1),
-			BackofficeClientSecret:        testCanonicalReleaseSecret(2),
-			WalletAuthorizerClientSecret:  testCanonicalReleaseSecret(12),
-			TemporalLedgerClientSecret:    testCanonicalReleaseSecret(13),
-			TemporalWorkerClientSecret:    testCanonicalReleaseSecret(14),
-			TemporalBootstrapClientSecret: testCanonicalReleaseSecret(15),
+			ReconcilerClientSecret:             testCanonicalReleaseSecret(1),
+			BackofficeClientSecret:             testCanonicalReleaseSecret(2),
+			WalletAuthorizerClientSecret:       testCanonicalReleaseSecret(12),
+			TemporalLedgerClientSecret:         testCanonicalReleaseSecret(13),
+			TemporalWorkerClientSecret:         testCanonicalReleaseSecret(14),
+			TemporalIdentityClientSecret:       testCanonicalReleaseSecret(31),
+			TemporalIdentityWorkerClientSecret: testCanonicalReleaseSecret(32),
+			TemporalBootstrapClientSecret:      testCanonicalReleaseSecret(15),
 		},
 		GatewayAuth: kubernetesReleaseGatewayAuthInputs{
 			Database: kubernetesReleaseGatewayAuthDatabaseInputs{

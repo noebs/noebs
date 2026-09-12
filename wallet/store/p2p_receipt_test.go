@@ -55,6 +55,14 @@ func TestP2PReceiptsAndFailureFence(t *testing.T) {
 		if r.Status != want || r.Payload.Amount != 100 || r.Fee != 0 || r.CurrencyUnitID != n.unit {
 			t.Fatalf("receipt %+v want %s", r, want)
 		}
+		var event struct {
+			Status    string `db:"status"`
+			Substatus string `db:"substatus"`
+		}
+		interopMust(t, f.runtime.DB.GetContext(f.ctx, &event, `SELECT status,substatus FROM transaction_status_events WHERE tenant_id=$1 AND aggregate_id=$2 ORDER BY version DESC LIMIT 1`, n.id, "p2p:"+key))
+		if event.Status != r.LifecycleStatus || event.Substatus != r.Substatus {
+			t.Fatalf("event %+v differs from receipt %+v", event, r)
+		}
 		return r
 	}
 	t.Run("recipient lookup is exact and canonical", func(t *testing.T) {
@@ -112,6 +120,14 @@ func TestP2PReceiptsAndFailureFence(t *testing.T) {
 		interopMust(t, e)
 		if !again.Existing || again.TransactionID != posted.TransactionID {
 			t.Fatal(again)
+		}
+		_, e = f.runtime.RecordP2PCommandRun(f.ctx, n.id, p.IdempotencyKey, "workflow-"+p.IdempotencyKey, "late-run")
+		interopMust(t, e)
+		receipt(p.IdempotencyKey, "completed")
+		var transitions int
+		interopMust(t, f.runtime.DB.GetContext(f.ctx, &transitions, `SELECT count(*) FROM transaction_status_events WHERE tenant_id=$1 AND aggregate_id=$2`, n.id, "p2p:"+p.IdempotencyKey))
+		if transitions != 2 {
+			t.Fatalf("late run/replay emitted %d transitions, want created and completed", transitions)
 		}
 	})
 	t.Run("immutable reviewed amount cannot change in late activity", func(t *testing.T) {

@@ -19,6 +19,7 @@ func TestIdentityEvidenceRoutesRequireAuthenticatedOwner(t *testing.T) {
 	app := fiber.New()
 	RegisterIdentityAuthedRoutes(app.Group("/consumer"), &Handler{})
 	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/consumer/identity/verification"},
 		{http.MethodPost, "/consumer/identity/sessions"},
 		{http.MethodGet, "/consumer/identity/sessions/latest"},
 		{http.MethodPost, "/consumer/identity/sessions/" + identityTestID + "/withdraw"},

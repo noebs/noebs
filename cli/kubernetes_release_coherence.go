@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -114,10 +116,20 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 	if apiGateway.WalletAuthorizerClientSecret != reconciler.ClientCredentials["noebs-wallet-authorizer"].ClientSecret {
 		return errors.New("api-gateway wallet authorizer client secret does not match the Keycloak managed credential")
 	}
-	if apiGateway.WalletAuthorizerRedirectURL != "https://api.noebs.sd/wallet/authorizations/oauth/callback" {
+	origin, err := keycloakPublicOrigin(keycloakValues["hostname"])
+	if err != nil {
+		return err
+	}
+	if apiGateway.KeycloakProxyTrustedAddresses != keycloakValues["proxy-trusted-addresses"] {
+		return errors.New("Keycloak proxy trust does not match the explicit release source address")
+	}
+	if apiGateway.WalletAuthorizerRedirectURL != origin+"/wallet/authorizations/oauth/callback" {
 		return errors.New("api-gateway wallet authorizer redirect URL does not match the Keycloak client boundary")
 	}
-	if apiGateway.OIDC.Issuer != "https://api.noebs.sd/auth/realms/noebs" ||
+	if apiGateway.BackofficeRedirectURL != origin+"/backoffice/oauth/callback" || apiGateway.BackofficePostLogoutURL != origin+"/backoffice/oauth/logout/callback" {
+		return errors.New("api-gateway back-office redirects do not match the release Keycloak boundary")
+	}
+	if apiGateway.OIDC.Issuer != origin+"/auth/realms/noebs" ||
 		apiGateway.OIDC.JWKSURL != "https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/certs" {
 		return errors.New("api-gateway OIDC endpoints do not match the release Keycloak boundary")
 	}
@@ -127,6 +139,7 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 	}{
 		{role: serviceRoleWalletLedger, clientID: temporalLedgerClientID},
 		{role: serviceRoleWalletWorker, clientID: temporalWorkerClientID},
+		{role: serviceRoleIdentityAuth, clientID: temporalIdentityClientID},
 	} {
 		service := services[expected.role].value
 		if service.TemporalClientID != expected.clientID || service.TemporalClientSecret != reconciler.ClientCredentials[expected.clientID].ClientSecret {
@@ -143,6 +156,22 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 		return err
 	}
 	return validateReleaseWorkloadKeyProjection(services)
+}
+
+func keycloakPublicOrigin(hostname string) (string, error) {
+	parsed, err := url.Parse(hostname)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Path != "/auth" || parsed.RawPath != "" || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || strings.ContainsAny(parsed.Host, "* \t\r\n") {
+		return "", errors.New("Keycloak hostname must be an explicit HTTPS origin followed by /auth")
+	}
+	return "https://" + parsed.Host, nil
+}
+
+func validateKeycloakProxyAddress(value string) error {
+	prefix, err := netip.ParsePrefix(value)
+	if err != nil || prefix.Bits() != prefix.Addr().BitLen() || prefix.Addr().IsUnspecified() || prefix.Addr().IsMulticast() || prefix.String() != value {
+		return errors.New("Keycloak proxy trust requires one exact host /32 or /128 address")
+	}
+	return nil
 }
 
 func validateReleasePSPWebhookProjection(catalog tenantcatalog.Catalog, apiGateway ebs_fields.NoebsConfig, pspWebhook, walletWorker map[string]interface{}) error {

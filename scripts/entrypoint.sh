@@ -22,4 +22,4 @@ require_file "service config" "$SERVICE_FILE"
 require_file "secrets" "$SECRETS_FILE"
 
 echo "Starting noebs service runtime..."
-exec noebs
+exec noebs "$@"

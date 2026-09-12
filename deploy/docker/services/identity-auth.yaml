@@ -2,3 +2,4 @@ noebs:
   service_role: identity-auth
   otel_service_name: identity-auth
   db_driver: pgx
+  temporal_client_id: noebs-temporal-identity-auth

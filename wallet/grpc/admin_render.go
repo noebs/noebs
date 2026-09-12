@@ -50,6 +50,8 @@ func (s *Server) RenderWalletAdmin(ctx context.Context, req *walletv1.RenderWall
 		operator = *resolved
 	}
 	switch req.Action {
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION:
+		return s.resolveAdminTransaction(ctx, req, operator)
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD:
 		return s.renderAdminDashboard(ctx, req)
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_WALLETS:
@@ -89,7 +91,7 @@ func (s *Server) RenderWalletAdmin(ctx context.Context, req *walletv1.RenderWall
 
 func isAdminWalletMutation(action walletv1.AdminWalletAction) bool {
 	switch action {
-	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_SUBMIT_MANUAL_TRANSFER,
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION, walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_SUBMIT_MANUAL_TRANSFER,
 		walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_FEE,
 		walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_RATE,
 		walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_APPROVE_TRANSFER,
@@ -102,6 +104,8 @@ func isAdminWalletMutation(action walletv1.AdminWalletAction) bool {
 
 func adminWalletActionPermission(action walletv1.AdminWalletAction) tenantauth.Permission {
 	switch action {
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION:
+		return tenantauth.PermissionWalletTransactionResolve
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_AUDIT_EVENTS:
 		return tenantauth.PermissionWalletAuditRead
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_SUBMIT_MANUAL_TRANSFER:
@@ -314,7 +318,17 @@ func (s *Server) renderAdminTransactionDetail(ctx context.Context, req *walletv1
 	if err != nil {
 		return nil, mapError(err)
 	}
+	events, err := s.Service.Store.ListPSPTransactionStatusEvents(ctx, tenantID, clientRef, 100)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	md, _ := metadata.FromIncomingContext(ctx)
+	principal, err := walletOperatorPrincipal(md)
+	if err != nil {
+		return nil, err
+	}
 	return adminHTML(ctx, wallethandler.PSPTransactionDetailPage(wallethandler.PSPTransactionDetailView{
+		Events: events, IdempotencyKey: uuid.NewString(), CanResolve: principal.HasRole(tenantauth.RoleTenantAdmin),
 		TenantID:    tenantID,
 		Transaction: *txn,
 	}))

@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"html"
+	"net/http"
 	"strings"
 
 	gateway "github.com/adonese/noebs/apigateway"
@@ -28,6 +30,7 @@ func RegisterGRPCAdminRoutes(router fiber.Router, handler *GRPCAdminHandler) {
 	router.Get("/wallets/:id", handler.WalletDetail)
 	router.Get("/transactions", handler.Transactions)
 	router.Get("/transactions/:client_reference", handler.TransactionDetail)
+	router.Post("/transactions/:client_reference/resolve", handler.ResolveTransaction)
 	router.Get("/pending", handler.PendingApprovals)
 	router.Get("/manual", handler.ManualTransfers)
 	router.Post("/manual", handler.SubmitManualTransfer)
@@ -67,6 +70,18 @@ func (h *GRPCAdminHandler) Transactions(c *fiber.Ctx) error {
 
 func (h *GRPCAdminHandler) TransactionDetail(c *fiber.Ctx) error {
 	return h.render(c, walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_TRANSACTION_DETAIL, fiber.Map{"client_reference": c.Params("client_reference")})
+}
+
+func (h *GRPCAdminHandler) ResolveTransaction(c *fiber.Ctx) error {
+	if len(c.Body()) > 16384 || !strings.HasPrefix(c.Get(fiber.HeaderContentType), fiber.MIMEApplicationForm) {
+		return fiber.ErrBadRequest
+	}
+	for _, field := range []string{"idempotency_key", "expected_version", "status", "fulfillment_method", "reason", "evidence_reference", "settlement_reference"} {
+		if len(c.Request().PostArgs().PeekMulti(field)) != 1 {
+			return fiber.ErrBadRequest
+		}
+	}
+	return h.render(c, walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION, fiber.Map{"client_reference": c.Params("client_reference")})
 }
 
 func (h *GRPCAdminHandler) ManualTransfers(c *fiber.Ctx) error {
@@ -128,10 +143,20 @@ func (h *GRPCAdminHandler) render(c *fiber.Ctx, action walletv1.AdminWalletActio
 	}
 	resp, err := h.Client.RenderWalletAdmin(outgoing, req)
 	if err != nil {
+		if action == walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION && c.Get("HX-Request") == "true" {
+			c.Set("HX-Retarget", "#review-feedback")
+			c.Set("HX-Reswap", "innerHTML")
+			c.Set(fiber.HeaderContentType, "text/html; charset=utf-8")
+			return c.Status(http.StatusConflict).SendString("<p role=\"alert\">" + html.EscapeString("Resolution could not be recorded. Check the fields and reload if the transaction changed. Retry the same form after a connection interruption.") + "</p>")
+		}
 		return jsonResponse(c, 0, mapWalletGRPCError(err))
 	}
 	statusCode := int(resp.GetStatusCode())
 	if resp.GetRedirectLocation() != "" {
+		if c.Get("HX-Request") == "true" {
+			c.Set("HX-Redirect", resp.GetRedirectLocation())
+			return c.SendStatus(http.StatusOK)
+		}
 		return c.Redirect(resp.GetRedirectLocation(), statusCode)
 	}
 	if resp.GetContentType() != "" {
@@ -159,6 +184,8 @@ func adminOutgoingContext(c *fiber.Ctx, tenantID string) (context.Context, error
 
 func adminActionPermission(action walletv1.AdminWalletAction) tenantauth.Permission {
 	switch action {
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_RESOLVE_TRANSACTION:
+		return tenantauth.PermissionWalletTransactionResolve
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_AUDIT_EVENTS:
 		return tenantauth.PermissionWalletAuditRead
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_SUBMIT_MANUAL_TRANSFER:

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"github.com/adonese/noebs/store"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
@@ -9,6 +10,23 @@ import (
 	"testing"
 	"time"
 )
+
+func TestIdentityDecisionCannotFallBackToDirectDatabase(t *testing.T) {
+	root := t.TempDir()
+	reason := filepath.Join(root, "reason.txt")
+	if err := os.WriteFile(reason, []byte("Evidence matches the supplied claims"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"--action", "decide", "--config", filepath.Join(root, "missing-config"), "--secrets", "missing", "--tenant", "tenant", "--reviewer", "operator", "--session", "11111111-1111-4111-8111-111111111111", "--user-id", "1", "--revision", "1", "--operation-id", "11111111-1111-4111-8111-111111111112", "--decision", "approved", "--reason-file", reason, "--policy", "test-v1", "--evidence-reviewed"}
+	var output bytes.Buffer
+	err := runIdentityReview(args, &output, func(string) (*store.DB, error) {
+		t.Fatal("decision opened database instead of Temporal")
+		return nil, nil
+	})
+	if err == nil || output.Len() != 0 {
+		t.Fatalf("missing Temporal configuration accepted: %v", err)
+	}
+}
 
 func TestIdentityReviewCommandRequiresExplicitScopeAndDecisionTerms(t *testing.T) {
 	base := []string{"--secrets", "/app/secrets.yaml", "--tenant", "tenant-mojaloop", "--reviewer", "reviewer@example.test"}
