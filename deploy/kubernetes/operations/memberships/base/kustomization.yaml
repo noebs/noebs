@@ -14,4 +14,4 @@ labels:
 images:
   - name: ghcr.io/noebs/noebs
     newName: ghcr.io/noebs/noebs
-    digest: sha256:3b8a77fd562d5b98fb8695b103cd962c8d36fc8b67cb030ec9d95688715a0fdd
+    digest: sha256:c0d0c92966ee6a00048e5c5d6549d32a7a999964b82ed6e8823044a3ad001702
