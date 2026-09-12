@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import shlex
 
-from reconcile import ROOT, ssh
+from reconcile import ROOT, RemoteLease, ssh, ssh_args
 
 
 def main():
@@ -16,6 +16,19 @@ def main():
     args=parser.parse_args()
     machines=json.loads(args.machines.read_text())
     key=args.key.resolve()
+    with RemoteLease(ssh_args(key,machines['noebs-control']['ssh_destination'])) as lease:
+        bootstrap(key,machines,lease)
+
+
+def bootstrap(key,machines,lease):
+    marker=ssh(key,machines['noebs-data']['ssh_destination'],
+        'if command -v k3s >/dev/null && sudo test -s /var/lib/rancher/k3s/server/db/state.db; then sudo k3s kubectl -n noebs get configmap noebs-migration --ignore-not-found -o json; fi',capture_output=True).stdout
+    if marker and json.loads(marker)['data']['state']!='destination-active':
+        raise RuntimeError('Cluster bootstrap refused while migration or recovery is fenced')
+    checkpoint=ssh(key,machines['noebs-data']['ssh_destination'],
+        'if command -v k3s >/dev/null && sudo test -s /var/lib/rancher/k3s/server/db/state.db; then sudo k3s kubectl -n noebs get configmap noebs-backup-checkpoint --ignore-not-found -o name; fi',capture_output=True).stdout
+    if checkpoint:
+        raise RuntimeError('Cluster bootstrap refused: a coordinated backup has not resumed')
     script=(ROOT/'scripts/exe/node-init.sh').read_bytes()
     receipt=ssh(key,machines['noebs-control']['ssh_destination'],
                 'if test -f /var/lib/noebs/runtime/deployment.json; then cat /var/lib/noebs/runtime/deployment.json; fi',
@@ -31,6 +44,7 @@ def main():
 
 
     def initialize(name, phase, server_ip='', token=''):
+        lease.check()
         vm=machines[name]
         ssh(key, vm['ssh_destination'], 'sudo install -d -m 0700 /opt/noebs; sudo tee /opt/noebs/node-init.sh >/dev/null', input=script)
         command='sudo bash /opt/noebs/node-init.sh '+shlex.join([name,vm['role'],server_ip,phase])
@@ -44,7 +58,7 @@ def main():
     address=ssh(key, server, 'tailscale ip -4', capture_output=True).stdout.decode().strip()
     token=ssh(key, server, 'sudo cat /var/lib/rancher/k3s/server/node-token', capture_output=True).stdout.decode().strip()
     initialize('noebs-workers', 'cluster', address, token)
-    ssh(key, server, 'sudo k3s kubectl wait --for=condition=Ready nodes --all --timeout=180s; sudo k3s kubectl get nodes -o wide')
+    ssh(key, server, 'sudo k3s kubectl wait --for=condition=Ready nodes --all --timeout=180s && sudo k3s kubectl get nodes -o wide')
 
 
 if __name__=='__main__': main()

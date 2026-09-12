@@ -1,3 +1,10 @@
+{
+	servers {
+		trusted_proxies static 100.102.164.34/32
+		trusted_proxies_strict
+	}
+}
+
 (common_headers) {
 	encode gzip zstd
 	header {

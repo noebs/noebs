@@ -9,7 +9,8 @@ import re
 import shlex
 import tarfile
 
-from reconcile import ROOT, RemoteLease, run, ssh, ssh_args
+from reconcile import RemoteLease, run, ssh, ssh_args
+from backup_checkpoint import verify_set
 
 
 def require_fenced(marker, recovery_id, resources):
@@ -26,25 +27,23 @@ def require_fenced(marker, recovery_id, resources):
                 raise ValueError('A runtime or maintenance pod is still active: ' + name)
 
 
-def redis_archive(rdb):
-    if not rdb.startswith(b'REDIS'):
-        raise ValueError('SDK backup is not a Redis RDB file')
-    content = {'appendonlydir/appendonly.aof.1.base.rdb': rdb,
-               'appendonlydir/appendonly.aof.manifest': b'file appendonly.aof.1.base.rdb seq 1 type b\n'}
-    result = io.BytesIO()
-    with tarfile.open(fileobj=result, mode='w') as archive:
-        for name, value in content.items():
-            entry = tarfile.TarInfo(name)
-            entry.size, entry.mode = len(value), 0o600
-            archive.addfile(entry, io.BytesIO(value))
-    return result.getvalue()
+def validate_cold_archive(payload):
+    with tarfile.open(fileobj=io.BytesIO(payload), mode='r:gz') as archive:
+        members = archive.getmembers()
+        if not members:
+            raise ValueError('Cold-store backup archive is empty')
+        for member in members:
+            path = Path(member.name)
+            if path.is_absolute() or '..' in path.parts or not (member.isfile() or member.isdir()):
+                raise ValueError('Cold-store archive has an unsafe filesystem entry')
+    return payload
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--key', type=Path, required=True)
     parser.add_argument('--machines', type=Path, required=True)
-    parser.add_argument('--redis-backup', type=Path, required=True)
+    parser.add_argument('--archives', type=Path, required=True)
     parser.add_argument('--age', type=Path, required=True)
     parser.add_argument('--age-key', type=Path, required=True)
     parser.add_argument('--recovery-id', required=True)
@@ -52,6 +51,7 @@ def main():
     if not re.fullmatch('[A-Za-z0-9][A-Za-z0-9_.-]{0,79}', args.recovery_id):
         raise ValueError('Recovery ID must be a filename-safe identifier')
     os.umask(0o077)
+    checkpoint = verify_set(args.archives)
     key = args.key.resolve()
     machines = json.loads(args.machines.read_text())
     server = machines['noebs-data']['ssh_destination']
@@ -64,9 +64,14 @@ def main():
         marker = json.loads(kube(['get', 'configmap/noebs-migration', '-o', 'json']))['data']
         resources = json.loads(kube(['get', 'deployments,cronjobs,pods', '-o', 'json']))['items']
         require_fenced(marker, args.recovery_id, resources)
-        rdb = run([str(args.age.resolve()), '--decrypt', '-i', str(args.age_key.resolve()),
-                   str(args.redis_backup.resolve())], capture_output=True).stdout
-        archive = redis_archive(rdb)
+        if marker.get('backup_checkpoint') != checkpoint['id']:
+            raise ValueError('PostgreSQL restore marker must identify this exact backup checkpoint')
+        archives = {}
+        for name, suffix in [('kafka', 'kafka'), ('redis', 'mojaloop')]:
+            path = args.archives / (checkpoint['id'] + '-' + suffix + '.tar.gz.age')
+            payload = run([str(args.age.resolve()), '--decrypt', '-i', str(args.age_key.resolve()),
+                           str(path.resolve())], capture_output=True).stdout
+            archives[name] = validate_cold_archive(payload)
         volumes = {}
         for name, claim in [('kafka', 'kafka-data-kafka-0'), ('redis', 'data-noebs-mojaloop-redis-0')]:
             pvc = json.loads(kube(['get', 'pvc/' + claim, '-o', 'json']))
@@ -79,8 +84,9 @@ def main():
         # Failed recovery stays fenced. PostgreSQL snapshots must already be restored.
         kube(['patch', 'configmap/noebs-migration', '--type=merge', '-p',
               json.dumps({'data': {'state': 'destination-recovery-running'}})])
-        kube(['scale', 'statefulset/kafka', 'statefulset/noebs-mojaloop-redis', '--replicas=0',
-              '--field-manager=noebs-release'])
+        for name in ['kafka', 'noebs-mojaloop-redis']:
+            kube(['patch', 'statefulset/' + name, '--type=merge', '--field-manager=noebs-release',
+                  '-p', json.dumps({'spec': {'replicas': 0}})])
         pods = [item['metadata']['name'] for item in resources if item['kind'] == 'Pod'
                 and item['metadata']['name'] in ['kafka-0', 'noebs-mojaloop-redis-0']]
         if pods:
@@ -96,20 +102,11 @@ mv -- "$path" "$retained"
 install -d -m "$mode" "$path"
 chown "$owner" "$path"
 '''
-            if name == 'redis':
-                command += 'tar xf - -C "$path"; chown -R "$owner" "$path"\n'
-            ssh(key, server, 'sudo bash -c ' + shlex.quote(command), input=archive if name == 'redis' else None)
-        for database in ['identity_auth', 'wallet_ledger', 'ebs_adapter']:
-            sql = (ROOT / 'scripts/exe/recovery' / (database + '.sql')).read_bytes()
-            # Stage input on the host before kubectl exec so exec startup cannot lose stdin.
-            path = '/var/lib/noebs-recovery-' + args.recovery_id + '.sql'
-            ssh(key, server, 'sudo install -m 0600 /dev/null ' + path + '; sudo tee ' + path + ' >/dev/null', input=sql)
-            command = 'set -eu; trap ' + shlex.quote('rm -f ' + path) + ' EXIT; cat ' + path + ' | k3s kubectl -n noebs exec -i postgres-0 -- gosu postgres psql -X -v ON_ERROR_STOP=1 -h /var/run/postgresql -U postgres -d ' + database
-            lease.check()
-            ssh(key, server, 'sudo bash -c ' + shlex.quote(command))
+            command += 'tar xzf - -C "$path"\n'
+            ssh(key, server, 'sudo bash -c ' + shlex.quote(command), input=archives[name])
         kube(['patch', 'configmap/noebs-migration', '--type=merge', '-p',
-              json.dumps({'data': {'state': 'destination-staged', 'recovery_kind': 'periodic-backup'}})])
-        print('SDK RDB restored and durable outboxes prepared for fresh Kafka; runtimes remain fenced')
+              json.dumps({'data': {'state': 'destination-staged', 'recovery_kind': 'coordinated-backup'}})])
+        print('Checkpoint Kafka and SDK cold stores restored together; runtimes remain fenced')
 
 
 if __name__ == '__main__':

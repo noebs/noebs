@@ -100,6 +100,8 @@ def main():
 trap 'rm -rf "$incoming"' EXIT
 IFS= read -r EXEDEV_TOKEN
 export EXEDEV_TOKEN
+exec 8>/var/lib/noebs/release.lock
+flock -n 8
 exec 9>/var/lib/noebs/foundation.lock
 flock -x 9
 cd /var/lib/noebs/foundation

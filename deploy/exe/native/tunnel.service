@@ -1,0 +1,11 @@
+[Unit]
+Description=noebs Mojaloop private WireGuard transport
+After=network-online.target
+Wants=network-online.target
+[Service]
+Environment=TOKIO_WORKER_THREADS=2
+ExecStart=/usr/local/bin/wstunnel client --http-headers-file /etc/noebs-mojaloop/exe-headers --tls-verify-certificate --websocket-ping-frequency 20s -L udp://127.0.0.1:51826:127.0.0.1:51820?timeout_sec=0 wss://nips-hub.exe.xyz:9000
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target

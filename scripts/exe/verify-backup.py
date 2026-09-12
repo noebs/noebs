@@ -8,6 +8,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from backup_checkpoint import verify_set
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -16,9 +18,9 @@ def main():
     parser.add_argument('--age-key', type=Path, required=True)
     parser.add_argument('--postgres-bin', type=Path, required=True)
     parser.add_argument('--work', type=Path, required=True)
-    parser.add_argument('--prepare-event-replay', action='store_true')
     args = parser.parse_args()
     os.umask(0o077)
+    checkpoint = verify_set(args.archives)
     binaries = args.postgres_bin.resolve()
     reports = []
     for authority in ['postgres', 'temporal', 'keycloak']:
@@ -46,11 +48,6 @@ def main():
                     try:
                         run([str(binaries / 'psql'), '-X', '-h', str(work), '-U', 'noebs_backup_verifier',
                              '-d', 'postgres', '--set=ON_ERROR_STOP=1'], input=sql)
-                        if authority == 'postgres' and args.prepare_event_replay:
-                            for database in ['identity_auth', 'wallet_ledger', 'ebs_adapter']:
-                                reset = (Path(__file__).parent / 'recovery' / (database + '.sql')).read_bytes()
-                                run([str(binaries / 'psql'), '-X', '-h', str(work), '-U', 'noebs_backup_verifier',
-                                     '-d', database, '--set=ON_ERROR_STOP=1'], input=reset)
                         count = subprocess.check_output([str(binaries / 'psql'), '-X', '-At', '-h', str(work),
                                                         '-U', 'noebs_backup_verifier', '-d', 'postgres', '-c',
                                                         'SELECT count(*) FROM pg_database WHERE datallowconn AND NOT datistemplate'])
@@ -62,7 +59,7 @@ def main():
                     failure.write_bytes(log_path.read_bytes())
                     raise RuntimeError('Restore failed for ' + authority + '; private diagnostic: ' + str(failure)) from None
             reports.append({'authority': authority, 'databases': int(count), 'restored': True})
-    print(json.dumps({'restores': reports}, sort_keys=True))
+    print(json.dumps({'checkpoint': checkpoint['id'], 'restores': reports}, sort_keys=True))
 
 
 if __name__ == '__main__':

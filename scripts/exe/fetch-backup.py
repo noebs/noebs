@@ -9,6 +9,7 @@ import re
 import shlex
 
 from reconcile import ssh
+from backup_checkpoint import manifest_entries, verify_set
 
 
 def main():
@@ -29,22 +30,14 @@ def main():
     directory = '/var/lib/noebs-backup/data/'
     manifest = ssh(args.key, backup, 'sudo cat ' + directory + manifest_name, capture_output=True).stdout
     stamp = manifest_name.removesuffix('-SHA256SUMS')
-    expected = {stamp + '-' + suffix for suffix in ['postgres.sql.gz.age', 'temporal.sql.gz.age',
-                'keycloak.sql.gz.age', 'mojaloop.rdb.age', 'kubernetes.json.gz.age', 'control-plane.tar.gz.age']}
-    seen = set()
-    for line in manifest.decode().splitlines():
-        checksum, name = line.split()
-        name = name.removeprefix('./')
-        if name not in expected or name in seen or not re.fullmatch('[0-9a-f]{64}', checksum):
-            raise ValueError('Backup manifest contains an unexpected archive')
+    entries = manifest_entries(manifest, stamp)
+    for name, checksum in entries.items():
         payload = ssh(args.key, backup, 'sudo cat ' + shlex.quote(directory + name), capture_output=True).stdout
         if hashlib.sha256(payload).hexdigest() != checksum:
             raise ValueError('Backup checksum mismatch: ' + name)
         (args.output / name).write_bytes(payload)
-        seen.add(name)
-    if seen != expected:
-        raise ValueError('Backup manifest is incomplete')
     (args.output / manifest_name).write_bytes(manifest)
+    verify_set(args.output)
     key = ssh(args.key, controller, 'cat /var/lib/noebs/runtime/age-key.txt', capture_output=True).stdout
     (args.output / 'age-key.txt').write_bytes(key)
     print('Verified encrypted backup ' + stamp)

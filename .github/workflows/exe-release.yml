@@ -91,17 +91,21 @@ jobs:
         run: scripts/exe/bootstrap-cluster.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json"
       - name: Promote application and migration jobs
         run: scripts/exe/promote.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --receipts "$RUNNER_TEMP/receipts" --work "$RUNNER_TEMP/exe"
-      - name: Enable and verify encrypted backups
+      - name: Configure encrypted backups and rehearse staging snapshot
         run: |
           scripts/exe/setup-backups.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --work "$RUNNER_TEMP/exe"
-          ssh -i "$RUNNER_TEMP/exe/key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=deploy/exe/known_hosts noebs-data.exe.xyz 'sudo systemctl start noebs-backup'
+          if [[ $(jq -r .stage "$RUNNER_TEMP/exe/release-receipt.json") == empty-staging ]]; then
+            scripts/exe/coordinated_backup.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --work "$RUNNER_TEMP/exe/checkpoints" --staging-only
+          fi
       - name: Restore backups into isolated temporary PostgreSQL clusters
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-16
           sudo locale-gen en_US.UTF-8
           scripts/exe/fetch-backup.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --output "$RUNNER_TEMP/exe/restore"
-          scripts/exe/verify-backup.py --archives "$RUNNER_TEMP/exe/restore" --age "$RUNNER_TEMP/exe/bin/age" --age-key "$RUNNER_TEMP/exe/restore/age-key.txt" --postgres-bin /usr/lib/postgresql/16/bin --work "$RUNNER_TEMP/exe" --prepare-event-replay
+          scripts/exe/verify-backup.py --archives "$RUNNER_TEMP/exe/restore" --age "$RUNNER_TEMP/exe/bin/age" --age-key "$RUNNER_TEMP/exe/restore/age-key.txt" --postgres-bin /usr/lib/postgresql/16/bin --work "$RUNNER_TEMP/exe"
+      - name: Enable the verified nightly backup schedule
+        run: scripts/exe/setup-backups.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --work "$RUNNER_TEMP/exe" --enable-schedule
       - name: Preserve encrypted recovery state
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

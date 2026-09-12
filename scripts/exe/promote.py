@@ -14,6 +14,7 @@ import tempfile
 
 import yaml
 from reconcile import ROOT, RemoteLease, run, ssh, ssh_args
+from native_relay import Host, callback_ready, stage_native_relay, switch_native_relay
 
 ORIGIN = 'https://api.noebs.sd'
 
@@ -54,7 +55,10 @@ def main():
     parser.add_argument('--receipts',type=Path,required=True)
     parser.add_argument('--work',type=Path,required=True)
     parser.add_argument('--migration-id')
+    parser.add_argument('--native-handoff', type=Path)
     args=parser.parse_args()
+    if args.native_handoff and not args.migration_id:
+        parser.error('--native-handoff requires --migration-id')
     os.umask(0o077)
     inherited=args.migration_id and os.environ.get('NOEBS_RELEASE_LEASE')==args.migration_id
     if inherited:
@@ -87,6 +91,9 @@ def promote(args, lease):
         if not result: return ''
         conditions=json.loads(result).get('status',{}).get('conditions',[])
         return next((item['type'] for item in conditions if item['status']=='True' and item['type'] in ['Complete','Failed']),'Running')
+
+    if kubectl(['-n','noebs','get','configmap','noebs-backup-checkpoint','--ignore-not-found','-o','name'],capture=True).stdout:
+        raise RuntimeError('Promotion refused: a coordinated backup has not resumed')
 
     migration=kubectl(['-n','noebs','get','configmap','noebs-migration','--ignore-not-found','-o','json'],capture=True).stdout
     marker=json.loads(migration).get('data',{}) if migration else {}
@@ -134,6 +141,8 @@ def promote(args, lease):
                 peers=obj['spec']['ingress'][0]['from']
                 peers[:]=[peer for peer in peers if peer.get('ipBlock',{}).get('cidr')!='10.42.0.1/32']
                 peers.append({'ipBlock':{'cidr':gateway_proxy if obj['metadata']['name']=='api-gateway-ingress' else keycloak_proxy}})
+            if obj['kind']=='NetworkPolicy' and obj['metadata']['name']=='noebs-mojaloop-worker':
+                obj['spec']['ingress'][0]['from']=[{'ipBlock':{'cidr':gateway_proxy}}]
             if obj['kind']=='ConfigMap' and obj['metadata']['name']=='noebs-config':
                 obj['data']['config.yaml']=(release/'config.yaml').read_text()
                 for path in (release/'services').glob('*.yaml'):
@@ -173,6 +182,15 @@ def promote(args, lease):
                 obj['metadata']['name']=name+'-'+job_revision
         waves=sorted({int(obj['metadata'].get('annotations',{}).get('argocd.argoproj.io/sync-wave','0')) for obj in objects})
         for wave in waves:
+            if wave == 20:
+                sdk_service=json.loads(kubectl(['-n','noebs','get','service','noebs-mojaloop-sdk','-o','json'],capture=True).stdout)
+                sdk_address=sdk_service['spec']['clusterIP']+':4000'
+                stage_native_relay(key, worker, sdk_address)
+                if args.native_handoff:
+                    handoff=json.loads(args.native_handoff.read_text())
+                    if handoff.get('migration_id')!=args.migration_id:
+                        raise ValueError('Native handoff belongs to a different migration')
+                    switch_native_relay(Host(handoff['source_ssh_args']),Host(ssh_args(key,worker)))
             batch=[obj for obj in objects if int(obj['metadata'].get('annotations',{}).get('argocd.argoproj.io/sync-wave','0'))==wave]
             print('Applying release wave',wave,flush=True)
             for obj in batch:
@@ -185,6 +203,8 @@ def promote(args, lease):
                     kubectl(['-n','noebs','rollout','status',kind.lower()+'/'+name,'--timeout=600s'])
                 elif kind=='Job':
                     kubectl(['-n','noebs','wait','--for=condition=Complete','job/'+name,'--timeout=600s'])
+            if wave==20:
+                callback_ready(Host(ssh_args(key,worker)))
             if wave==6 and steady_keycloak:
                 apply([steady_keycloak])
                 kubectl(['-n','noebs','rollout','status','deployment/keycloak','--timeout=300s'])
@@ -193,6 +213,10 @@ def promote(args, lease):
         apply([obj for obj in edge if obj])
         kubectl(['-n','edge','rollout','status','deployment/caddy','--timeout=300s'])
         ssh(key,'exe.dev','share port noebs-workers 8080 --json')
+        pods=json.loads(kubectl(['-n','noebs','get','pods','-o','json'],capture=True).stdout)['items']
+        terminating=['pod/'+pod['metadata']['name'] for pod in pods if pod['metadata'].get('deletionTimestamp')]
+        if terminating:
+            kubectl(['-n','noebs','wait','--for=delete','--timeout=180s']+terminating)
         kubectl(['-n','noebs','get','deployments,statefulsets,pods','-o','wide'])
         snapshots={name:json.loads(kubectl(['-n','noebs','get',resources,'-o','json'],capture=True).stdout)
                    for name,resources in [('workloads','deployments,statefulsets,jobs'),('cronjobs','cronjobs'),('pods','pods')]}
