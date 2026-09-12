@@ -251,6 +251,9 @@ func (s *Store) reserveLimitUsageInTx(
 	if monthly.ReservedAmount+monthly.ConsumedAmount > limit.MonthlyLimit-params.Amount {
 		return nil, TransactionLimitExceededError{Reason: LimitExceededMonthly}
 	}
+	if err := s.checkSharedOutboundLimitInTx(ctx, tx, params, wallet, dailyStart, monthlyStart); err != nil {
+		return nil, err
+	}
 
 	stmt := s.DB.Rebind(`INSERT INTO transaction_limit_reservations(
 		tenant_id, command_id, wallet_id, transaction_type, currency, amount,

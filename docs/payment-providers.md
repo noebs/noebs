@@ -27,6 +27,32 @@ are rejected; account and funding queries never accept an owner identifier.
   an owned wallet only. A different customer's wallet returns 404. The methods
   are scoped to the wallet's exact currency unit version.
 
+The local `noebs` provider uses `transfer_mode: wallet_p2p` and
+`funding_mode: account_transfer`. An active personal wallet can receive through
+its opaque wallet reference without a phone alias or an existing balance.
+Sending is advertised only when that wallet's exact unit and KYC tier have an
+active P2P fee tier and transaction limit with an admissible positive amount.
+The provider also requires the configured Temporal runtime. Discovery does not
+guarantee current worker health, sufficient balance or remaining period budget.
+Wallet creation is an explicit account operation independent of provider
+discovery; refresh discovery after opening a wallet.
+
+The local receiving method is `noebs:receive`, mode `account_transfer`, with the
+owned wallet UUID in `account_identifier`. The ledger returns no invented name.
+After successful ownership validation, the gateway obtains only the canonical
+account display name through a signed identity-auth request. The identity
+service retains its database authority; the wallet service never reads profiles.
+
+`POST /wallet/p2p/preview` resolves an exact active same-tenant personal recipient
+reference and returns the fee and total debit for review. The gateway adds the
+canonical recipient name while preserving the sender's signed identity. Submit
+the reviewed immutable terms through the existing transaction-authorized
+`POST /wallet/p2p`, then restore the owner-scoped outcome with
+`GET /wallet/p2p/status?idempotency_key=...`. A temporary name lookup failure must
+not hide the persisted payment status. See the
+[shared outbound policy proposal](p2p-shared-outbound-policy.md) for activation
+without increasing the aggregate outbound allowance.
+
 Example registered native receiving method:
 
 ```json
