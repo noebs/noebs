@@ -50,5 +50,5 @@ func (a *ValidationActivities) ResolvePSPDepositAmounts(ctx context.Context, req
 }
 
 func terminalP2PValidationError(err error) bool {
-	return errors.Is(err, walletstore.ErrP2PFeeChanged) || errors.Is(err, walletstore.ErrCurrencyMismatch) || errors.Is(err, walletstore.ErrInsufficientFunds) || errors.Is(err, walletstore.ErrFeeConfigNotFound) || errors.Is(err, walletstore.ErrTransactionLimitNotFound) || errors.Is(err, walletstore.ErrWalletNotFound) || errors.Is(err, walletstore.ErrAmountOverflow) || errors.Is(err, walletstore.ErrP2PCommandFailed) || errors.Is(err, walletstore.ErrInvalidP2PCommand) || errors.Is(err, walletvalidation.ErrWalletInactive) || errors.Is(err, walletvalidation.ErrWalletOwnerMismatch)
+	return errors.Is(err, walletstore.ErrP2PFeeChanged) || errors.Is(err, walletstore.ErrCurrencyMismatch) || errors.Is(err, walletstore.ErrInsufficientFunds) || errors.Is(err, walletstore.ErrFeeConfigNotFound) || errors.Is(err, walletstore.ErrTransactionLimitNotFound) || errors.Is(err, walletstore.ErrWalletNotFound) || errors.Is(err, walletstore.ErrWalletInactive) || errors.Is(err, walletstore.ErrAmountOverflow) || errors.Is(err, walletstore.ErrP2PCommandFailed) || errors.Is(err, walletstore.ErrInvalidP2PCommand) || errors.Is(err, walletvalidation.ErrWalletInactive) || errors.Is(err, walletvalidation.ErrWalletOwnerMismatch)
 }
