@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shlex
 import signal
+import subprocess
 
 from reconcile import RemoteLease, ssh, ssh_args
 from backup_checkpoint import FORMAT, validate_checkpoint
@@ -32,7 +33,7 @@ class Host:
 
     def run(self, command, payload=None):
         self.lease.check()
-        return ssh(self.key, self.destination, command, input=payload, capture_output=True).stdout
+        return ssh(self.key, self.destination, command, input=payload, stdout=subprocess.PIPE).stdout
 
     def kube(self, args, namespace='noebs'):
         return self.run('sudo k3s kubectl -n ' + namespace + ' ' + shlex.join(args))
