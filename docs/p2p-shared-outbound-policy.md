@@ -78,6 +78,26 @@ current-period usage. Removing that enforcement would change the allowance even
 if P2P admission has been disabled. Configuration rollback never resets a period
 or deletes a financial/audit record.
 
+## Deployment receipt — 12 September 2026
+
+The prepared policy was activated at 07:53:29 UTC after a successful rolled-back
+dry run. Source `1ae6c315b4bc4e4c40194baa12a3c6b9ce6aff94` was published by
+[release run34680710205](https://github.com/noebs/noebs/actions/runs/34680710205)
+and deployed through promotion `befae7ad3a16173647b22d229f242c717359311b`.
+The exact application image is
+`ghcr.io/noebs/noebs@sha256:58212ab8f1bbbb01ff35f6bfa2b5900a0cd0766c07d08a3552e228241c45c1e9`.
+Every ledger/worker instance passed the new-image and no-old-pod guard before
+activation. The transaction verified unchanged account, money and usage
+snapshots. No account was funded and no customer transfer was submitted.
+
+Both Argo applications reached the promotion and reported Synced/Healthy.
+The post-deploy smoke check passed, including wallet migrations005 and006 and
+the existing public authentication boundaries. The exact two-Application
+OpenTofu plan, registry receipts, rendered image checks, policy transactions
+and smoke output are recorded in
+[the account-transfer release evidence](https://github.com/noebs/mojaloop/tree/main/evidence/live-walkthrough-20260912/account-transfers).
+The two-phone transfer remains a separate user-authorized walkthrough.
+
 ## Validation
 
 Actual disposable PostgreSQL tests run under the runtime and worker logins.
