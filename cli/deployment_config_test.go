@@ -1097,7 +1097,7 @@ func TestPostDeploySmokeRequiresExactFreshMigrationSets(t *testing.T) {
 	text := string(payload)
 	for _, required := range []string{
 		`string_agg(version_id::text || chr(58) || is_applied::text, chr(44) ORDER BY version_id, id)`,
-		`$identity_migrations|0:true,1:true,2:true|identity-auth`,
+		`$identity_migrations|0:true,1:true,2:true,3:true|identity-auth`,
 		`$card_vault_migrations|0:true,1:true|card-vault`,
 		`$ebs_adapter_migrations|0:true,1:true|ebs-adapter`,
 		`$admin_reporting_migrations|0:true,1:true|admin-reporting`,
