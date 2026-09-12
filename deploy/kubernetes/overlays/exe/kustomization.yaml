@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: noebs
+
+resources:
+  - ../current-host
+  - storage.yaml
+
+patches:
+  - target:
+      kind: StatefulSet
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value: {noebs.dev/role: data}
+      - op: add
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: noebs-retain
+  - target:
+      kind: Deployment
+      name: (temporal|keycloak)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value: {noebs.dev/role: data}
+  - target:
+      kind: Deployment
+      name: (admin-reporting|admin-reporting-projector|api-gateway|card-vault|ebs-adapter|ebs-adapter-events|identity-auth|identity-worker|notification-chat|psp-webhook|wallet-api|wallet-ledger|wallet-worker)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value: {noebs.dev/role: workers}

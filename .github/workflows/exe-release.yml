@@ -1,0 +1,91 @@
+name: Deploy exe fleet
+on:
+  workflow_run:
+    workflows: [Immutable interop release]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+concurrency:
+  group: noebs-exe-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: foundation/exedev-provider/go.sum
+      - name: Validate provider and automation
+        run: |
+          go -C foundation/exedev-provider test ./...
+          bash -n scripts/exe/*.sh
+          python3 -m py_compile scripts/exe/*.py
+      - name: Install release tooling
+        run: |
+          go install github.com/getsops/sops/v3/cmd/sops@v3.10.2
+          go install github.com/google/go-containerregistry/cmd/crane@v0.21.0
+          go install sigs.k8s.io/kustomize/kustomize/v5@v5.8.1
+          python3 -m pip install PyYAML==6.0.2
+          python3 -B -m unittest discover -s scripts/exe -p 'test_*.py'
+      - name: Load verified build receipts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          revision=$(git rev-parse HEAD)
+          build=$(gh run list --workflow interop-release.yml --commit "$revision" --status success --json databaseId --jq '.[0].databaseId')
+          test -n "$build"
+          gh run download "$build" --name "interop-release-$revision" --dir "$RUNNER_TEMP/receipts"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Load deployment identity
+        env:
+          EXE_KEY: ${{ secrets.EXE_SSH_PRIVATE_KEY }}
+        run: |
+          test -n "$EXE_KEY"
+          install -d -m 0700 "$RUNNER_TEMP/exe"
+          umask 077
+          printf '%s\n' "$EXE_KEY" > "$RUNNER_TEMP/exe/key"
+      - name: Reconcile VMs and back up Terraform state
+        run: scripts/exe/reconcile.py --key "$RUNNER_TEMP/exe/key" --work "$RUNNER_TEMP/exe"
+      - name: Join private Kubernetes cluster
+        env:
+          EXE_TAILSCALE_AUTH_KEY: ${{ secrets.EXE_TAILSCALE_AUTH_KEY }}
+        run: scripts/exe/bootstrap-cluster.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json"
+      - name: Promote application and migration jobs
+        run: scripts/exe/promote.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --receipts "$RUNNER_TEMP/receipts" --work "$RUNNER_TEMP/exe"
+      - name: Enable and verify encrypted backups
+        run: |
+          scripts/exe/setup-backups.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --work "$RUNNER_TEMP/exe"
+          ssh -i "$RUNNER_TEMP/exe/key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=deploy/exe/known_hosts noebs-data.exe.xyz 'sudo systemctl start noebs-backup'
+      - name: Restore backups into isolated temporary PostgreSQL clusters
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-16
+          sudo locale-gen en_US.UTF-8
+          scripts/exe/fetch-backup.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --output "$RUNNER_TEMP/exe/restore"
+          scripts/exe/verify-backup.py --archives "$RUNNER_TEMP/exe/restore" --age "$RUNNER_TEMP/exe/bin/age" --age-key "$RUNNER_TEMP/exe/restore/age-key.txt" --postgres-bin /usr/lib/postgresql/16/bin --work "$RUNNER_TEMP/exe" --prepare-event-replay
+      - name: Preserve encrypted recovery state
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: exe-state-${{ github.run_id }}
+          path: ${{ runner.temp }}/exe/terraform-state.enc.json
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Remove deployment identity
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/exe/restore"
+          rm -f "$RUNNER_TEMP/exe/key"
+          docker logout ghcr.io

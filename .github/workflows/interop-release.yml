@@ -2,7 +2,7 @@ name: Immutable interop release
 on:
   push:
     branches: [master]
-    paths-ignore: [docs/**, deploy/kubernetes/**]
+    paths-ignore: [docs/**]
 permissions:
   contents: read
   packages: write
