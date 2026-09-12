@@ -13,7 +13,7 @@ images:
   # Match only the bootstrap Job; preserve the SDK digest inherited below.
   - name: noebs-bootstrap
     newName: ghcr.io/noebs/noebs
-    digest: sha256:c0d0c92966ee6a00048e5c5d6549d32a7a999964b82ed6e8823044a3ad001702
+    digest: sha256:58212ab8f1bbbb01ff35f6bfa2b5900a0cd0766c07d08a3552e228241c45c1e9
 
 patches:
   - target:
