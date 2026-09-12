@@ -1,7 +1,7 @@
 # One NoEBS account, multiple payment providers
 
 The app signs into NoEBS through its configured OIDC identity authority. It does
-not sign into Mojaloop. The same verified customer and tenant own their profile,
+not sign into Mojaloop. The same authenticated customer and tenant own their profile,
 wallets, transaction history and identity evidence. Mojaloop is one configured
 payment rail; the switch receives only the native transfer data needed for
 interoperability. Customer balances remain in NoEBS. A hub participant position
@@ -36,7 +36,7 @@ Example registered native receiving method:
   "label": "Bank or wallet transfer",
   "instructions": "From a participating bank or wallet, send to this registered number. Your NoEBS balance updates when the transfer completes.",
   "account_identifier": "249900000088",
-  "account_name": "Synthetic customer",
+  "account_name": "Amina Hassan",
   "currency": "SDG",
   "available": true,
   "mode": "external_transfer",
@@ -46,7 +46,7 @@ Example registered native receiving method:
 }
 ```
 
-The number and unit version in this example are illustrative. The live response
+The name, number and unit version in this example are illustrative. The live response
 reads the operator-registered alias and the wallet's immutable currency unit; it
 never derives a receiving number from profile contact data or installs an alias.
 An unregistered wallet returns `available: false`, empty receiving details and
@@ -55,6 +55,29 @@ An unregistered wallet returns `available: false`, empty receiving details and
 currencies/units have no native receiving method. Provider availability describes
 configuration and admission enablement, not a realtime network health guarantee
 or approval of a particular amount.
+
+The receiving name comes from `wallet_ledger.interop_aliases.display_name`.
+Native party discovery returns the same field, so the app must not substitute a
+different profile name only on its receiving screen. This is account display
+metadata, not a verified legal name or an identity-review decision.
+
+When registering an actual customer's receiving alias, an operator must resolve
+the existing personal wallet's canonical tenant/user identity and deliberately
+choose the receiving name. For a personal account using its profile name, take
+`identity_auth.users.fullname` from that exact canonical owner; do not copy a
+test-wallet label. Keep fixture names confined to fixture-owned aliases.
+Existing intentional/custom receiving names must not be overwritten by a
+background profile refresh.
+
+A stale setup label can be corrected without re-registering or reassigning the
+alias. Use an explicitly authorized operator transaction that checks the exact
+tenant, alias, active personal wallet, canonical owner, immutable currency unit
+and expected prior name. Update only `display_name` and append a wallet audit
+event recording the actor, source profile revision and old/new names. Abort on a
+changed binding or unexpected name. Verify wallet/ledger/hold state and original
+quote/transfer records are unchanged, then compare the receiving screen and the
+party-discovery response. Historical fixture transfers retain their original
+provenance; correcting a name does not change the rail's operational readiness.
 
 ## Routes retain their monetary meaning
 
