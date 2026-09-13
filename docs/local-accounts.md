@@ -1,8 +1,8 @@
 # Local accounts and identity providers
 
 Noebs uses one Keycloak Authorization Code flow with PKCE S256 for human
-sign-in. Local credentials and optional social providers produce the same
-Keycloak issuer and subject. The gateway, tenant membership policy and
+sign-in. Local credentials and optional social providers produce tokens from one
+Keycloak issuer. Each account has its own subject. The gateway, tenant membership policy and
 application profile projection are independent of the chosen login method.
 Passwords, password resets and OTP secrets never enter the Noebs Go API or
 application databases.
@@ -141,9 +141,9 @@ accepts only providers actually configured in the realm. Keycloak's local ACR
 values and freshness parameters must not be forwarded to an external provider.
 The Google-specific preflight remains useful only when Google is enabled.
 
-Provider account linking remains inside Keycloak's first-broker flow. An email
-match alone must not link an existing local account without authenticating that
-account.
+First broker login reviews the profile and creates a unique account. An email
+match never automatically links an existing local account. Linking identities
+requires an explicit, authenticated Keycloak operation.
 
 ## Client and white-label contract
 
