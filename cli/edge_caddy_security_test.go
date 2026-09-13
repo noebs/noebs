@@ -120,6 +120,27 @@ func TestExeEdgePreservesIncomingHostForBackoffice(t *testing.T) {
 	}
 }
 
+func TestExeEdgeForwardsOneResolvedClientIP(t *testing.T) {
+	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "exe-edge", "Caddyfile")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caddyfile := string(data)
+	if !strings.Contains(caddyfile, "trusted_proxies static 100.102.164.34/32") ||
+		!strings.Contains(caddyfile, "trusted_proxies_strict") {
+		t.Fatal("EXE edge must resolve the client IP through the explicitly trusted source proxy")
+	}
+	_, api, found := strings.Cut(caddyfile, "reverse_proxy https://api-gateway.noebs.svc.cluster.local:8080 {")
+	if !found {
+		t.Fatal("EXE edge is missing the HTTPS API upstream")
+	}
+	headers, _, _ := strings.Cut(api, "transport http {")
+	if !strings.Contains(headers, "header_up X-Forwarded-For {client_ip}") {
+		t.Fatal("API gateway requires one resolved client IP, not an appended forwarding chain")
+	}
+}
+
 func readEdgeSecurityFile(t *testing.T, name string) string {
 	t.Helper()
 	path := filepath.Join("..", "deploy", "kubernetes", "edge", name)

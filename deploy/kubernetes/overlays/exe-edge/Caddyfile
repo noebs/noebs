@@ -68,6 +68,7 @@
 
 		reverse_proxy https://api-gateway.noebs.svc.cluster.local:8080 {
 			header_up Host {http.request.hostport}
+			header_up X-Forwarded-For {client_ip}
 			header_up X-Forwarded-Proto https
 			header_up X-Forwarded-Host api.noebs.sd
 			transport http {
