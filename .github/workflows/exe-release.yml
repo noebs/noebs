@@ -52,6 +52,7 @@ jobs:
       - name: Validate provider and automation
         run: |
           go -C foundation/exedev-provider test ./...
+          go test ./cli -run 'TestExeEdge|TestGatewayRequestSource' -count=1
           bash -n scripts/exe/*.sh
           python3 -m py_compile scripts/exe/*.py
       - name: Install release tooling
