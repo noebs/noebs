@@ -59,9 +59,13 @@ banking integration.
 Configure a DNS-only CNAME `api.noebs.sd → noebs-workers.exe.xyz`. The deploy
 command checks it and verifies domain registration over HTTPS. An already
 registered domain needs no registration permission on subsequent releases.
-When EXE reports `Domain Not Configured`, registration requires an SSH key allowed
-to run `domain add`. An owner can register it once with
-`ssh exe.dev domain add noebs-workers api.noebs.sd`.
+When EXE reports `Domain Not Configured`, register it with
+`ssh exe.dev domain add noebs-workers api.noebs.sd`. If EXE rejects that command
+with `command not allowed by SSH key permissions`, sign in to the
+[exe.dev web shell](https://exe.dev/shell) and run
+`domain add noebs-workers api.noebs.sd` there once. EXE documents this
+[account-session handoff](https://exe.dev/docs/suggest-links) for commands an
+automation key cannot execute.
 exe.dev supplies the public certificate. DNS credentials are not needed by the deployment.
 
 ```sh

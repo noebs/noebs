@@ -1,8 +1,9 @@
 import copy
 import json
 import unittest
+from unittest.mock import Mock
 
-from coordinated_backup import Backup, COLD_CLAIMS, FORMAT, MARKER, validate_checkpoint
+from coordinated_backup import Backup, COLD_CLAIMS, FORMAT, MARKER, inventory, validate_checkpoint
 
 
 def item(name, replicas, kind='Deployment', wave=20, namespace='noebs'):
@@ -96,6 +97,41 @@ class CoordinatedBackupTests(unittest.TestCase):
             self.assertEqual(self.host.get(obj['kind'].lower() + '/' + obj['name'], obj['namespace'])['spec']['replicas'], obj['replicas'])
         for obj in self.host.state['cronjobs']:
             self.assertEqual(self.host.get('cronjob/' + obj['name'])['spec']['suspend'], obj['suspend'])
+
+    def test_inventory_preserves_traefik_namespace_through_pause_and_restore(self):
+        def resource(name, kind='Deployment', namespace='noebs', replicas=1):
+            return {'kind': kind, 'metadata': {'name': name, 'namespace': namespace, 'uid': name + '-uid'},
+                    'spec': {'replicas': replicas, 'selector': {'matchLabels': {'app': name}}}}
+
+        resources = {
+            ('noebs', 'deployments,statefulsets,cronjobs,hpa'): {
+                'items': [resource('api-gateway')] +
+                         [resource(name, 'StatefulSet') for name in
+                          ['postgres', 'temporal-postgres', 'keycloak-postgres', 'kafka']]},
+            ('noebs', 'pvc/kafka-data-kafka-0'): {'spec': {'volumeName': 'kafka-volume'}},
+            ('noebs', 'pv/kafka-volume'): {'spec': {
+                'local': {'path': '/var/lib/rancher/k3s/storage/kafka'},
+                'nodeAffinity': {'required': {'nodeSelectorTerms': [
+                    {'matchExpressions': [{'values': ['noebs-data']}]}]}}}},
+            ('noebs', 'namespace/noebs'): {'metadata': {'uid': 'cluster'}},
+            ('kube-system', 'deployment/traefik'): resource('traefik', namespace='kube-system', replicas=2),
+        }
+        source = Mock()
+        source.optional.side_effect = lambda name: {'stage': 'production'} if name == 'noebs-release' else None
+        source.get.side_effect = lambda name, namespace='noebs': copy.deepcopy(resources[(namespace, name)])
+
+        state = inventory(source, staging_only=False)
+        self.assertEqual(state['edge']['namespace'], 'kube-system')
+        self.assertEqual(state['edge']['uid'], 'traefik-uid')
+        self.assertEqual(state['edge']['replicas'], 2)
+        host = Host(state)
+        result = Backup(host, state, '/private/checkpoint.json').execute()
+        edge_patches = [event for event in host.events if event[0] == 'kube'
+                        and event[1][:2] == ('patch', 'deployment/traefik')]
+        self.assertEqual([event[2] for event in edge_patches], ['kube-system', 'kube-system'])
+        self.assertEqual([json.loads(event[1][-1])['spec']['replicas'] for event in edge_patches], [0, 2])
+        self.assertEqual(result['phase'], 'published')
+        self.assertIsNone(host.marker)
 
     def test_snapshot_preserves_exact_workloads_and_publishes_after_resumption(self):
         result = self.backup.execute()

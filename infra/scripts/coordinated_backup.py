@@ -98,7 +98,7 @@ def inventory(host, staging_only):
             'cluster_uid': host.get('namespace/noebs')['metadata']['uid'], 'release': release,
             'workloads': [workload(item) for item in resources if item['kind'] == 'Deployment'],
             'cold_workloads': [workload(statefulsets[name]) for name in sorted(COLD_CLAIMS)],
-            'edge': workload(host.get('deployment/traefik', 'kube-system'), 'edge'),
+            'edge': workload(host.get('deployment/traefik', 'kube-system'), 'kube-system'),
             'cronjobs': [{'name': item['metadata']['name'], 'uid': item['metadata']['uid'],
                           'suspend': item['spec'].get('suspend')} for item in resources if item['kind'] == 'CronJob'],
             'cold_volumes': cold, 'phase': 'planned'}
