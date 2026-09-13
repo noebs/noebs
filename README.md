@@ -23,12 +23,12 @@ There are many reasons why I started this project. On one hand people can happil
 
 # How to use noebs
 
-You can contact us directly at [hi@noebs.dev](mailto:hi@noebs.dev) for more available hosting options.   
+You can contact us directly at [hi@noebs.dev](mailto:hi@noebs.dev) for more available hosting options.
 
 noebs is deployed as role-specific microservices. There is no supported root `config.yaml` or single-binary local server mode; every runtime process must receive mounted shared config, mounted service role config, and mounted secrets.
 
 ## Local development with Docker Compose
-Docker Compose is for local development only. Deployment goes through Kubernetes/k3s manifests and Argo CD.
+Docker Compose is for local development only. Deployment uses the Kubernetes fleet defined in `infra/`.
 
 - Fork this repository (e.g., `git clone https://github.com/adonese/noebs`)
 - `cd` to noebs root directory (E.g., $HOME/src/noebs)
@@ -37,11 +37,13 @@ Docker Compose is for local development only. Deployment goes through Kubernetes
 - Open `localhost:8081/test` in your browser to reach the API gateway
 
 ## Deployment
-The supported deployment is Kubernetes/k3s plus Argo CD. The current host target is `100.102.164.34`, using `deploy/kubernetes/overlays/current-host` and the foundation OpenTofu root under `foundation/terraform`.
+The supported deployment is the exe.dev Kubernetes fleet under [`infra/`](infra/README.md). K3s provides the control plane and service discovery; Traefik routes ingress to Noebs services. The fleet overlay is `infra/kubernetes/overlays/exe`.
 
 Noebs service roles are selected by mounted service config files, not environment variables. Service-owned secrets are separate SOPS material per microservice, and migrations run through service-specific Kubernetes Jobs before runtime Deployments.
 
-Images are built and verified locally from one reviewed commit using the [immutable alpha image release](docs/alpha-image-release.md). The resulting digest receipt, not GitHub automation or a mutable tag, is the release artifact pinned by GitOps.
+Images are built from one reviewed commit using the [immutable image release](docs/alpha-image-release.md). Deployment verifies the image receipt, completes bootstrap and migration Jobs, and waits for workload readiness.
+
+Noebs owns its aggregator services and customer ledger. Mojaloop and other payment providers are independently operated external services, configured through their connection contracts. A Noebs deployment does not provision a switch or require another repository.
 
 # This project philosophy
 noebs is not meant to be a full e-payment framework (e.g., unlike Morsal). It is meant as a generic e-payment gateway system. Currently, it implements EBS services, but we might add new gateway. Being such, adapts to Unix philosophy; doing one thing and do it good. Also, with our experience with embedded devices, working with authorizations and handling all of these headers and tokens (esp. JWT ones) has proven to be challenging as simply some of the older models cannot handle lengthy headers.
@@ -79,10 +81,10 @@ While everything you see here is very and open source; we don't hide any fees or
 Contact us: +249 111493885 (Mohamed Yousif) | +249 9023 00672 (Mohamed Gafar) | m@noebs.dev (Mohamed Yousif)
 
 # Our simulator and EBS services
-Our team have developed an internal EBS QA test system that emulates EBS test environment. We offer our simulator as a paid service 
+Our team have developed an internal EBS QA test system that emulates EBS test environment. We offer our simulator as a paid service
 - very superior to that of EBS testing server. It runs on weekends. Well, 24/7, just like any server should work ¯\\_(ツ)\_/¯.
 - hate EBS's bureaucracy? We do too. No need for the EBS busy servers, you can test our server at any time.
-- we have two plans for the simulator: 
+- we have two plans for the simulator:
 	- you can use our EBS simulator on your own; we won't test your services.
 	- we can use our EBS simulator while we do the plan for you, the exact way EBS does. Bear in mind that our testers are highly competitive and they're all ex-EBSers.
 
@@ -92,13 +94,13 @@ Our team have developed an internal EBS QA test system that emulates EBS test en
 
 We are extremely very gratitude to our sponsors:
 
-- ACTS 
+- ACTS
 - SolusPay
 - G&I Engineering
 
 # Docs
 
-More documentations can be found through [Noebs Docs](https://docs.noebs.dev). Merchant documentations can be found [here](https://docs.merchant.noebs). 
+More documentations can be found through [Noebs Docs](https://docs.noebs.dev). Merchant documentations can be found [here](https://docs.merchant.noebs).
 
 # FAQ
 - Why is the name?
@@ -116,4 +118,4 @@ I'm very committed to this project.
 
 ## Runtime Secrets
 
-Docker Compose secret shapes live in `deploy/docker/secrets/*.example`; the local encrypted files are ignored. Kubernetes secrets required by the current host overlay are listed in `deploy/kubernetes/overlays/current-host/README.md`.
+Docker Compose secret shapes live in `deploy/docker/secrets/*.example`; the local encrypted files are ignored. Kubernetes release inputs are documented in [`infra/`](infra/README.md) and the [release input example](infra/exe/release.inputs.yaml.example).

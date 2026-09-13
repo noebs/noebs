@@ -38,7 +38,7 @@ func TestIdentityEventRecoveryReplaysStableEventsIntoExistingNotifications(t *te
 		t.Fatal(err)
 	}
 	// The second event was acknowledged by Kafka but absent from the sink snapshot.
-	recovery, err := os.ReadFile("../scripts/exe/recovery/identity_auth.sql")
+	recovery, err := os.ReadFile("../infra/scripts/recovery/identity_auth.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

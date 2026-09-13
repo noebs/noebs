@@ -41,8 +41,8 @@ def fixture():
 
 
 class WorkloadImagesTest(unittest.TestCase):
-    def execute(self, value, passed, sdk=SDK):
-        result = subprocess.run([sys.executable, str(CHECKER), APP, sdk], input=json.dumps(value),
+    def execute(self, value, passed):
+        result = subprocess.run([sys.executable, str(CHECKER), APP], input=json.dumps(value),
                                 text=True, capture_output=True, check=False)
         report = json.loads(result.stdout)
         self.assertEqual(result.returncode, 0 if passed else 1, report)
@@ -63,7 +63,7 @@ class WorkloadImagesTest(unittest.TestCase):
                 self.execute(value, False)
 
     def test_sdk_foreign_repository_missing_role_and_wrong_manifest_are_rejected(self):
-        for mutation in ('foreign-application', 'foreign-template', 'foreign-pod', 'missing-sidecar', 'missing-status', 'wrong-manifest', 'wrong-sdk-argument'):
+        for mutation in ('foreign-application', 'foreign-template', 'foreign-pod', 'missing-sidecar', 'missing-status', 'wrong-manifest', 'extra-sidecar'):
             with self.subTest(mutation=mutation):
                 value = fixture(); worker = value['pods']['items'][-1]
                 if mutation == 'foreign-application': value['pods']['items'][0]['spec']['containers'][0]['image'] = FOREIGN
@@ -73,8 +73,9 @@ class WorkloadImagesTest(unittest.TestCase):
                     worker['status']['containerStatuses'][-1]['imageID'] = FOREIGN
                 elif mutation == 'missing-sidecar': worker['spec']['containers'].pop()
                 elif mutation == 'missing-status': worker['status']['containerStatuses'].pop()
-                elif mutation == 'wrong-manifest': worker['status']['containerStatuses'][-1]['imageID'] = APP
-                self.execute(value, False, APP if mutation == 'wrong-sdk-argument' else SDK)
+                elif mutation == 'wrong-manifest': worker['status']['containerStatuses'][-1]['imageID'] = SDK
+                if mutation == 'extra-sidecar': worker['spec']['containers'].append({'name': 'sdk', 'image': SDK})
+                self.execute(value, False)
 
     def test_cronjob_every_container_is_checked_independent_of_repository(self):
         for key in ('containers', 'initContainers'):
@@ -116,12 +117,6 @@ class WorkloadImagesTest(unittest.TestCase):
             'spec': {'containers': [{'name': 'cleanup', 'image': FOREIGN}]}, 'status': {'phase': 'Running'}})
         self.execute(value, False)
 
-    def test_omitted_or_empty_sdk_argument_is_rejected_before_any_ssh(self):
-        for arguments in (['0' * 40, 'sha256:' + 'a' * 64], ['0' * 40, 'sha256:' + 'a' * 64, '']):
-            result = subprocess.run(['bash', str(ROOT / 'scripts/alpha-post-deploy-smoke.sh'), *arguments],
-                                    capture_output=True, text=True, timeout=5)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn('sdk-digest' if len(arguments) == 2 else 'SDK digest', result.stderr)
 
 
 if __name__ == '__main__':

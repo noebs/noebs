@@ -64,7 +64,7 @@ func TestApplicationOwnedWalletCredentialsStayRetired(t *testing.T) {
 		"cli/grpc_server.go",
 		"ebs_fields/fields.go",
 		"config.docker.yaml",
-		"deploy/kubernetes/base/configmap.yaml",
+		"infra/kubernetes/base/configmap.yaml",
 		"go.mod",
 		"go.sum",
 	}

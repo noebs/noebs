@@ -82,7 +82,7 @@ func TestStoreCreateTransactionWithEventOutboxLifecycle(t *testing.T) {
 	if err := storeSvc.MarkTransactionEventPublished(ctx, eventsIDNotFound); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("missing published id error = %v, want %v", err, sql.ErrNoRows)
 	}
-	recovery, err := os.ReadFile("../scripts/exe/recovery/ebs_adapter.sql")
+	recovery, err := os.ReadFile("../infra/scripts/recovery/ebs_adapter.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -495,16 +495,29 @@ func (r *gatewayWebhookResolver) Resolve(c *fiber.Ctx) error {
 }
 
 func gatewayRequestSource(c *fiber.Ctx) (string, error) {
+	// The gateway TLS listener authenticates the edge workload. Traefik discards
+	// X-Forwarded-For from untrusted peers, then appends its immediate peer address.
+	// An explicitly trusted proxy must append the actual client address last in
+	// its inbound chain. This is verified for the exe.dev proxy. Thus the client is
+	// immediately before Traefik's appended peer, or the sole address for a direct
+	// untrusted connection. Caller-controlled prefixes and X-Real-IP never win.
 	values := c.Request().Header.PeekAll(fiber.HeaderXForwardedFor)
 	if len(values) != 1 {
 		return "", errors.New("gateway request source must have one value")
 	}
-	source := string(values[0])
-	ip := net.ParseIP(source)
-	if ip == nil || ip.String() != source {
-		return "", errors.New("gateway request source must be a canonical IP address")
+	chain := strings.Split(string(values[0]), ",")
+	for index, value := range chain {
+		address := strings.TrimSpace(value)
+		ip := net.ParseIP(address)
+		if ip == nil || ip.String() != address {
+			return "", errors.New("gateway request source must contain canonical IP addresses")
+		}
+		chain[index] = address
 	}
-	return source, nil
+	if len(chain) == 1 {
+		return chain[0], nil
+	}
+	return chain[len(chain)-2], nil
 }
 
 func gatewayProxyRouteSpecs() []gatewayRouteSpec {

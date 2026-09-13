@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Provision and deploy the noebs Kubernetes fleet from one source revision."""
+import argparse
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import sys
+import tempfile
+from types import SimpleNamespace
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'scripts'))
+from deployment import load_config, prepare_source, render_ingress_config, require_clean_revision, validate_fleet
+from reconcile import ROOT, RemoteLease, run, ssh_args
+from promote import require_public_dns, promote
+
+
+def load_script(filename):
+    spec = importlib.util.spec_from_file_location(filename.replace('-', '_'), ROOT / 'infra/scripts' / filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--config', type=Path, required=True)
+    parser.add_argument('--key', type=Path, required=True, help='Registered exe.dev SSH key')
+    parser.add_argument('--age-key', type=Path, required=True)
+    parser.add_argument('--work', type=Path, required=True, help='Private deployment output directory')
+    parser.add_argument('--receipts', type=Path, help='Verified build receipts; otherwise publish this commit')
+    parser.add_argument('--check', action='store_true', help='Validate and render without changing the fleet')
+    args = parser.parse_args()
+    os.umask(0o077)
+    config = load_config(args.config)
+    validate_fleet(ROOT / 'infra/exedev/fleet.json')
+    for path in [args.key, args.age_key]:
+        if not path.is_file() or path.stat().st_mode & 0o077:
+            parser.error('SSH and age keys must be existing private files (mode 0600)')
+    for tool in ['go', 'git', 'ssh', 'sops', 'kustomize', 'crane', 'python3', 'dig']:
+        if not shutil.which(tool):
+            parser.error('Required deployment tool is unavailable: ' + tool)
+    os.environ['SOPS_AGE_KEY_FILE'] = str(args.age_key.resolve())
+    args.work = args.work.resolve()
+    args.work.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if args.work.stat().st_mode & 0o077:
+        parser.error('--work must be private (mode 0700)')
+    binary = args.work / 'noebs'
+    run(['go', 'build', '-trimpath', '-o', str(binary), './cli'], cwd=ROOT)
+    # Validate every runtime credential and service setting before provisioning.
+    with tempfile.TemporaryDirectory(prefix='validate-', dir=args.work) as directory:
+        source = Path(directory) / 'source'
+        prepare_source(source, config)
+        run([str(binary), 'prepare-kubernetes-release', str(source),
+             str(ROOT / 'infra/exe/release.secrets.yaml'), str(args.age_key.resolve()),
+             str(Path(directory) / 'release')], capture_output=True)
+        bootstrap = Path(directory) / 'bootstrap.yaml'
+        run([str(binary), 'render-keycloak-bootstrap-secrets', str(Path(directory) / 'release'),
+             'noebs', str(ROOT / 'infra/exe/bootstrap.secrets.yaml'), str(bootstrap)], capture_output=True)
+        run(['kustomize', 'build', str(source / 'infra/kubernetes/overlays/exe')], capture_output=True)
+        run(['kustomize', 'build', str(source / 'infra/kubernetes/ingress')], capture_output=True)
+    ingress = args.work / 'traefik-config.yaml'
+    ingress.write_text(render_ingress_config(config))
+    if args.check:
+        print('Deployment inputs and Kubernetes manifests validated; fleet unchanged.')
+        return
+    require_public_dns(config['public_host'])
+    revision = require_clean_revision()
+    receipts = args.receipts.resolve() if args.receipts else args.work / 'receipts' / revision
+    if args.receipts is None:
+        receipts.mkdir(parents=True, exist_ok=True, mode=0o700)
+        receipt = receipts / 'noebs-receipt.json'
+        if not receipt.exists():
+            run([str(ROOT / 'scripts/publish-alpha-image.sh'), revision, str(receipt)])
+    from promote import verify_receipt
+    verify_receipt(receipts / 'noebs-receipt.json', revision)
+    common = ['--key', str(args.key.resolve())]
+    scripts = ROOT / 'infra/scripts'
+    run([sys.executable, str(scripts / 'reconcile.py'), *common, '--work', str(args.work)])
+    machines_path = args.work / 'machines.json'
+    machines = json.loads(machines_path.read_text())
+    synchronization = load_script('sync-runtime.py')
+    bootstrap = load_script('bootstrap-cluster.py')
+    backups = load_script('setup-backups.py')
+    promotion = SimpleNamespace(key=args.key, machines=machines_path, receipts=receipts,
+                                work=args.work, config=args.config)
+    # Hold one lease from credential installation through the final backup setup.
+    # Another release cannot replace the authority inputs between these stages.
+    with RemoteLease(ssh_args(args.key.resolve(), machines['noebs-control']['ssh_destination'])) as lease:
+        synchronization.synchronize(args, machines, lease)
+        bootstrap.bootstrap(args.key.resolve(), machines, lease, ingress.read_text())
+        promote(promotion, lease)
+        backups.setup(args, machines, lease)
+    print('Deployed https://' + config['public_host'] + '; receipt: ' + str(args.work / 'release-receipt.json'))
+
+
+if __name__ == '__main__':
+    main()

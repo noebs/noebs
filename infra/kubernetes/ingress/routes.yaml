@@ -1,0 +1,71 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: noebs
+spec:
+  entryPoints: [web]
+  routes:
+    - kind: Rule
+      match: >-
+        Host(`api.noebs.sd`) && (Method(`GET`) || Method(`HEAD`)) &&
+        (Path(`/auth/realms/noebs/.well-known/openid-configuration`) ||
+        Path(`/auth/realms/noebs/protocol/openid-connect/certs`) || PathPrefix(`/auth/resources/`))
+      priority: 100
+      middlewares: [{name: public-headers}, {name: keycloak-source}, {name: compress}]
+      services:
+        - name: keycloak
+          port: 8443
+          scheme: https
+          passHostHeader: true
+          serversTransport: keycloak
+    - kind: Rule
+      match: >-
+        Host(`api.noebs.sd`) && Method(`GET`) &&
+        (Path(`/auth/realms/noebs/protocol/openid-connect/userinfo`) ||
+        Path(`/auth/realms/noebs/protocol/openid-connect/auth`) ||
+        Path(`/auth/realms/noebs/protocol/openid-connect/logout`) ||
+        Path(`/auth/realms/noebs/login-actions/authenticate`) ||
+        Path(`/auth/realms/noebs/login-actions/required-action`) ||
+        Path(`/auth/realms/noebs/login-actions/restart`) ||
+        Path(`/auth/realms/noebs/login-actions/first-broker-login`) ||
+        Path(`/auth/realms/noebs/login-actions/post-broker-login`) ||
+        Path(`/auth/realms/noebs/broker/google/login`) ||
+        Path(`/auth/realms/noebs/broker/google/endpoint`) ||
+        Path(`/auth/realms/noebs/broker/after-first-broker-login`) ||
+        Path(`/auth/realms/noebs/broker/after-post-broker-login`))
+      priority: 100
+      middlewares: [{name: public-headers}, {name: keycloak-source}, {name: compress}]
+      services:
+        - name: keycloak
+          port: 8443
+          scheme: https
+          passHostHeader: true
+          serversTransport: keycloak
+    - kind: Rule
+      match: >-
+        Host(`api.noebs.sd`) && Method(`POST`) &&
+        (Path(`/auth/realms/noebs/protocol/openid-connect/token`) ||
+        Path(`/auth/realms/noebs/login-actions/authenticate`) ||
+        Path(`/auth/realms/noebs/login-actions/required-action`) ||
+        Path(`/auth/realms/noebs/login-actions/first-broker-login`) ||
+        Path(`/auth/realms/noebs/login-actions/post-broker-login`) ||
+        Path(`/auth/realms/noebs/broker/after-post-broker-login`))
+      priority: 100
+      middlewares: [{name: public-headers}, {name: keycloak-source}, {name: compress}]
+      services:
+        - name: keycloak
+          port: 8443
+          scheme: https
+          passHostHeader: true
+          serversTransport: keycloak
+    # Unlisted auth paths and methods have no router, so Traefik returns 404.
+    - kind: Rule
+      match: Host(`api.noebs.sd`) && !Path(`/auth`) && !PathPrefix(`/auth/`)
+      priority: 1
+      middlewares: [{name: public-headers}, {name: compress}]
+      services:
+        - name: api-gateway
+          port: 8080
+          scheme: https
+          passHostHeader: true
+          serversTransport: api-gateway

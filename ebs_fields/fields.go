@@ -1020,23 +1020,27 @@ type NoebsConfig struct {
 	TemporalClientSecret  string `json:"temporal_client_secret"`
 
 	// Wallet
-	InteropTenant                              string `json:"interop_tenant"`
-	InteropFSPID                               string `json:"interop_fsp_id"`
-	InteropDemoSeed                            bool   `json:"interop_demo_seed"`
-	WalletEnabled                              bool   `json:"wallet_enabled"`
-	WalletApprovalThreshold                    int64  `json:"wallet_approval_threshold"`
-	WalletDefaultCurrency                      string `json:"wallet_default_currency"`
-	WalletHoldExpirySeconds                    int    `json:"wallet_hold_expiry_seconds"`
-	WalletApprovalTimeoutSeconds               int    `json:"wallet_approval_timeout_seconds"`
-	WalletManualTransferApprovalTimeoutSeconds int    `json:"wallet_manual_approval_timeout_seconds"`
-	WalletFXRefreshCron                        string `json:"wallet_fx_refresh_cron"`
-	WalletFXQuoteMaxPerUserObservation         int    `json:"wallet_fx_quote_max_per_user_observation"`
-	WalletPSPPollerCron                        string `json:"wallet_psp_poller_cron"`
-	WalletPSPPollerBatchSize                   int    `json:"wallet_psp_poller_batch_size"`
-	WalletPSPPollerIntervalSeconds             int    `json:"wallet_psp_poller_interval_seconds"`
-	WalletReconciliationCron                   string `json:"wallet_reconciliation_cron"`
-	WalletReconciliationBatchSize              int    `json:"wallet_reconciliation_batch_size"`
-	WalletReconciliationLookbackHours          int    `json:"wallet_reconciliation_lookback_hours"`
+	InteropTenant                              string   `json:"interop_tenant"`
+	InteropFSPID                               string   `json:"interop_fsp_id"`
+	InteropDemoSeed                            bool     `json:"interop_demo_seed"`
+	InteropSDKOutboundURL                      string   `json:"interop_sdk_outbound_url"`
+	InteropSDKInboundURL                       string   `json:"interop_sdk_inbound_url"`
+	InteropBackendListenAddress                string   `json:"interop_backend_listen_address"`
+	InteropBackendAllowedPeers                 []string `json:"interop_backend_allowed_peers"`
+	WalletEnabled                              bool     `json:"wallet_enabled"`
+	WalletApprovalThreshold                    int64    `json:"wallet_approval_threshold"`
+	WalletDefaultCurrency                      string   `json:"wallet_default_currency"`
+	WalletHoldExpirySeconds                    int      `json:"wallet_hold_expiry_seconds"`
+	WalletApprovalTimeoutSeconds               int      `json:"wallet_approval_timeout_seconds"`
+	WalletManualTransferApprovalTimeoutSeconds int      `json:"wallet_manual_approval_timeout_seconds"`
+	WalletFXRefreshCron                        string   `json:"wallet_fx_refresh_cron"`
+	WalletFXQuoteMaxPerUserObservation         int      `json:"wallet_fx_quote_max_per_user_observation"`
+	WalletPSPPollerCron                        string   `json:"wallet_psp_poller_cron"`
+	WalletPSPPollerBatchSize                   int      `json:"wallet_psp_poller_batch_size"`
+	WalletPSPPollerIntervalSeconds             int      `json:"wallet_psp_poller_interval_seconds"`
+	WalletReconciliationCron                   string   `json:"wallet_reconciliation_cron"`
+	WalletReconciliationBatchSize              int      `json:"wallet_reconciliation_batch_size"`
+	WalletReconciliationLookbackHours          int      `json:"wallet_reconciliation_lookback_hours"`
 
 	// gRPC
 	GRPCEnabled        bool   `json:"grpc_enabled"`

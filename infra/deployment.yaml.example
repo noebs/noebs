@@ -1,0 +1,9 @@
+api_version: noebs.infrastructure/v1
+public_host: api.noebs.sd
+# exe.dev reaches this VM through loopback. This trust contract is verified by
+# the ingress tests; additional forwarding proxies require explicit CIDRs.
+trusted_proxy_cidrs:
+  - 127.0.0.1/32
+# Explicit application settings, applied to the named service at release preparation.
+# An empty mapping deploys noebs without enabling an external banking integration.
+service_config: {}

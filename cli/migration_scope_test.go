@@ -13,7 +13,7 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 	if testPostgres == nil {
 		t.Skip("PostgreSQL test environment unavailable")
 	}
-	catalog, err := tenantcatalog.LoadFile("../deploy/kubernetes/keycloak-authority/tenant-catalog.yaml")
+	catalog, err := tenantcatalog.LoadFile("../infra/kubernetes/keycloak-authority/tenant-catalog.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,14 +18,18 @@ import (
 )
 
 type Worker struct {
-	Store   *walletstore.Store
-	Tenant  string
-	FSPID   string
-	client  *http.Client
-	running atomic.Bool
+	Store     *walletstore.Store
+	Tenant    string
+	FSPID     string
+	client    *http.Client
+	transport TransportConfig
+	running   atomic.Bool
 }
 
-func NewWorker(ctx context.Context, store *walletstore.Store, tenant, fsp string) (*Worker, error) {
+func NewWorker(ctx context.Context, store *walletstore.Store, tenant, fsp string, config TransportConfig) (*Worker, error) {
+	if !config.valid {
+		return nil, ErrTransportConfig
+	}
 	if store == nil || fsp == "" {
 		return nil, walletstore.ErrInteropInvalid
 	}
@@ -37,17 +41,20 @@ func NewWorker(ctx context.Context, store *walletstore.Store, tenant, fsp string
 		return nil, walletstore.ErrInteropInvalid
 	}
 	transport := &http.Transport{Proxy: nil, DialContext: (&net.Dialer{Timeout: 3 * time.Second}).DialContext, MaxIdleConns: 4, MaxIdleConnsPerHost: 4, IdleConnTimeout: 30 * time.Second, ResponseHeaderTimeout: 30 * time.Second}
-	return &Worker{Store: store, Tenant: tenant, FSPID: fsp, client: &http.Client{Transport: transport, Timeout: 35 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+	return &Worker{Store: store, Tenant: tenant, FSPID: fsp, transport: config, client: &http.Client{Transport: transport, Timeout: 35 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 
 // Start must succeed before the worker is considered ready. No SDK backend
 // route is mounted on the application's external/background health listeners.
 func (w *Worker) Start(ctx context.Context) (*http.Server, error) {
-	listener, err := net.Listen("tcp", "127.0.0.1:4002")
+	if !w.transport.valid {
+		return nil, ErrTransportConfig
+	}
+	listener, err := net.Listen("tcp", w.transport.backendListenAddress)
 	if err != nil {
 		return nil, err
 	}
-	server := &http.Server{Addr: "127.0.0.1:4002", Handler: w.Handler(), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 30 * time.Second}
+	server := &http.Server{Addr: w.transport.backendListenAddress, Handler: w.Handler(), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 30 * time.Second}
 	runCtx, cancel := context.WithCancel(ctx)
 	w.running.Store(true)
 	go func() {
@@ -119,7 +126,7 @@ func (w *Worker) Process(ctx context.Context) error {
 }
 func (w *Worker) sdk(ctx context.Context, method, path string, body []byte) (SDKState, []byte, error) {
 	var state SDKState
-	request, err := http.NewRequestWithContext(ctx, method, "http://127.0.0.1:4001"+path, bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, method, w.transport.sdkOutboundURL+path, bytes.NewReader(body))
 	if err != nil {
 		return state, nil, err
 	}
@@ -265,7 +272,7 @@ func (w *Worker) replayReservation(ctx context.Context, q *walletstore.InteropQu
 	// The patched native inbound GET obtains the original fulfilment and reserved
 	// timestamp from SQL, then sends the same PUT through MojaloopRequests. This
 	// also works after Redis loss and does not grant new spending authority.
-	r, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:4000/transfers/"+q.TransferID.String(), nil)
+	r, err := http.NewRequestWithContext(ctx, http.MethodGet, w.transport.sdkInboundURL+"/transfers/"+q.TransferID.String(), nil)
 	if err != nil {
 		return err
 	}

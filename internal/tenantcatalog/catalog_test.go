@@ -9,7 +9,7 @@ import (
 )
 
 func TestRepositoryCatalog(t *testing.T) {
-	file, err := os.Open("../../deploy/kubernetes/keycloak-authority/tenant-catalog.yaml")
+	file, err := os.Open("../../infra/kubernetes/keycloak-authority/tenant-catalog.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

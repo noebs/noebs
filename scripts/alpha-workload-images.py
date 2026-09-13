@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Check the current-host NoEBS workload contract independently of image names.
+"""Check the Noebs fleet workload contract independently of image names.
 
 Input is Kubernetes List objects named workloads, pods and cronjobs. Required
-roles mirror base/kustomization.yaml plus the current-host Mojaloop sidecar.
+roles mirror base/kustomization.yaml.
 Only completed Job pods are historical; third-party workloads stay out of this
 application image contract. No Kubernetes or filesystem mutation is performed.
 """
@@ -17,7 +17,6 @@ DEPLOYMENTS = {
         'psp-webhook', 'wallet-api', 'wallet-ledger', 'wallet-worker',
     )
 }
-DEPLOYMENTS['wallet-worker'].append('mojaloop-sdk')
 CRONJOBS = ('noebs-gateway-auth-cleanup', 'noebs-workload-auth-cleanup')
 # Hook jobs may already have been deleted. If still active, their roles must
 # retain the release image even if someone changes its repository completely.
@@ -39,7 +38,7 @@ def historical_job(pod):
     )
 
 
-def verify(value, expected_app, expected_sdk):
+def verify(value, expected_app):
     errors = []
     workloads = value['workloads']['items']
     cronjobs = value['cronjobs']['items']
@@ -50,7 +49,7 @@ def verify(value, expected_app, expected_sdk):
             errors.append(message)
 
     def expected(name):
-        return expected_sdk if name == 'mojaloop-sdk' else expected_app
+        return expected_app
 
     def containers(spec, names, init_names, label, status=None, deployment=False):
         for key, required, status_key in (
@@ -127,8 +126,8 @@ def verify(value, expected_app, expected_sdk):
 
 
 def main():
-    if len(sys.argv) != 3 or not all(re.fullmatch(r'ghcr\.io/noebs/noebs@sha256:[0-9a-f]{64}', x) for x in sys.argv[1:]):
-        raise SystemExit('usage: alpha-workload-images.py <application image@sha256> <SDK image@sha256>')
+    if len(sys.argv) != 2 or not all(re.fullmatch(r'ghcr\.io/noebs/noebs@sha256:[0-9a-f]{64}', x) for x in sys.argv[1:]):
+        raise SystemExit('usage: alpha-workload-images.py <application image@sha256>')
     try:
         report = verify(json.load(sys.stdin), *sys.argv[1:])
     except (ValueError, KeyError, TypeError) as error:

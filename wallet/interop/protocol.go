@@ -211,9 +211,10 @@ func PrepareFromQuote(q *walletstore.InteropQuote, fsp string) (Prepare, error) 
 	return Prepare{TransferID: q.TransferID.String(), PayerFSP: fsp, PayeeFSP: state.To.FSPID, Amount: r.TransferAmount, ILPPacket: r.ILPPacket, Condition: r.Condition, Expiration: r.Expiration}, nil
 }
 
-// ValidateOutcome is called only for a response read from the literal loopback
-// SDK endpoint or its private backend callback. It correlates stored terms and
-// checks the fulfilment independently, including SDK hub-GET responses.
+// ValidateOutcome is called only for a response from the configured SDK endpoint
+// or an allowed private callback peer. The stored "sdk-loopback" authority label
+// predates external SDK transport. It correlates stored terms and checks the
+// fulfilment independently, including SDK hub-GET responses.
 func ValidateOutcome(q *walletstore.InteropQuote, t *walletstore.InteropTransfer, state SDKState, authority, fsp string) (string, error) {
 	if state.TransferID != "" && state.TransferID != q.TransferID.String() {
 		return "", ErrProtocol

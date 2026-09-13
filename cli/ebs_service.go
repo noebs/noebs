@@ -190,8 +190,11 @@ func runMain() error {
 
 func runService(ctx context.Context, role serviceRole) error {
 	if role == serviceRoleWalletWorker && noebsConfig.InteropTenant != "" {
-		var err error
-		interopWorker, err = walletinterop.NewWorker(ctx, walletService.Store, noebsConfig.InteropTenant, noebsConfig.InteropFSPID)
+		transport, err := interopTransportConfig(noebsConfig)
+		if err != nil {
+			return err
+		}
+		interopWorker, err = walletinterop.NewWorker(ctx, walletService.Store, noebsConfig.InteropTenant, noebsConfig.InteropFSPID, transport)
 		if err != nil {
 			return fmt.Errorf("configure interop worker: %w", err)
 		}

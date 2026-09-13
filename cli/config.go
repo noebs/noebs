@@ -561,6 +561,7 @@ func GetMainEngine() *fiber.App {
 	route.Use(gateway.RequestLogger(logrusLogger, logSampling))
 	route.Use(gateway.NoebsCors(noebsConfig.Cors))
 	registerAPIGatewayHealthRoute(route, role)
+	registerAndroidAssetLinksRoute(route, role)
 	if role.startsHTTP() {
 		route.Get(internalHealthPath, func(c *fiber.Ctx) error {
 			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})

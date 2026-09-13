@@ -1,0 +1,1 @@
+The deployment command performs Keycloak bootstrap automatically on the first release, waits for reconciliation and bootstrap-client deletion, then removes the temporary credentials. Subsequent releases use the realm-local reconciler.

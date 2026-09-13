@@ -103,7 +103,7 @@ func TestPSPWebhookGatewayResolvesOpaqueCallbackBeforeSigning(t *testing.T) {
 		t.Fatalf("signed tenant = %q, want test-tenant", got.tenant)
 	}
 	if got.source != "203.0.113.10" {
-		t.Fatalf("gateway source = %q, want Caddy-authenticated request source", got.source)
+		t.Fatalf("gateway source = %q, want verified ingress request source", got.source)
 	}
 	if got.publicTenant != "" || got.authorization != "" || got.adminKey != "" {
 		t.Fatalf("public credentials reached upstream: %#v", got)

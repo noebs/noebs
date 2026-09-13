@@ -209,8 +209,8 @@ func TestProtocolReviewStepUpCanonicalBinding(t *testing.T) {
 	}
 }
 
-func TestProtocolReviewBackendRejectsNonLoopbackPeers(t *testing.T) {
-	for _, peer := range []string{"172.30.250.1:40000", "10.42.1.9:40000", "192.0.2.1:40000", "[2001:db8::1]:40000", "malformed"} {
+func TestProtocolReviewBackendRejectsUnconfiguredPeers(t *testing.T) {
+	for _, peer := range []string{"127.0.0.1:40000", "[::1]:40000", "172.30.250.1:40000", "10.42.1.9:40000", "192.0.2.1:40000", "[2001:db8::1]:40000", "malformed"} {
 		req := httptest.NewRequest(http.MethodGet, "/parties/MSISDN/249910000001", nil)
 		req.RemoteAddr = peer
 		response := httptest.NewRecorder()

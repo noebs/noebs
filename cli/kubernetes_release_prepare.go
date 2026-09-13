@@ -159,7 +159,7 @@ func prepareKubernetesRelease(repoRoot, inputsPath, ageKeyPath, outputRoot strin
 	if err != nil {
 		return err
 	}
-	tenantCatalogPath := filepath.Join(repoRoot, "deploy", "kubernetes", "keycloak-authority", "tenant-catalog.yaml")
+	tenantCatalogPath := filepath.Join(repoRoot, "infra", "kubernetes", "keycloak-authority", "tenant-catalog.yaml")
 	tenantCatalogPayload, err := os.ReadFile(tenantCatalogPath)
 	if err != nil {
 		return fmt.Errorf("read Kubernetes tenant catalog: %w", err)
@@ -275,7 +275,7 @@ func (r preparedKubernetesRelease) publish(outputRoot string, decrypt deployment
 }
 
 func readNoebsKubernetesConfigMapData(repoRoot string) (map[string]string, error) {
-	path := filepath.Join(repoRoot, "deploy", "kubernetes", "base", "configmap.yaml")
+	path := filepath.Join(repoRoot, "infra", "kubernetes", "base", "configmap.yaml")
 	payload, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read Kubernetes noebs configmap: %w", err)

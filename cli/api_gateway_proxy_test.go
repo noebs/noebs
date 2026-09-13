@@ -77,7 +77,13 @@ func TestGatewayRequestSourceRequiresOneCanonicalProxyValue(t *testing.T) {
 	}{
 		{name: "canonical IPv4", values: []string{"203.0.113.9"}, status: http.StatusOK, source: "203.0.113.9"},
 		{name: "missing", status: http.StatusBadRequest},
-		{name: "forwarding chain", values: []string{"198.51.100.4, 203.0.113.9"}, status: http.StatusBadRequest},
+		{name: "canonical IPv6", values: []string{"2001:db8::9"}, status: http.StatusOK, source: "2001:db8::9"},
+		{name: "noncanonical", values: []string{"2001:0db8::9"}, status: http.StatusBadRequest},
+		{name: "embedded whitespace", values: []string{"203. 0.113.9"}, status: http.StatusBadRequest},
+		{name: "trusted proxy chain", values: []string{"203.0.113.9, 127.0.0.1"}, status: http.StatusOK, source: "203.0.113.9"},
+		{name: "spoofed prefix before EXE client addresses", values: []string{"198.51.100.4, 203.0.113.9, 203.0.113.9, 127.0.0.1"}, status: http.StatusOK, source: "203.0.113.9"},
+		{name: "invalid immediate proxy", values: []string{"203.0.113.9, proxy.example"}, status: http.StatusBadRequest},
+		{name: "empty tail", values: []string{"203.0.113.9,"}, status: http.StatusBadRequest},
 		{name: "duplicate", values: []string{"198.51.100.4", "203.0.113.9"}, status: http.StatusBadRequest},
 		{name: "invalid", values: []string{"provider.example"}, status: http.StatusBadRequest},
 	}
@@ -95,6 +101,8 @@ func TestGatewayRequestSourceRequiresOneCanonicalProxyValue(t *testing.T) {
 			})
 			request := httptest.NewRequest(http.MethodGet, "/", nil)
 			request.Header[http.CanonicalHeaderKey(fiber.HeaderXForwardedFor)] = test.values
+			// exe.dev preserves caller-supplied X-Real-IP, so it is never trusted.
+			request.Header.Set("X-Real-IP", "192.0.2.123")
 			response, err := app.Test(request)
 			if err != nil {
 				t.Fatal(err)

@@ -52,7 +52,7 @@ func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 	}
 	keycloakConfig := readPreparedFile(t, outputRoot, "platform/keycloak.conf")
 	if !strings.Contains(keycloakConfig, "proxy-trusted-addresses=10.42.0.1/32\n") {
-		t.Fatal("prepared Keycloak config must trust only the observed host-network Caddy source")
+		t.Fatal("prepared Keycloak config must retain the explicit proxy trust address")
 	}
 	for _, required := range []string{
 		"db-tls-mode=verify-server\n",
@@ -409,7 +409,7 @@ func TestPrepareKubernetesReleasePreservesConcurrentDestination(t *testing.T) {
 }
 
 func TestKubernetesReleaseInputsExampleMatchesStrictSchema(t *testing.T) {
-	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kubernetes-release.inputs.yaml.example")
+	path := filepath.Join("..", "infra", "exe", "release.inputs.yaml.example")
 	payload, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read input example: %v", err)

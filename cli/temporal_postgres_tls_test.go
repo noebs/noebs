@@ -8,7 +8,7 @@ import (
 )
 
 func TestTemporalPostgresReleaseIsTLS13Only(t *testing.T) {
-	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "infra", "kubernetes", "base"))
 	var bootstrap string
 	var temporalConfig map[string]string
 	for _, object := range objects {

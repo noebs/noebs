@@ -12,8 +12,8 @@ import (
 const tenantCatalogMigrationTarget = `noebs-(identity-auth|card-vault|ebs-adapter|admin-reporting|notification-chat|wallet-ledger|gateway-auth)-migrate`
 
 func TestTenantCatalogKubernetesMountContract(t *testing.T) {
-	base := filepath.Join("..", "deploy", "kubernetes", "base")
-	authority := filepath.Join("..", "deploy", "kubernetes", "keycloak-authority")
+	base := filepath.Join("..", "infra", "kubernetes", "base")
+	authority := filepath.Join("..", "infra", "kubernetes", "keycloak-authority")
 	authorityData, err := os.ReadFile(filepath.Join(authority, "kustomization.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +134,7 @@ func assertTenantCatalogPatch(t testing.TB, patch, label string) {
 
 func TestTenantCatalogDockerMigrationMountContract(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
-	wantMount := "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
+	wantMount := "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
 	for _, service := range []string{
 		"api-gateway",
 		"identity-auth-migrate", "card-vault-migrate", "ebs-adapter-migrate",

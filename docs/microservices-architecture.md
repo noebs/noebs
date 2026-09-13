@@ -1,7 +1,7 @@
 # Noebs architecture
 
 Status: current implementation. Repository code is the design authority.
-Rendered manifests, live Kubernetes/OpenTofu state, and locally reproduced
+Rendered manifests, live Kubernetes/Terraform state, and locally reproduced
 results are deployment evidence and must be reconciled when they differ from
 the code. There is no supported monolith role or legacy authentication
 fallback.
@@ -9,16 +9,17 @@ fallback.
 ## Runtime shape
 
 Noebs builds one Go image, but every process starts exactly one configured
-service role. Caddy exposes the public HTTPS edge. Public API and back-office
+service role. Traefik provides Kubernetes ingress routing. Public API and back-office
 traffic enters `api-gateway`; the edge exposes only the Keycloak endpoints used
 by Authorization Code, PKCE, Google brokering, and login-theme assets. Keycloak
 administration, account management, client registration, and unused protocols
 remain private. Other workloads use ClusterIP services and are not public entry
 points.
 
-HTTP service discovery, gRPC service discovery, Kafka brokers, and Temporal
-addresses are explicit mounted configuration. A service does not discover a
-peer or database by guessing a hostname, tenant, or default identifier.
+Kubernetes Services and CoreDNS provide service discovery. HTTP and gRPC
+endpoints, Kafka brokers, and Temporal addresses are explicit mounted
+configuration using those service names. A service does not select a peer or
+database by guessing a hostname, tenant, or default identifier.
 
 ## Human identity and tenant authorization
 
@@ -123,24 +124,32 @@ identifiers; only API handlers may apply configured defaults.
 
 ## Infrastructure and release ownership
 
-`deploy/kubernetes/base` owns workloads, services, migration/reconcile Jobs,
-service accounts, and network policy. The current-host Kustomize overlay owns
-environment-specific digests, resources, routes, and patches.
-`foundation/terraform` owns the host foundation and Argo CD Applications. SOPS
-material is split by service and decrypted only into the intended workload or
-Job.
+`infra/exedev` defines the VM fleet. `infra/kubernetes/base` owns Noebs workloads,
+services, migration/reconcile Jobs, service accounts, and network policy.
+`infra/kubernetes/overlays/exe` sets image digests, resource budgets, and placement.
+`infra/deploy` provisions the cluster and deploys release resources in dependency
+order. SOPS material is split by service and decrypted only into the intended
+workload or Job. See the [deployment guide](../infra/README.md).
 
 Keycloak realm, clients, scopes, organization mappings, identity providers,
 organizations, groups, roles, and permissions are declared in
-`deploy/kubernetes/keycloak-authority/keycloak-desired-state.yaml` and reconciled
+`infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml` and reconciled
 idempotently. A temporary master-realm service account exists only in the
-bootstrap overlay and is deleted after the realm-local reconciler is usable.
+`infra/kubernetes/bootstrap` overlay and is deleted after the realm-local
+reconciler is usable.
 
-Release evidence is local. `scripts/publish-alpha-image.sh` exports one reviewed
-commit, publishes a write-once full-SHA image tag, verifies the registry
-manifest digest, and writes an immutable receipt. A separate GitOps commit pins
-that digest. Argo CD reconciles the commit; GitHub Actions and mutable image
-tags are not test or release authorities.
+`scripts/publish-alpha-image.sh` exports one reviewed commit, publishes a
+write-once full-SHA image tag, verifies the registry manifest digest, and writes
+an immutable receipt. Deployment verifies that receipt against the source
+revision and registry, applies the release, waits for bootstrap and migration
+Jobs, and verifies the declared and running image digests.
+
+Mojaloop is an external payment service. Noebs retains its customer ledger,
+admission rules, holds, and outcome reconciliation. The optional interop worker
+uses explicit SDK API origins and a private callback listener with exact allowed
+peer IPs. VPN routing belongs to the connection contract; Noebs infrastructure
+does not deploy the switch, its SDK, or a sibling repository. See the
+[external interop contract](mojaloop-interop.md).
 
 ## Required invariants
 

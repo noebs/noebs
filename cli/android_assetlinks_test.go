@@ -2,23 +2,28 @@ package main
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"regexp"
 	"testing"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 // App Links authorizes browser callbacks for each established signing identity.
 // It does not make Android installations signed by different keys upgradeable.
 func TestAndroidAssetLinksPreserveExistingAndManagedReleaseCertificates(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "deploy", "kubernetes", "edge", "Caddyfile"))
+	app := fiber.New()
+	registerAndroidAssetLinksRoute(app, serviceRoleAPIGateway)
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/.well-known/assetlinks.json", nil))
 	if err != nil {
 		t.Fatal(err)
 	}
-	response := regexp.MustCompile("(?m)^\\s*respond @assetlinks `([^`]+)` 200\\s*$").FindAllSubmatch(content, -1)
-	if len(response) != 1 {
-		t.Fatal("edge must serve exactly one JSON assetlinks response with HTTP 200")
+	defer closeResponseBody(t, response.Body)
+	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != fiber.MIMEApplicationJSON ||
+		response.Header.Get("Cache-Control") != "public, max-age=3600" {
+		t.Fatalf("unexpected assetlinks response: status=%d headers=%v", response.StatusCode, response.Header)
 	}
 	var links []struct {
 		Relation []string `json:"relation"`
@@ -28,7 +33,7 @@ func TestAndroidAssetLinksPreserveExistingAndManagedReleaseCertificates(t *testi
 			Fingerprints []string `json:"sha256_cert_fingerprints"`
 		} `json:"target"`
 	}
-	if err := json.Unmarshal(response[0][1], &links); err != nil {
+	if err := json.NewDecoder(response.Body).Decode(&links); err != nil {
 		t.Fatalf("assetlinks response must be valid JSON: %v", err)
 	}
 	if len(links) != 1 {
@@ -52,5 +57,18 @@ func TestAndroidAssetLinksPreserveExistingAndManagedReleaseCertificates(t *testi
 		if !fingerprint.MatchString(value) {
 			t.Fatalf("invalid SHA-256 certificate fingerprint: %q", value)
 		}
+	}
+}
+
+func TestAndroidAssetLinksOnlyServedByGateway(t *testing.T) {
+	app := fiber.New()
+	registerAndroidAssetLinksRoute(app, serviceRoleIdentityAuth)
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/.well-known/assetlinks.json", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeResponseBody(t, response.Body)
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", response.StatusCode)
 	}
 }

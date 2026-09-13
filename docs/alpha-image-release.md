@@ -1,6 +1,6 @@
 # Alpha image release
 
-`scripts/publish-alpha-image.sh` publishes one reviewed Git commit. The interop release workflow runs this same bounded publisher on GitHub Actions using the job-scoped registry token. It accepts only a full commit SHA, exports that commit with
+`scripts/publish-alpha-image.sh` publishes one reviewed Git commit. CI uses the same publisher with a job-scoped registry token. It accepts only a full commit SHA, exports that commit with
 `git archive`, and builds the export in a private temporary directory. Modified
 and untracked working-tree files therefore cannot enter the image.
 
@@ -13,8 +13,7 @@ check cannot make two concurrent publishers atomic by itself.
 ## Prerequisites
 
 Run the command on a trusted Linux Docker host with Bash, Git, tar, jq,
-`sha256sum`, Docker Engine, and Docker Buildx. The alpha host was checked with
-Docker Engine 29.5.2 and Buildx 0.34.0.
+`sha256sum`, Docker Engine, and Docker Buildx.
 
 Authenticate Docker to GHCR before the release session with an account that can
 write `ghcr.io/noebs/noebs`. The script reads the existing
@@ -22,7 +21,7 @@ write `ghcr.io/noebs/noebs`. The script reads the existing
 invoke `docker login`, or print the config. A credential helper or credential
 store referenced by that file is supported.
 
-For manual publication, supply a pre-authenticated Docker config; do not put a token in this repository or on the command line. The interop CI workflow authenticates only for its job and removes the credentials afterward.
+For manual publication, supply a pre-authenticated Docker config; do not put a token in this repository or on the command line. CI authenticates only for its job and removes the credentials afterward.
 
 The Dockerfile pins both Docker Hub base manifests by digest. The runtime image
 does not contain SOPS, age, an age identity, or a SOPS working directory. Secret
@@ -59,21 +58,22 @@ the intended persistent outputs.
 
 ## Promote by digest
 
-This command never edits Kubernetes manifests and never deploys. Review the
-receipt, then make a separate GitOps commit that replaces the four Noebs digest
-pins in the current-host overlay, bootstrap-current-host overlay, subject lookup
-operation, and membership operation base with the receipt's `digest`. Those
-four pins are one promotion unit: render and validate every workflow before
-setting foundation `noebs_target_revision` to that exact promotion commit and
-allowing Argo CD to reconcile. The coordinated migration and rollback boundary remains documented in the
-[current-host release notes](../deploy/kubernetes/overlays/current-host/README.md).
+The publisher produces an image and receipt. `infra/deploy` consumes the
+application receipt, verifies its source SHA and registry digest, prepares
+service secrets, then runs bootstrap, migrations, and workload rollout in
+dependency order. The image checker compares every Noebs application and init
+container with the receipt, including cleanup CronJobs. See the
+[deployment guide](../infra/README.md) for the complete entrypoint.
+
+The checked-in digest pins in `infra/kubernetes/overlays/exe`,
+`infra/kubernetes/bootstrap`, and the lookup and membership operation overlays
+must remain coherent when those manifests are used directly. Render each
+workflow and verify its Noebs image against the selected receipt.
 
 If the command fails after the push, inspect the full-SHA tag and retained
-receipt before doing anything else. Do not overwrite or delete the tag to make a
-retry succeed; resolve the release evidence or publish a new reviewed commit.
+receipt before retrying. Do not overwrite or delete the tag to make a retry
+succeed; resolve the release evidence or publish a new reviewed commit.
 
-## Mojaloop profile release
-
-`.github/workflows/interop-release.yml` publishes both images from the same exact source commit and retains two JSON receipts. `scripts/publish-interop-sdk.sh` builds the versioned patch against the pinned official SDK source and runtime, with a 1 GiB/two-CPU/512-PID builder. Its independent digest uses the `noebs-mojaloop-sdk` image alias in current-host. The bootstrap overlay matches only its `noebs-bootstrap` Job alias, so it cannot overwrite the inherited SDK image. Render both overlays and verify the `mojaloop-sdk` container against the SDK receipt, and every other noebs container against the application receipt.
-
-For a public configuration change with unchanged credentials, run `scripts/refresh-preflight-manifest.py` on the host against a reviewed JSON render. It first verifies the existing complete artifact set, validates the proposed payload with the new immutable image without network access, and changes only the release fingerprint when invoked with `--apply`. It never rotates database, TLS, or application credentials.
+Mojaloop and its SDK have an independent release lifecycle. The Noebs fleet
+release requires only its application image receipt and never publishes or
+deploys an external switch or SDK.

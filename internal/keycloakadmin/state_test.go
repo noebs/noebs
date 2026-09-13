@@ -32,7 +32,7 @@ func TestDesiredStateUsesOneExplicitDeploymentOrigin(t *testing.T) {
 }
 
 func TestRepositoryDesiredStateContract(t *testing.T) {
-	file, err := os.Open("../../deploy/kubernetes/keycloak-authority/keycloak-desired-state.yaml")
+	file, err := os.Open("../../infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestDesiredStateRejectsGoogleForwardingDrift(t *testing.T) {
 }
 
 func TestDesiredStateRejectsLegacyPostBrokerFlow(t *testing.T) {
-	data, err := os.ReadFile("../../deploy/kubernetes/keycloak-authority/keycloak-desired-state.yaml")
+	data, err := os.ReadFile("../../infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,7 +356,7 @@ func TestSteadyRealmLocalConfig(t *testing.T) {
 
 func repositoryDesiredState(t *testing.T) DesiredState {
 	t.Helper()
-	file, err := os.Open("../../deploy/kubernetes/keycloak-authority/keycloak-desired-state.yaml")
+	file, err := os.Open("../../infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +370,7 @@ func repositoryDesiredState(t *testing.T) DesiredState {
 
 func repositoryTenantCatalog(t *testing.T) tenantcatalog.Catalog {
 	t.Helper()
-	catalog, err := tenantcatalog.LoadFile("../../deploy/kubernetes/keycloak-authority/tenant-catalog.yaml")
+	catalog, err := tenantcatalog.LoadFile("../../infra/kubernetes/keycloak-authority/tenant-catalog.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

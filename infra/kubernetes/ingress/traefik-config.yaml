@@ -1,0 +1,87 @@
+# Installed on each control-plane server before enabling bundled Traefik.
+# Deployment renders the explicitly configured proxy CIDRs into trustedIPs.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    deployment:
+      kind: Deployment
+      replicas: 1
+      dnsPolicy: ClusterFirstWithHostNet
+      healthchecksHost: 127.0.0.1
+    hostNetwork: true
+    nodeSelector:
+      noebs.dev/role: workers
+      kubernetes.io/hostname: noebs-workers
+    updateStrategy:
+      type: Recreate
+      rollingUpdate: null
+    service:
+      enabled: false
+    ingressClass:
+      enabled: false
+    api:
+      dashboard: false
+    ingressRoute:
+      dashboard:
+        enabled: false
+      healthcheck:
+        enabled: false
+    providers:
+      kubernetesCRD:
+        enabled: true
+        namespaces: [noebs]
+        allowCrossNamespace: false
+        allowExternalNameServices: false
+      kubernetesIngress:
+        enabled: false
+      kubernetesGateway:
+        enabled: false
+    rbac:
+      namespaced: true
+    ports:
+      traefik:
+        port: 9001
+        hostIP: 127.0.0.1
+        expose:
+          default: false
+      web:
+        port: 8081
+        expose:
+          default: false
+        forwardedHeaders:
+          trustedIPs: []
+          insecure: false
+        proxyProtocol:
+          trustedIPs: []
+          insecure: false
+      websecure: null
+      metrics: null
+    metrics:
+      prometheus: null
+    additionalArguments:
+      - --entrypoints.web.http.encodedcharacters.allowencodedslash=false
+      - --entrypoints.web.http.encodedcharacters.allowencodedbackslash=false
+      - --entrypoints.web.http.encodedcharacters.allowencodednullcharacter=false
+    logs:
+      general:
+        level: WARN
+      access:
+        enabled: true
+        format: json
+        fields:
+          general:
+            defaultmode: drop
+            names:
+              StartUTC: keep
+              Duration: keep
+              DownstreamStatus: keep
+              RequestMethod: keep
+              RequestHost: keep
+              RouterName: keep
+              ServiceName: keep
+          headers:
+            defaultmode: drop

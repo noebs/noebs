@@ -9,7 +9,7 @@ import (
 
 func TestPrepareReleaseUsesExplicitDeploymentOriginAndProxy(t *testing.T) {
 	source := t.TempDir()
-	for _, relative := range []string{"deploy/kubernetes/base/configmap.yaml", "deploy/kubernetes/keycloak-authority/tenant-catalog.yaml", "deploy/docker/postgres/001-service-databases.sql"} {
+	for _, relative := range []string{"infra/kubernetes/base/configmap.yaml", "infra/kubernetes/keycloak-authority/tenant-catalog.yaml", "deploy/docker/postgres/001-service-databases.sql"} {
 		payload, err := os.ReadFile(filepath.Join("..", relative))
 		if err != nil {
 			t.Fatal(err)

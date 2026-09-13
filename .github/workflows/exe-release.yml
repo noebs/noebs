@@ -1,7 +1,7 @@
 name: Deploy exe fleet
 on:
   workflow_run:
-    workflows: [Immutable interop release]
+    workflows: [Immutable noebs release]
     types: [completed]
     branches: [master]
   workflow_dispatch:
@@ -48,28 +48,28 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
-          cache-dependency-path: foundation/exedev-provider/go.sum
-      - name: Validate provider and automation
-        run: |
-          go -C foundation/exedev-provider test ./...
-          go test ./cli -run 'TestExeEdge|TestGatewayRequestSource' -count=1
-          bash -n scripts/exe/*.sh
-          python3 -m py_compile scripts/exe/*.py
+          cache-dependency-path: infra/exedev-provider/go.sum
       - name: Install release tooling
         run: |
           go install github.com/getsops/sops/v3/cmd/sops@v3.10.2
           go install github.com/google/go-containerregistry/cmd/crane@v0.21.0
           go install sigs.k8s.io/kustomize/kustomize/v5@v5.8.1
           python3 -m pip install PyYAML==6.0.2
-          python3 -B -m unittest discover -s scripts/exe -p 'test_*.py'
+          python3 -B -m unittest discover -s infra/scripts -p 'test_*.py'
+      - name: Validate provider and automation
+        run: |
+          go -C infra/exedev-provider test ./...
+          go test ./cli ./wallet/interop -count=1
+          for script in infra/scripts/*.sh; do bash -n "$script"; done
+          python3 -m py_compile infra/scripts/*.py
       - name: Load verified build receipts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           revision=$(git rev-parse HEAD)
-          build=$(gh run list --workflow interop-release.yml --commit "$revision" --status success --json databaseId --jq '.[0].databaseId')
+          build=$(gh run list --workflow noebs-release.yml --commit "$revision" --status success --json databaseId --jq '.[0].databaseId')
           test -n "$build"
-          gh run download "$build" --name "interop-release-$revision" --dir "$RUNNER_TEMP/receipts"
+          gh run download "$build" --name "noebs-release-$revision" --dir "$RUNNER_TEMP/receipts"
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
       - name: Load deployment identity
         env:
@@ -82,18 +82,16 @@ jobs:
           umask 077
           printf '%s\n' "$EXE_KEY" > "$RUNNER_TEMP/exe/key"
           printf '%s\n' "$EXE_AGE_KEY" > "$RUNNER_TEMP/exe/age-key.txt"
-      - name: Reconcile VMs and back up Terraform state
-        run: scripts/exe/reconcile.py --key "$RUNNER_TEMP/exe/key" --work "$RUNNER_TEMP/exe"
-      - name: Install encrypted runtime inputs from this revision
-        run: scripts/exe/sync-runtime.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --age-key "$RUNNER_TEMP/exe/age-key.txt"
-      - name: Join private Kubernetes cluster
+      - name: Deploy the noebs fleet
         env:
           EXE_TAILSCALE_AUTH_KEY: ${{ secrets.EXE_TAILSCALE_AUTH_KEY }}
-        run: scripts/exe/bootstrap-cluster.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json"
-      - name: Promote application and migration jobs
-        run: scripts/exe/promote.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --receipts "$RUNNER_TEMP/receipts" --work "$RUNNER_TEMP/exe"
-      - name: Configure encrypted recovery storage
-        run: scripts/exe/setup-backups.py --key "$RUNNER_TEMP/exe/key" --machines "$RUNNER_TEMP/exe/machines.json" --work "$RUNNER_TEMP/exe"
+          DEPLOYMENT_CONFIG: ${{ vars.NOEBS_DEPLOYMENT_CONFIG }}
+        run: |
+          test -n "$DEPLOYMENT_CONFIG"
+          printf '%s\n' "$DEPLOYMENT_CONFIG" > "$RUNNER_TEMP/exe/deployment.yaml"
+          infra/deploy --config "$RUNNER_TEMP/exe/deployment.yaml" \
+            --key "$RUNNER_TEMP/exe/key" --age-key "$RUNNER_TEMP/exe/age-key.txt" \
+            --work "$RUNNER_TEMP/exe" --receipts "$RUNNER_TEMP/receipts"
       - name: Preserve encrypted recovery state
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

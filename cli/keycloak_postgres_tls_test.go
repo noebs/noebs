@@ -8,7 +8,7 @@ import (
 )
 
 func TestKeycloakPostgresReleaseIsTLS13Only(t *testing.T) {
-	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "infra", "kubernetes", "base"))
 	var postgres, keycloak manifestContainer
 	var bootstrap string
 	for _, object := range objects {
@@ -57,7 +57,7 @@ func TestKeycloakPostgresReleaseIsTLS13Only(t *testing.T) {
 
 func TestKeycloakUsesOfficialDatabaseServerVerification(t *testing.T) {
 	for _, path := range []string{
-		filepath.Join("..", "deploy", "kubernetes", "base", "keycloak.conf.example"),
+		filepath.Join("..", "infra", "kubernetes", "base", "keycloak.conf.example"),
 		filepath.Join("..", "deploy", "docker", "keycloak", "keycloak.conf.example"),
 	} {
 		payload, err := os.ReadFile(path)

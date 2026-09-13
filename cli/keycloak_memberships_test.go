@@ -30,8 +30,8 @@ func TestRunAssignKeycloakMembershipsDryRun(t *testing.T) {
 
 	memberships, actions, dryRun, err := runAssignKeycloakMemberships([]string{
 		"--memberships", membershipsPath,
-		"--desired-state", "../deploy/kubernetes/keycloak-authority/keycloak-desired-state.yaml",
-		"--tenant-catalog", "../deploy/kubernetes/keycloak-authority/tenant-catalog.yaml",
+		"--desired-state", "../infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml",
+		"--tenant-catalog", "../infra/kubernetes/keycloak-authority/tenant-catalog.yaml",
 		"--config", configPath,
 		"--ca", caPath,
 		"--dry-run",
@@ -114,10 +114,10 @@ func TestLookupKeycloakSubjectCommandWritesOnlyUUID(t *testing.T) {
 }
 
 func TestKeycloakMembershipOperationManifests(t *testing.T) {
-	operations := filepath.Join("..", "deploy", "kubernetes", "operations")
-	releaseDigest := readOperationImageDigest(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kustomization.yaml"))
+	operations := filepath.Join("..", "infra", "kubernetes", "operations")
+	releaseDigest := readOperationImageDigest(t, filepath.Join("..", "infra", "kubernetes", "overlays", "exe", "kustomization.yaml"))
 	for _, path := range []string{
-		filepath.Join("..", "deploy", "kubernetes", "overlays", "bootstrap-current-host", "kustomization.yaml"),
+		filepath.Join("..", "infra", "kubernetes", "bootstrap", "kustomization.yaml"),
 		filepath.Join(operations, "lookup", "kustomization.yaml"),
 		filepath.Join(operations, "memberships", "base", "kustomization.yaml"),
 	} {
@@ -156,12 +156,12 @@ func TestKeycloakMembershipOperationManifests(t *testing.T) {
 	if !strings.Contains(string(dryRun), "value: --dry-run") {
 		t.Fatal("dry-run operation does not add --dry-run")
 	}
-	base, err := os.ReadFile(filepath.Join("..", "deploy", "kubernetes", "base", "kustomization.yaml"))
+	base, err := os.ReadFile(filepath.Join("..", "infra", "kubernetes", "base", "kustomization.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(string(base), "operations") || strings.Contains(string(base), "membership-assignment") {
-		t.Fatal("operator-only membership Jobs were added to the Argo base")
+		t.Fatal("operator-only membership Jobs were added to the runtime base")
 	}
 	membershipBase, err := os.ReadFile(filepath.Join(operations, "memberships", "base", "kustomization.yaml"))
 	if err != nil {
@@ -170,7 +170,7 @@ func TestKeycloakMembershipOperationManifests(t *testing.T) {
 	if !strings.Contains(string(membershipBase), "../../../keycloak-authority") {
 		t.Fatal("membership operation does not consume the canonical Keycloak authority generator")
 	}
-	runnerPath := filepath.Join(operations, "run-membership-job.sh")
+	runnerPath := filepath.Join(operations, "run-keycloak-job.sh")
 	runner, err := os.ReadFile(runnerPath)
 	if err != nil {
 		t.Fatal(err)
@@ -178,10 +178,10 @@ func TestKeycloakMembershipOperationManifests(t *testing.T) {
 	runnerText := string(runner)
 	for _, required := range []string{
 		`git -C "$repo_root" diff --quiet`,
-		`.spec.source.targetRevision == $revision`,
-		`.spec.source.path == "deploy/kubernetes/overlays/current-host"`,
-		`.status.sync.revision == $revision`,
-		`argocd.argoproj.io/tracking-id`,
+		`.data.revision == $revision`,
+		`get configmap noebs-release -o json`,
+		`rollout status deployment/keycloak --timeout=120s`,
+		`release_image="$(jq -r '.data.image' <<<"$release")"`,
 		`cmp -s "$source_file"`,
 		`apply --dry-run=server -f "$job_manifest"`,
 		`apply -f "$job_manifest"`,
@@ -191,7 +191,7 @@ func TestKeycloakMembershipOperationManifests(t *testing.T) {
 		}
 	}
 	if strings.Contains(runnerText, "apply -k") || strings.Contains(runnerText, "delete -k") {
-		t.Fatal("membership operation runner may apply or delete Argo-owned ConfigMaps")
+		t.Fatal("operation runner may apply or delete shared authority ConfigMaps")
 	}
 	info, err := os.Stat(runnerPath)
 	if err != nil {
@@ -204,12 +204,12 @@ func TestKeycloakMembershipOperationManifests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(readme), "apply -k deploy/kubernetes/operations/memberships") {
+	if strings.Contains(string(readme), "apply -k infra/kubernetes/operations/memberships") {
 		t.Fatal("membership runbook directly applies shared authority ConfigMaps")
 	}
 
 	assertMembershipAuthorityRenders(t,
-		filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host"),
+		filepath.Join("..", "infra", "kubernetes", "overlays", "exe"),
 		filepath.Join(operations, "memberships", "dry-run"),
 		filepath.Join(operations, "memberships", "apply"),
 	)

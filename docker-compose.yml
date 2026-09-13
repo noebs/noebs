@@ -374,7 +374,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/gateway-auth-migrate.yaml:/app/service.yaml:ro"
-      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
+      - "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: gateway-auth-migrate-secrets
         target: /app/secrets.yaml
@@ -399,7 +399,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/identity-auth-migrate.yaml:/app/service.yaml:ro"
-      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
+      - "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: identity-auth-migrate-secrets
         target: /app/secrets.yaml
@@ -409,7 +409,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/card-vault-migrate.yaml:/app/service.yaml:ro"
-      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
+      - "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: card-vault-migrate-secrets
         target: /app/secrets.yaml
@@ -419,7 +419,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/ebs-adapter-migrate.yaml:/app/service.yaml:ro"
-      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
+      - "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: ebs-adapter-migrate-secrets
         target: /app/secrets.yaml
@@ -429,7 +429,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/admin-reporting-migrate.yaml:/app/service.yaml:ro"
-      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
+      - "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: admin-reporting-migrate-secrets
         target: /app/secrets.yaml
@@ -439,7 +439,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/notification-chat-migrate.yaml:/app/service.yaml:ro"
-      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
+      - "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: notification-chat-migrate-secrets
         target: /app/secrets.yaml
@@ -449,7 +449,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-ledger-migrate.yaml:/app/service.yaml:ro"
-      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
+      - "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: wallet-ledger-migrate-secrets
         target: /app/secrets.yaml
@@ -469,7 +469,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/api-gateway.yaml:/app/service.yaml:ro"
-      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
+      - "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - *api-gateway-secret
     networks:

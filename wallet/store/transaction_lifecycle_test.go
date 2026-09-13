@@ -39,7 +39,7 @@ func TestWalletStatusRecoveryReplaysStableHistoryAndInvalidatesOldLeases(t *test
 	if err != nil || len(second) != 1 {
 		t.Fatalf("second=%+v error=%v", second, err)
 	}
-	recovery, err := os.ReadFile("../../scripts/exe/recovery/wallet_ledger.sql")
+	recovery, err := os.ReadFile("../../infra/scripts/recovery/wallet_ledger.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

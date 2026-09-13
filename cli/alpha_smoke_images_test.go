@@ -12,10 +12,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestPostDeployImageRoleContractMatchesCurrentHostRender(t *testing.T) {
-	render, err := exec.Command("kustomize", "build", filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host")).CombinedOutput()
+func TestPostDeployImageRoleContractMatchesFleetRender(t *testing.T) {
+	render, err := exec.Command("kustomize", "build", filepath.Join("..", "infra", "kubernetes", "overlays", "exe")).CombinedOutput()
 	if err != nil {
-		t.Fatalf("render current-host: %v\n%s", err, render)
+		t.Fatalf("render fleet: %v\n%s", err, render)
 	}
 	var objects []map[string]interface{}
 	decoder := yaml.NewDecoder(bytes.NewReader(render))
@@ -59,6 +59,6 @@ assert actual_jobs=={name:tuple(map(sorted,roles)) for name,roles in checker.OPT
 	command := exec.Command("python3", "-B", "-c", program, filepath.Join("..", "scripts", "alpha-workload-images.py"))
 	command.Stdin = bytes.NewReader(payload)
 	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("smoke image role contract differs from current-host render: %v\n%s", err, output)
+		t.Fatalf("smoke image role contract differs from fleet render: %v\n%s", err, output)
 	}
 }

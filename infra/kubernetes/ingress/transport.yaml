@@ -1,0 +1,21 @@
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: api-gateway
+spec:
+  serverName: api-gateway.noebs.svc.cluster.local
+  rootCAsSecrets:
+    - edge-internal-transport
+  certificatesSecrets:
+    - edge-internal-transport
+  insecureSkipVerify: false
+---
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: keycloak
+spec:
+  serverName: keycloak.noebs.svc.cluster.local
+  rootCAsSecrets:
+    - edge-internal-transport
+  insecureSkipVerify: false

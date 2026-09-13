@@ -14,7 +14,7 @@ import (
 
 func TestKeycloakApplicationTransportIsHTTPSOnly(t *testing.T) {
 	for _, path := range []string{
-		filepath.Join("..", "deploy", "kubernetes", "base", "keycloak.conf.example"),
+		filepath.Join("..", "infra", "kubernetes", "base", "keycloak.conf.example"),
 		filepath.Join("..", "deploy", "docker", "keycloak", "keycloak.conf.example"),
 	} {
 		payload, err := os.ReadFile(path)

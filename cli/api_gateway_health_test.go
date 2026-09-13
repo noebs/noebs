@@ -40,7 +40,7 @@ func TestAPIGatewayPublicHealthRouteMatchesKubernetesProbes(t *testing.T) {
 		t.Fatalf("identity-auth GET /test status = %d, want 404", response.StatusCode)
 	}
 
-	objects := decodeManifestObjects(t, filepath.Join("..", "deploy", "kubernetes", "base", "api-gateway.yaml"))
+	objects := decodeManifestObjects(t, filepath.Join("..", "infra", "kubernetes", "base", "api-gateway.yaml"))
 	for _, object := range objects {
 		if object.Kind != "Deployment" || object.Metadata.Name != "api-gateway" {
 			continue

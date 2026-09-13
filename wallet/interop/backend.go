@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"reflect"
 	"time"
@@ -105,10 +104,9 @@ func (w *Worker) Handler() http.Handler {
 	mux.HandleFunc("PUT /transfers/{id}", w.notification)
 	mux.HandleFunc("GET /transfers/{id}", w.incomingStatus)
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// This listener must also be bound literally to loopback. Checking the peer
-		// rejects accidental exposure through future listener/config refactors.
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil || !net.ParseIP(host).IsLoopback() {
+		// The private network authenticates the SDK peer. Forwarded headers never
+		// establish callback authority; only an explicitly configured socket peer does.
+		if !w.transport.acceptsPeer(r.RemoteAddr) {
 			http.Error(rw, "forbidden", http.StatusForbidden)
 			return
 		}
