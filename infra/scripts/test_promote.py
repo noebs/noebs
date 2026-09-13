@@ -1,5 +1,6 @@
 import hashlib
 from email.message import Message
+import io
 import json
 from pathlib import Path
 from subprocess import CompletedProcess
@@ -7,11 +8,58 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+from urllib.error import HTTPError, URLError
 
 import yaml
 import promote as promotion
 
 from promote import verify_receipt, require_public_dns, verify_login_response
+
+
+class DomainRegistrationTests(unittest.TestCase):
+    host = 'api.noebs.sd'
+    key = Path('deployment-key')
+
+    def test_registered_domain_skips_owner_command_and_disables_redirects(self):
+        response = Mock(status=200)
+        context = Mock()
+        context.__enter__ = Mock(return_value=response)
+        context.__exit__ = Mock(return_value=False)
+        opener = Mock()
+        opener.open.return_value = context
+        with patch.object(promotion, 'build_opener', return_value=opener) as build, patch.object(promotion, 'ssh') as ssh:
+            promotion.ensure_public_domain(self.key, self.host)
+        ssh.assert_not_called()
+        build.assert_called_once_with(promotion.NoRedirect)
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.full_url, 'https://api.noebs.sd/test')
+        self.assertFalse(request.has_header('Authorization'))
+        self.assertFalse(request.has_header('Cookie'))
+        self.assertIsNone(promotion.NoRedirect().redirect_request(None, None, 302, '', {}, 'https://other.example'))
+
+    def test_explicit_exe_unregistered_response_registers_once(self):
+        response = HTTPError('https://' + self.host + '/test', 421, 'Misdirected Request', {},
+                             io.BytesIO(b'<html><title>Domain Not Configured</title></html>'))
+        opener = Mock()
+        opener.open.side_effect = response
+        with patch.object(promotion, 'build_opener', return_value=opener), patch.object(promotion, 'ssh') as ssh:
+            promotion.ensure_public_domain(self.key, self.host)
+        ssh.assert_called_once_with(self.key, 'exe.dev', 'domain add noebs-workers api.noebs.sd --json')
+
+    def test_probe_errors_do_not_trigger_registration_or_expose_response_data(self):
+        errors = [URLError('private-value'), TimeoutError('private-value')]
+        for code in [301, 302, 401, 403, 404, 421, 500, 502]:
+            errors.append(HTTPError('https://' + self.host + '/test', code, 'private-value', {},
+                                    io.BytesIO(b'private-value')))
+        for error in errors:
+            opener = Mock()
+            opener.open.side_effect = error
+            with self.subTest(error=type(error).__name__, code=getattr(error, 'code', None)), \
+                 patch.object(promotion, 'build_opener', return_value=opener), patch.object(promotion, 'ssh') as ssh:
+                with self.assertRaises(RuntimeError) as failure:
+                    promotion.ensure_public_domain(self.key, self.host)
+                self.assertNotIn('private-value', str(failure.exception))
+                ssh.assert_not_called()
 
 
 class PublicLoginTests(unittest.TestCase):
@@ -136,6 +184,7 @@ class PromotionSequenceTests(unittest.TestCase):
              patch.object(promotion, 'load_config', return_value=self.config), \
              patch.object(promotion, 'verify_receipt', return_value=self.image), \
              patch.object(promotion, 'require_public_dns'), patch.object(promotion, 'prepare_source'), \
+             patch.object(promotion, 'public_domain_registered', return_value=True), \
              patch.object(promotion, 'verify_public', side_effect=verify_public), patch.dict(promotion.os.environ):
             promotion.promote(self.args, Mock())
 
@@ -167,6 +216,17 @@ class PromotionSequenceTests(unittest.TestCase):
         deletes = [event[2] for event in self.events if event[0] == 'ssh' and 'delete' in event[2]]
         self.assertFalse(any('deployment/caddy' in command or 'statefulset/noebs-mojaloop-redis' in command for command in deletes))
         self.assertFalse((self.work / 'release-receipt.json').exists())
+
+    def test_fresh_ingress_definitions_are_created_before_waiting_for_establishment(self):
+        self.invoke(Mock())
+        commands = [event[2] for event in self.events if event[0] == 'ssh']
+        created = [command for command in commands if 'wait --for=create' in command]
+        self.assertEqual(len(created), 3)
+        for command in created:
+            self.assertEqual(command.count('crd/'), 1)
+        established = next(i for i, command in enumerate(commands) if 'wait --for=condition=Established' in command)
+        self.assertTrue(all(commands.index(command) < established for command in created))
+        self.assertLess(established, next(i for i, command in enumerate(commands) if 'kubectl apply' in command))
 
 
 

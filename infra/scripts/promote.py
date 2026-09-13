@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import shlex
 import tempfile
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
@@ -29,6 +29,37 @@ def require_public_dns(host):
         raise ValueError('Set the DNS-only CNAME ' + host + ' -> noebs-workers.exe.xyz before deploying')
 
 
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, url):
+        return None
+
+
+def public_domain_registered(host):
+    request = Request('https://' + host + '/test', headers={'User-Agent': 'noebs-deployment'})
+    try:
+        with build_opener(NoRedirect).open(request, timeout=30) as response:
+            if response.status == 200:
+                return True
+            raise RuntimeError('Unexpected HTTPS response while verifying EXE domain registration')
+    except HTTPError as response:
+        try:
+            # EXE serves this explicit rejection over verified HTTPS before a
+            # custom domain has been registered. Other errors are not evidence
+            # that an owner must register the domain again.
+            if response.code == 421 and b'<title>Domain Not Configured</title>' in response.read(16384):
+                return False
+            raise RuntimeError('Unable to verify EXE domain registration: HTTP ' + str(response.code)) from None
+        finally:
+            response.close()
+    except (URLError, OSError, TimeoutError):
+        raise RuntimeError('Unable to verify EXE domain registration over HTTPS') from None
+
+
+def ensure_public_domain(key, host):
+    if not public_domain_registered(host):
+        ssh(key, 'exe.dev', 'domain add noebs-workers ' + shlex.quote(host) + ' --json')
+
+
 def verify_public(host, origin):
     def fetch(path):
         request = Request('https://' + host + path, headers={'User-Agent': 'noebs-deployment'})
@@ -43,10 +74,6 @@ def verify_public(host, origin):
     with fetch('/.well-known/assetlinks.json') as response:
         if 'application/json' not in response.headers['Content-Type'] or not json.load(response):
             raise RuntimeError('Public Android app association is unavailable')
-    class NoRedirect(HTTPRedirectHandler):
-        def redirect_request(self, request, response, code, message, headers, url):
-            return None
-
     try:
         with build_opener(NoRedirect).open('https://' + host + '/backoffice/login', timeout=30):
             raise RuntimeError('Public backoffice did not start its OIDC login')
@@ -134,7 +161,10 @@ def promote(args, lease):
 
     ingress_crds = ['crd/' + name + '.traefik.io' for name in
                     ['ingressroutes', 'middlewares', 'serverstransports']]
-    kubectl(['wait', '--for=create', *ingress_crds, '--timeout=300s'])
+    # kubectl aggregates NotFound errors for multiple missing names instead of
+    # waiting for creation. Each CRD must be observed individually first.
+    for crd in ingress_crds:
+        kubectl(['wait', '--for=create', crd, '--timeout=300s'])
     kubectl(['wait', '--for=condition=Established', *ingress_crds, '--timeout=300s'])
 
     if kubectl(['-n','noebs','get','configmap','noebs-backup-checkpoint','--ignore-not-found','-o','name'],capture=True).stdout:
@@ -255,9 +285,9 @@ def promote(args, lease):
         if metadata['issuer'] != ORIGIN+'/auth/realms/noebs':
             raise ValueError('Deployed OpenID issuer differs from release origin')
         # Publish only after the application, identities and routes are ready.
-        ssh(key, 'exe.dev', 'domain add noebs-workers ' + shlex.quote(config['public_host']) + ' --json')
         ssh(key, 'exe.dev', 'share port noebs-workers 8081 --json')
         ssh(key, 'exe.dev', 'share set-public noebs-workers --json')
+        ensure_public_domain(key, config['public_host'])
         verify_public(config['public_host'], ORIGIN)
         kubectl(['-n','edge','delete','deployment/caddy','--ignore-not-found','--wait=true'])
         # Retire the old embedded adapter. Persistent data is retained by its PVC.

@@ -57,8 +57,12 @@ explicit application settings keyed by service role; `{}` enables no external
 banking integration.
 
 Configure a DNS-only CNAME `api.noebs.sd → noebs-workers.exe.xyz`. The deploy
-command checks it and registers the custom domain with exe.dev. exe.dev supplies
-the public certificate. DNS credentials are not needed by the deployment.
+command checks it and verifies domain registration over HTTPS. An already
+registered domain needs no registration permission on subsequent releases.
+When EXE reports `Domain Not Configured`, registration requires an SSH key allowed
+to run `domain add`. An owner can register it once with
+`ssh exe.dev domain add noebs-workers api.noebs.sd`.
+exe.dev supplies the public certificate. DNS credentials are not needed by the deployment.
 
 ```sh
 infra/deploy \
