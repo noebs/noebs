@@ -12,6 +12,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+const mobileOAuthCallbackPath = "/mobile/oauth/callback"
+
 type appConfigResponse struct {
 	TenantID string           `json:"tenant_id"`
 	Wallet   appWalletConfig  `json:"wallet"`
@@ -58,6 +60,9 @@ func publicAppConfig(cfg ebs_fields.NoebsConfig) (appConfigResponse, error) {
 	if err != nil {
 		return appConfigResponse{}, err
 	}
+	if err := requireExactHTTPSCallbackPath(cfg.MobileRedirectURL, mobileOAuthCallbackPath); err != nil {
+		return appConfigResponse{}, err
+	}
 	walletConfig := appWalletConfig{
 		Enabled:         cfg.WalletEnabled,
 		DefaultCurrency: strings.TrimSpace(cfg.WalletDefaultCurrency),
@@ -83,7 +88,7 @@ func publicAppConfig(cfg ebs_fields.NoebsConfig) (appConfigResponse, error) {
 			ClientID:    "noebs-mobile",
 			Audience:    strings.TrimSpace(cfg.OIDC.Audience),
 			Scopes:      []string{"openid", "organization:*"},
-			RedirectURI: "https://api.noebs.sd/mobile/oauth/callback",
+			RedirectURI: cfg.MobileRedirectURL,
 		},
 		Features: appFeatureConfig{
 			OpaqueCardManagement: cfg.OpaqueCardManagementEnabled,

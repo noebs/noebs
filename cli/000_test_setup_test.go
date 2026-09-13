@@ -215,6 +215,7 @@ func cliTestConfig(role serviceRole, dbURL string) ebs_fields.NoebsConfig {
 		cfg.OIDC.JWKSRefreshSeconds = 300
 		cfg.OIDC.UnknownKeyRefreshIntervalSeconds = 30
 		cfg.KeycloakCACertificate = testKeycloakCACertificate
+		cfg.MobileRedirectURL = "https://app.example/mobile/oauth/callback"
 		cfg.BackofficeClientSecret = "test-backoffice-client-secret"
 		cfg.BackofficeRedirectURL = "https://app.example/backoffice/oauth/callback"
 		cfg.BackofficePostLogoutURL = "https://app.example/backoffice/oauth/logout/callback"

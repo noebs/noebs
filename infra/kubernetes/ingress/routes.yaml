@@ -25,12 +25,14 @@ spec:
         Path(`/auth/realms/noebs/protocol/openid-connect/auth`) ||
         Path(`/auth/realms/noebs/protocol/openid-connect/logout`) ||
         Path(`/auth/realms/noebs/login-actions/authenticate`) ||
+        Path(`/auth/realms/noebs/login-actions/registration`) ||
+        Path(`/auth/realms/noebs/login-actions/reset-credentials`) ||
         Path(`/auth/realms/noebs/login-actions/required-action`) ||
         Path(`/auth/realms/noebs/login-actions/restart`) ||
+        Path(`/auth/realms/noebs/login-actions/action-token`) ||
         Path(`/auth/realms/noebs/login-actions/first-broker-login`) ||
         Path(`/auth/realms/noebs/login-actions/post-broker-login`) ||
-        Path(`/auth/realms/noebs/broker/google/login`) ||
-        Path(`/auth/realms/noebs/broker/google/endpoint`) ||
+        PathRegexp(`^/auth/realms/noebs/broker/[a-z][a-z0-9-]{0,62}/(login|endpoint)$`) ||
         Path(`/auth/realms/noebs/broker/after-first-broker-login`) ||
         Path(`/auth/realms/noebs/broker/after-post-broker-login`))
       priority: 100
@@ -46,6 +48,8 @@ spec:
         Host(`api.noebs.sd`) && Method(`POST`) &&
         (Path(`/auth/realms/noebs/protocol/openid-connect/token`) ||
         Path(`/auth/realms/noebs/login-actions/authenticate`) ||
+        Path(`/auth/realms/noebs/login-actions/registration`) ||
+        Path(`/auth/realms/noebs/login-actions/reset-credentials`) ||
         Path(`/auth/realms/noebs/login-actions/required-action`) ||
         Path(`/auth/realms/noebs/login-actions/first-broker-login`) ||
         Path(`/auth/realms/noebs/login-actions/post-broker-login`) ||

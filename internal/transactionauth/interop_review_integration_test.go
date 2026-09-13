@@ -70,12 +70,12 @@ func TestInteropReviewGatewayAuthorizationPostgres(t *testing.T) {
 	}
 	now := time.Now().UTC().Truncate(time.Second)
 	bound := transactionauth.Binding{TenantID: "synthetic", Issuer: "https://identity.synthetic.invalid/realms/noebs", Subject: "synthetic-subject", Operation: transactionauth.OperationWalletInterop, RequestDigest: sha256.Sum256([]byte("immutable synthetic quote and transfer key")), IdempotencyKey: "synthetic-interop-1"}
-	oauth := &interopReviewOAuth{identity: transactionauth.VerifiedIdentity{Issuer: bound.Issuer, Subject: bound.Subject, ACR: "urn:noebs:acr:google-totp", AuthenticationTime: now}}
+	oauth := &interopReviewOAuth{identity: transactionauth.VerifiedIdentity{Issuer: bound.Issuer, Subject: bound.Subject, ACR: "urn:noebs:acr:mfa", AuthenticationTime: now}}
 	keys, err := transactionauth.NewKeyring(transactionauth.KeyringConfig{ActiveKeyID: "synthetic-key", Keys: map[string][]byte{"synthetic-key": make([]byte, 32)}, Entropy: rand.Reader})
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := transactionauth.NewService(transactionauth.ServiceConfig{Repository: repository, OAuth: oauth, Keys: keys, Clock: interopReviewClock{now}, Entropy: rand.Reader, RequiredACR: "urn:noebs:acr:google-totp", BrowserStartTTL: 10 * time.Minute, FlowTTL: 5 * time.Minute, AuthorizationTTL: 2 * time.Minute})
+	service, err := transactionauth.NewService(transactionauth.ServiceConfig{Repository: repository, OAuth: oauth, Keys: keys, Clock: interopReviewClock{now}, Entropy: rand.Reader, RequiredACR: "urn:noebs:acr:mfa", BrowserStartTTL: 10 * time.Minute, FlowTTL: 5 * time.Minute, AuthorizationTTL: 2 * time.Minute})
 	if err != nil {
 		t.Fatal(err)
 	}

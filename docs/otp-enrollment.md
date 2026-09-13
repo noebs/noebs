@@ -2,8 +2,9 @@
 
 The Noebs realm enrolls TOTP with HMAC-SHA-1, six digits, a 30-second period,
 look-around window one, and non-reusable codes. Initial OTP enrollment remains
-required, and wallet payment authorization still requires a fresh Google/TOTP
-LoA2 authorization.
+required for local and brokered users. Wallet payment authorization requires
+fresh primary authentication (password or the selected identity provider) and
+TOTP at `urn:noebs:acr:mfa` (LoA2).
 
 Microsoft Authenticator accepts this enrollment profile. Keycloak 26.7's
 [Microsoft authenticator compatibility check](https://github.com/keycloak/keycloak/blob/26.7.0/services/src/main/java/org/keycloak/authentication/otp/MicrosoftAuthenticatorOTPProvider.java)
@@ -42,7 +43,7 @@ the broader `basic` scope. Mobile and backoffice claim contracts are unchanged.
 
 The transaction authorizer requires this claim to verify fresh authentication.
 Removing every direct mapper while assigning only `acr` omitted the timestamp,
-even though Google and OTP succeeded. Preserve strict timestamp validation;
+even though primary authentication and OTP succeeded. Preserve strict timestamp validation;
 repair the issuer's claim configuration instead of accepting a missing value.
 
 Production payment requests use `max_age=0`. Under
@@ -50,7 +51,7 @@ Production payment requests use `max_age=0`. Under
 this requests fresh authentication. Keycloak 26.7's
 [cookie authenticator](https://github.com/keycloak/keycloak/blob/26.7.0/services/src/main/java/org/keycloak/authentication/authenticators/browser/CookieAuthenticator.java)
 resets the current authentication level when reauthentication is required, so
-the Google broker is visited again before the required OTP. The realm's reusable
+the local password or selected broker is required again before TOTP. The realm's reusable
 LoA1 policy does not override this explicit request. The real regression uses
 the production request parameters, completes two authorizations in the same
 browser session using distinct current codes, verifies both signed ID tokens,

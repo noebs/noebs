@@ -10,11 +10,15 @@ import (
 
 const (
 	configureTOTPProvider         = "CONFIGURE_TOTP"
+	registrationFlowAlias         = "noebs-registration"
+	registrationFormFlowAlias     = "noebs-registration-form"
+	resetCredentialsFlowAlias     = "noebs-reset-credentials"
+	primaryCredentialsFlowAlias   = "noebs-primary-credentials"
 	authenticationLevelsFlowAlias = "noebs-authentication-levels"
-	googleLoA1FlowAlias           = "noebs-google-loa1"
-	googleTOTPLoA2FlowAlias       = "noebs-google-totp-loa2"
-	googlePostBrokerLoA1FlowAlias = "noebs-google-post-broker-loa1"
-	googlePostBrokerLoA2FlowAlias = "noebs-google-post-broker-totp-loa2"
+	primaryLoA1FlowAlias          = "noebs-primary-loa1"
+	mfaLoA2FlowAlias              = "noebs-mfa-loa2"
+	postBrokerLoA1FlowAlias       = "noebs-post-broker-loa1"
+	postBrokerLoA2FlowAlias       = "noebs-post-broker-loa2"
 )
 
 type authenticationFlowRepresentation struct {
@@ -60,6 +64,7 @@ type authenticatorConfigRepresentation struct {
 }
 
 type managedAuthenticationFlow struct {
+	ProviderID  string
 	Alias       string
 	Description string
 	Executions  []managedAuthenticationExecution
@@ -77,22 +82,31 @@ type managedAuthenticationExecution struct {
 func desiredAuthenticationFlows(state DesiredState) []managedAuthenticationFlow {
 	loa1 := state.Authentication.Levels[0]
 	loa2 := state.Authentication.Levels[1]
-	loa1Flow := authenticationLevelFlow(
-		googleLoA1FlowAlias,
-		"Google federation establishes reusable LoA1",
-		loa1,
-		managedAuthenticationExecution{
-			ProviderID: "identity-provider-redirector", Requirement: "REQUIRED", Priority: 20,
-			ConfigAlias: "noebs-google-redirect", Config: map[string]string{"defaultProvider": "google"},
+	// Keep alternatives in their own required subflow: Keycloak ignores
+	// alternatives that share a level with a required execution.
+	credentialsFlow := managedAuthenticationFlow{
+		ProviderID:  "basic-flow",
+		Alias:       primaryCredentialsFlowAlias,
+		Description: "Local credentials or an explicitly selected identity provider",
+		Executions: []managedAuthenticationExecution{
+			{ProviderID: "identity-provider-redirector", Requirement: "ALTERNATIVE", Priority: 10},
+			{ProviderID: "auth-username-password-form", Requirement: "ALTERNATIVE", Priority: 20},
 		},
+	}
+	loa1Flow := authenticationLevelFlow(
+		primaryLoA1FlowAlias,
+		"Password or federated authentication establishes reusable LoA1",
+		loa1,
+		managedAuthenticationExecution{Requirement: "REQUIRED", Priority: 20, Flow: &credentialsFlow},
 	)
 	loa2Flow := authenticationLevelFlow(
-		googleTOTPLoA2FlowAlias,
+		mfaLoA2FlowAlias,
 		"TOTP establishes LoA2 for the current authorization only",
 		loa2,
 		managedAuthenticationExecution{ProviderID: "auth-otp-form", Requirement: "REQUIRED", Priority: 20},
 	)
 	levelsFlow := managedAuthenticationFlow{
+		ProviderID:  "basic-flow",
 		Alias:       authenticationLevelsFlowAlias,
 		Description: "Noebs ordered levels of authentication",
 		Executions: []managedAuthenticationExecution{
@@ -101,45 +115,86 @@ func desiredAuthenticationFlows(state DesiredState) []managedAuthenticationFlow 
 		},
 	}
 	browser := managedAuthenticationFlow{
+		ProviderID:  "basic-flow",
 		Alias:       state.Authentication.BrowserFlow,
-		Description: "Reusable Google LoA1 with one-request TOTP LoA2 step-up",
+		Description: "Reusable primary authentication with one-request TOTP LoA2 step-up",
 		Executions: []managedAuthenticationExecution{
 			{ProviderID: "auth-cookie", Requirement: "ALTERNATIVE", Priority: 10},
 			{Requirement: "ALTERNATIVE", Priority: 20, Flow: &levelsFlow},
 		},
 	}
 	firstBroker := managedAuthenticationFlow{
+		ProviderID:  "basic-flow",
 		Alias:       state.Authentication.FirstBrokerLoginFlow,
-		Description: "Create a unique user from Google; existing local identities fail closed",
+		Description: "Validate the federated profile and create a unique user; existing identities are never linked automatically",
 		Executions: []managedAuthenticationExecution{
-			{ProviderID: "idp-create-user-if-unique", Requirement: "REQUIRED", Priority: 10},
+			{
+				ProviderID: "idp-review-profile", Requirement: "REQUIRED", Priority: 10,
+				ConfigAlias: "noebs-first-broker-profile", Config: map[string]string{"update.profile.on.first.login": "missing"},
+			},
+			{ProviderID: "idp-create-user-if-unique", Requirement: "REQUIRED", Priority: 20},
 		},
 	}
-	postBrokerLoA1 := authenticationLevelFlow(
-		googlePostBrokerLoA1FlowAlias,
-		"Google broker authentication establishes reusable LoA1",
-		loa1,
+	postBroker := managedAuthenticationFlow{
+		ProviderID:  "basic-flow",
+		Alias:       state.Authentication.PostBrokerLoginFlow,
+		Description: "Establish requested Noebs authentication levels after federation",
+		Executions:  completedPrimaryAuthenticationExecutions(state.Authentication.PostBrokerLoginFlow, 10, loa1, loa2),
+	}
+	registrationForm := managedAuthenticationFlow{
+		ProviderID:  "form-flow",
+		Alias:       registrationFormFlowAlias,
+		Description: "Create a local account using the realm user profile and password policy",
+		Executions: []managedAuthenticationExecution{
+			{ProviderID: "registration-user-creation", Requirement: "REQUIRED", Priority: 10},
+			{ProviderID: "registration-password-action", Requirement: "REQUIRED", Priority: 20},
+		},
+	}
+	registration := managedAuthenticationFlow{
+		ProviderID:  "basic-flow",
+		Alias:       registrationFlowAlias,
+		Description: "Keycloak local account registration",
+		Executions: []managedAuthenticationExecution{
+			{ProviderID: "registration-page-form", Requirement: "REQUIRED", Priority: 10, Flow: &registrationForm},
+		},
+	}
+	registration.Executions = append(registration.Executions, completedPrimaryAuthenticationExecutions(registration.Alias, 20, loa1, loa2)...)
+	resetCredentials := managedAuthenticationFlow{
+		ProviderID:  "basic-flow",
+		Alias:       resetCredentialsFlowAlias,
+		Description: "Reset a password through email while preserving enrolled second factors",
+		Executions: []managedAuthenticationExecution{
+			{ProviderID: "reset-credentials-choose-user", Requirement: "REQUIRED", Priority: 10},
+			{ProviderID: "reset-credential-email", Requirement: "REQUIRED", Priority: 20},
+			{ProviderID: "reset-password", Requirement: "REQUIRED", Priority: 30},
+		},
+	}
+	resetCredentials.Executions = append(resetCredentials.Executions, completedPrimaryAuthenticationExecutions(resetCredentials.Alias, 40, loa1, loa2)...)
+	return []managedAuthenticationFlow{browser, firstBroker, postBroker, registration, resetCredentials}
+}
+
+// Registration, password recovery, and federation complete outside the browser
+// flow. Each must establish the same primary level and satisfy a requested MFA
+// level before it can issue a token. The preceding executions prove the primary
+// identity; this helper never bypasses the required second factor.
+func completedPrimaryAuthenticationExecutions(alias string, priority int, loa1, loa2 AuthenticationLevel) []managedAuthenticationExecution {
+	primary := authenticationLevelFlow(
+		alias+"-loa1", "Completed primary authentication establishes reusable LoA1", loa1,
 		managedAuthenticationExecution{ProviderID: "allow-access-authenticator", Requirement: "REQUIRED", Priority: 20},
 	)
-	postBrokerLoA2 := authenticationLevelFlow(
-		googlePostBrokerLoA2FlowAlias,
-		"TOTP establishes brokered LoA2 for the current authorization only",
-		loa2,
+	mfa := authenticationLevelFlow(
+		alias+"-loa2", "TOTP establishes LoA2 for the current authorization only", loa2,
 		managedAuthenticationExecution{ProviderID: "auth-otp-form", Requirement: "REQUIRED", Priority: 20},
 	)
-	postBroker := managedAuthenticationFlow{
-		Alias:       state.Authentication.PostBrokerLoginFlow,
-		Description: "Establish requested Noebs authentication levels after Google returns",
-		Executions: []managedAuthenticationExecution{
-			{Requirement: "CONDITIONAL", Priority: 10, Flow: &postBrokerLoA1},
-			{Requirement: "CONDITIONAL", Priority: 20, Flow: &postBrokerLoA2},
-		},
+	return []managedAuthenticationExecution{
+		{Requirement: "CONDITIONAL", Priority: priority, Flow: &primary},
+		{Requirement: "CONDITIONAL", Priority: priority + 10, Flow: &mfa},
 	}
-	return []managedAuthenticationFlow{browser, firstBroker, postBroker}
 }
 
 func authenticationLevelFlow(alias, description string, level AuthenticationLevel, authenticator managedAuthenticationExecution) managedAuthenticationFlow {
 	return managedAuthenticationFlow{
+		ProviderID:  "basic-flow",
 		Alias:       alias,
 		Description: description,
 		Executions: []managedAuthenticationExecution{
@@ -163,7 +218,7 @@ func reconcileHumanAuthentication(ctx context.Context, session *adminSession, st
 			return err
 		}
 	}
-	return reconcileOTPRequiredAction(ctx, session, state, result)
+	return reconcileRequiredActions(ctx, session, state, result)
 }
 
 func reconcileTopLevelAuthenticationFlow(ctx context.Context, session *adminSession, realm string, desired managedAuthenticationFlow, result *Result) error {
@@ -180,7 +235,7 @@ func reconcileTopLevelAuthenticationFlow(ctx context.Context, session *adminSess
 		}
 	}
 	wanted := authenticationFlowRepresentation{
-		Alias: desired.Alias, Description: desired.Description, ProviderID: "basic-flow", TopLevel: true, BuiltIn: false,
+		Alias: desired.Alias, Description: desired.Description, ProviderID: desired.ProviderID, TopLevel: true, BuiltIn: false,
 	}
 	if current.ID == "" {
 		if err := session.post(ctx, base+"/flows", wanted); err != nil {
@@ -285,7 +340,7 @@ func createAuthenticationExecution(ctx context.Context, session *adminSession, b
 	}
 	return session.post(ctx, path+"flow", map[string]any{
 		"alias": desired.Flow.Alias, "description": desired.Flow.Description,
-		"provider": "basic-flow", "type": "basic-flow", "priority": desired.Priority,
+		"provider": desired.ProviderID, "type": desired.Flow.ProviderID, "priority": desired.Priority,
 	})
 }
 
@@ -302,7 +357,7 @@ func reconcileSubflowMetadata(ctx context.Context, session *adminSession, base s
 		return fmt.Errorf("%w: authentication subflow %s does not exist", ErrUnexpectedResponse, desired.Alias)
 	}
 	wanted := authenticationFlowRepresentation{
-		ID: current.ID, Alias: desired.Alias, Description: desired.Description, ProviderID: "basic-flow", TopLevel: false, BuiltIn: false,
+		ID: current.ID, Alias: desired.Alias, Description: desired.Description, ProviderID: desired.ProviderID, TopLevel: false, BuiltIn: false,
 	}
 	if authenticationFlowMatches(current, wanted) {
 		return nil
@@ -348,15 +403,12 @@ func listDirectAuthenticationExecutions(ctx context.Context, session *adminSessi
 
 func authenticationExecutionIdentityMatches(current authenticationExecutionInfoRepresentation, desired managedAuthenticationExecution) bool {
 	if desired.Flow != nil {
-		return current.AuthenticationFlow && current.DisplayName == desired.Flow.Alias
+		return current.AuthenticationFlow && current.DisplayName == desired.Flow.Alias && current.ProviderID == desired.ProviderID
 	}
 	return !current.AuthenticationFlow && current.ProviderID == desired.ProviderID
 }
 
 func reconcileAuthenticatorConfig(ctx context.Context, session *adminSession, base string, current *authenticationExecutionInfoRepresentation, desired managedAuthenticationExecution, result *Result) error {
-	if desired.Flow != nil {
-		return nil
-	}
 	if desired.Config == nil {
 		if current.AuthenticationConfig == "" {
 			return nil
@@ -425,49 +477,70 @@ func pruneUnmanagedAuthenticationFlows(ctx context.Context, session *adminSessio
 	return nil
 }
 
-func reconcileOTPRequiredAction(ctx context.Context, session *adminSession, state DesiredState, result *Result) error {
+// Required actions remain opt-in unless the realm policy or an authenticator
+// requests them. Enabling password/profile maintenance does not require a
+// password for federated users, and email verification skips users without email.
+// Verify email before credential enrollment so a pending registration cannot
+// bind an attacker's password or second factor to someone else's mailbox.
+func desiredRequiredActions(state DesiredState) []requiredActionProviderRepresentation {
+	action := state.Authentication.OTP.ConfigureRequiredAction
+	return []requiredActionProviderRepresentation{
+		{
+			Alias: action.Alias, Name: "Configure OTP", ProviderID: configureTOTPProvider,
+			Enabled: action.Enabled, DefaultAction: action.DefaultAction, Priority: action.Priority, Config: map[string]string{},
+		},
+		{Alias: "UPDATE_PASSWORD", Name: "Update Password", ProviderID: "UPDATE_PASSWORD", Enabled: true, Priority: 57, Config: map[string]string{}},
+		{Alias: "UPDATE_PROFILE", Name: "Update Profile", ProviderID: "UPDATE_PROFILE", Enabled: true, Priority: 40, Config: map[string]string{}},
+		{Alias: "VERIFY_EMAIL", Name: "Verify Email", ProviderID: "VERIFY_EMAIL", Enabled: true, Priority: 0, Config: map[string]string{}},
+		{Alias: "VERIFY_PROFILE", Name: "Verify Profile", ProviderID: "VERIFY_PROFILE", Enabled: true, Priority: 100, Config: map[string]string{}},
+	}
+}
+
+func reconcileRequiredActions(ctx context.Context, session *adminSession, state DesiredState, result *Result) error {
 	base := realmPath(state.Realm.Name) + "/authentication"
 	var actions []requiredActionProviderRepresentation
 	if _, err := session.get(ctx, base+"/required-actions", &actions); err != nil {
 		return fmt.Errorf("list required actions: %w", err)
 	}
-	action := state.Authentication.OTP.ConfigureRequiredAction
-	wanted := requiredActionProviderRepresentation{
-		Alias: action.Alias, Name: "Configure OTP", ProviderID: configureTOTPProvider,
-		Enabled: action.Enabled, DefaultAction: action.DefaultAction, Priority: action.Priority, Config: map[string]string{},
+	desired := desiredRequiredActions(state)
+	wantedByAlias := make(map[string]requiredActionProviderRepresentation, len(desired))
+	for _, action := range desired {
+		wantedByAlias[action.Alias] = action
 	}
-	found := false
+	found := make(map[string]bool, len(desired))
 	for _, current := range actions {
-		if current.Alias == wanted.Alias {
-			found = true
-			if !requiredActionMatches(current, wanted) {
-				if err := session.put(ctx, base+"/required-actions/"+url.PathEscape(current.Alias), wanted); err != nil {
-					return fmt.Errorf("update Configure OTP required action: %w", err)
-				}
-				result.Updated++
+		wanted, managed := wantedByAlias[current.Alias]
+		if managed {
+			found[current.Alias] = true
+			if requiredActionMatches(current, wanted) {
+				continue
 			}
+		} else {
+			if !current.Enabled && !current.DefaultAction {
+				continue
+			}
+			wanted = current
+			wanted.Enabled = false
+			wanted.DefaultAction = false
+		}
+		if err := session.put(ctx, base+"/required-actions/"+url.PathEscape(current.Alias), wanted); err != nil {
+			return fmt.Errorf("reconcile required action %s: %w", current.Alias, err)
+		}
+		result.Updated++
+	}
+	for _, wanted := range desired {
+		if found[wanted.Alias] {
 			continue
 		}
-		if current.Enabled || current.DefaultAction {
-			current.Enabled = false
-			current.DefaultAction = false
-			if err := session.put(ctx, base+"/required-actions/"+url.PathEscape(current.Alias), current); err != nil {
-				return fmt.Errorf("disable required action %s outside desired state: %w", current.Alias, err)
-			}
-			result.Updated++
+		if err := session.post(ctx, base+"/register-required-action", map[string]string{"providerId": wanted.ProviderID, "name": wanted.Name}); err != nil {
+			return fmt.Errorf("register required action %s: %w", wanted.Alias, err)
 		}
+		result.Created++
+		if err := session.put(ctx, base+"/required-actions/"+url.PathEscape(wanted.Alias), wanted); err != nil {
+			return fmt.Errorf("configure registered required action %s: %w", wanted.Alias, err)
+		}
+		result.Updated++
 	}
-	if found {
-		return nil
-	}
-	if err := session.post(ctx, base+"/register-required-action", map[string]string{"providerId": configureTOTPProvider, "name": "Configure OTP"}); err != nil {
-		return fmt.Errorf("register Configure OTP required action: %w", err)
-	}
-	result.Created++
-	if err := session.put(ctx, base+"/required-actions/"+url.PathEscape(wanted.Alias), wanted); err != nil {
-		return fmt.Errorf("configure registered Configure OTP required action: %w", err)
-	}
-	result.Updated++
 	return nil
 }
 

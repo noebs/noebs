@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/adonese/noebs/internal/tenantcatalog"
 	"github.com/google/uuid"
@@ -18,7 +20,7 @@ const MembershipsAPIVersion = "noebs.sd/keycloak-memberships/v1"
 
 var (
 	ErrInvalidMemberships       = errors.New("invalid Keycloak memberships")
-	ErrInvalidLookupEmail       = errors.New("invalid Keycloak user lookup email")
+	ErrInvalidSubjectLookup     = errors.New("invalid Keycloak subject lookup")
 	ErrMembershipSubjectMissing = errors.New("keycloak membership subject does not exist")
 	ErrMembershipSubjectMany    = errors.New("keycloak user lookup is ambiguous")
 	ErrMembershipRead           = errors.New("read Keycloak memberships")
@@ -146,23 +148,54 @@ func isMembershipClass(class MembershipClass) bool {
 	return false
 }
 
-func (r *Reconciler) LookupSubjectByEmail(ctx context.Context, email string) (string, error) {
-	if err := r.requireRealmLocal("noebs"); err != nil {
+type SubjectLookupField string
+
+const (
+	SubjectLookupEmail    SubjectLookupField = "email"
+	SubjectLookupUsername SubjectLookupField = "username"
+)
+
+// SubjectLookup selects exactly one Keycloak attribute. It never infers whether
+// a value that looks like an email should be a username or an email lookup.
+type SubjectLookup struct {
+	Field SubjectLookupField
+	Value string
+}
+
+func (lookup SubjectLookup) Validate() error {
+	if lookup.Value == "" || len(lookup.Value) > 255 || !utf8.ValidString(lookup.Value) ||
+		strings.IndexFunc(lookup.Value, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+		return ErrInvalidSubjectLookup
+	}
+	switch lookup.Field {
+	case SubjectLookupEmail:
+		address, err := mail.ParseAddress(lookup.Value)
+		if err != nil || address.Address != lookup.Value {
+			return ErrInvalidSubjectLookup
+		}
+	case SubjectLookupUsername:
+	default:
+		return ErrInvalidSubjectLookup
+	}
+	return nil
+}
+
+func (r *Reconciler) LookupSubject(ctx context.Context, lookup SubjectLookup) (string, error) {
+	if err := lookup.Validate(); err != nil {
 		return "", err
 	}
-	address, err := mail.ParseAddress(email)
-	if err != nil || address.Address != email || strings.TrimSpace(email) != email {
-		return "", ErrInvalidLookupEmail
+	if err := r.requireRealmLocal("noebs"); err != nil {
+		return "", err
 	}
 	session, err := r.session(ctx)
 	if err != nil {
 		return "", fmt.Errorf("%w: create admin session: %w", ErrMembershipRead, err)
 	}
 	query := url.Values{
-		"email": {email},
-		"exact": {"true"},
-		"first": {"0"},
-		"max":   {"2"},
+		string(lookup.Field): {lookup.Value},
+		"exact":              {"true"},
+		"first":              {"0"},
+		"max":                {"2"},
 	}
 	var users []membershipUserRepresentation
 	if _, err := session.get(ctx, realmPath(r.config.AdminRealm)+"/users?"+query.Encode(), &users); err != nil {
@@ -177,8 +210,12 @@ func (r *Reconciler) LookupSubjectByEmail(ctx context.Context, email string) (st
 	default:
 		return "", fmt.Errorf("%w: exact user lookup returned more than two users", ErrMembershipSubjectMany)
 	}
-	if !strings.EqualFold(users[0].Email, email) {
-		return "", fmt.Errorf("%w: Keycloak returned a non-matching email", ErrMembershipRead)
+	actual := users[0].Email
+	if lookup.Field == SubjectLookupUsername {
+		actual = users[0].Username
+	}
+	if !strings.EqualFold(actual, lookup.Value) {
+		return "", fmt.Errorf("%w: Keycloak returned a non-matching %s", ErrMembershipRead, lookup.Field)
 	}
 	if err := validateCanonicalSubject(users[0].ID); err != nil {
 		return "", fmt.Errorf("%w: exact user lookup returned an invalid subject", ErrMembershipRead)
@@ -242,8 +279,9 @@ func (r *Reconciler) requireRealmLocal(realm string) error {
 }
 
 type membershipUserRepresentation struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID       string `json:"id"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
 }
 
 type membershipOrganization struct {

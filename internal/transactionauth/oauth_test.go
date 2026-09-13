@@ -19,7 +19,7 @@ import (
 const (
 	testIssuer      = "https://api.noebs.sd/auth/realms/noebs"
 	testClientID    = "noebs-wallet-authorizer"
-	testRequiredACR = "urn:noebs:acr:google-totp"
+	testRequiredACR = "urn:noebs:acr:mfa"
 	testRedirectURL = "https://api.noebs.sd/wallet/authorizations/oauth/callback"
 )
 
@@ -121,7 +121,7 @@ func TestOAuthClientRejectsEveryLoA2IdentityMismatch(t *testing.T) {
 		"authorized party":   func(claims map[string]any) { claims["azp"] = "other-client" },
 		"subject":            func(claims map[string]any) { claims["sub"] = "" },
 		"nonce":              func(claims map[string]any) { claims["nonce"] = opaqueForTest(9) },
-		"acr":                func(claims map[string]any) { claims["acr"] = "urn:noebs:acr:google" },
+		"acr":                func(claims map[string]any) { claims["acr"] = "urn:noebs:acr:primary" },
 		"missing auth time":  func(claims map[string]any) { delete(claims, "auth_time") },
 		"stale auth time":    func(claims map[string]any) { claims["auth_time"] = now.Add(-3 * time.Minute).Unix() },
 		"future auth time":   func(claims map[string]any) { claims["auth_time"] = now.Add(2 * time.Minute).Unix() },

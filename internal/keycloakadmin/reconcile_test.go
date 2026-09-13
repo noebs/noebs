@@ -843,26 +843,40 @@ func assertHumanAuthenticationExact(t *testing.T, fake *fakeKeycloak, state Desi
 			t.Fatalf("authentication flow %s is outside desired state", alias)
 		}
 	}
-	assertLoAConditionExact(t, fake, googleLoA1FlowAlias, "1", "28800")
-	assertLoAConditionExact(t, fake, googleTOTPLoA2FlowAlias, "2", "0")
-	assertLoAConditionExact(t, fake, googlePostBrokerLoA1FlowAlias, "1", "28800")
-	assertLoAConditionExact(t, fake, googlePostBrokerLoA2FlowAlias, "2", "0")
-	for _, executions := range fake.authenticationExecutions {
+	assertLoAConditionExact(t, fake, primaryLoA1FlowAlias, "1", "28800")
+	assertLoAConditionExact(t, fake, mfaLoA2FlowAlias, "2", "0")
+	assertLoAConditionExact(t, fake, postBrokerLoA1FlowAlias, "1", "28800")
+	assertLoAConditionExact(t, fake, postBrokerLoA2FlowAlias, "2", "0")
+	for _, alias := range []string{registrationFlowAlias, resetCredentialsFlowAlias} {
+		assertLoAConditionExact(t, fake, alias+"-loa1", "1", "28800")
+		assertLoAConditionExact(t, fake, alias+"-loa2", "2", "0")
+	}
+	passwordForms := 0
+	for flowID, executions := range fake.authenticationExecutions {
 		for _, execution := range executions {
-			if execution.ProviderID == "auth-username-password-form" || execution.ProviderID == "idp-username-password-form" {
-				t.Fatalf("password authenticator %s survived", execution.ProviderID)
+			if execution.ProviderID == "idp-username-password-form" {
+				t.Fatalf("automatic local account linking authenticator %s survived", execution.ProviderID)
+			}
+			if execution.ProviderID == "auth-username-password-form" {
+				passwordForms++
+				if fake.authenticationFlows[flowID].Alias != primaryCredentialsFlowAlias {
+					t.Fatal("local credentials bypass the primary authentication condition")
+				}
 			}
 		}
 	}
-	action := fake.requiredActions[configureTOTPProvider]
-	wantedAction := state.Authentication.OTP.ConfigureRequiredAction
-	if action.ProviderID != configureTOTPProvider || action.Name != "Configure OTP" ||
-		action.Enabled != wantedAction.Enabled || action.DefaultAction != wantedAction.DefaultAction ||
-		action.Priority != wantedAction.Priority || len(action.Config) != 0 {
-		t.Fatalf("Configure OTP required action = %#v", action)
+	if passwordForms != 1 {
+		t.Fatalf("local password authenticators = %d, want one", passwordForms)
+	}
+	wantedActions := make(map[string]requiredActionProviderRepresentation)
+	for _, action := range desiredRequiredActions(state) {
+		wantedActions[action.Alias] = action
+		if !requiredActionMatches(fake.requiredActions[action.Alias], action) {
+			t.Fatalf("required action %s = %#v", action.Alias, fake.requiredActions[action.Alias])
+		}
 	}
 	for alias, action := range fake.requiredActions {
-		if alias != configureTOTPProvider && (action.Enabled || action.DefaultAction) {
+		if _, managed := wantedActions[alias]; !managed && (action.Enabled || action.DefaultAction) {
 			t.Fatalf("required action %s remains enabled/default: %#v", alias, action)
 		}
 	}
@@ -915,8 +929,8 @@ func assertWalletAuthorizerExact(t *testing.T, fake *fakeKeycloak, state Desired
 	attributes["access.token.signed.response.alg"] = "RS256"
 	attributes["id.token.signed.response.alg"] = "RS256"
 	attributes["pkce.code.challenge.method"] = "S256"
-	attributes["default.acr.values"] = googleTOTPACR
-	attributes["minimum.acr.value"] = googleTOTPACR
+	attributes["default.acr.values"] = mfaACR
+	attributes["minimum.acr.value"] = mfaACR
 	attributes[managedClientSecretHash] = secretHash("wallet-authorizer-secret")
 	wanted := clientRepresentation{
 		ClientID:                           walletAuthorizerClientID,
@@ -971,7 +985,7 @@ func assertManagedAuthenticationFlow(t *testing.T, fake *fakeKeycloak, desired m
 		t.Fatalf("authentication flow %s is missing", desired.Alias)
 	}
 	current := fake.authenticationFlows[flowID]
-	if current.Alias != desired.Alias || current.Description != desired.Description || current.ProviderID != "basic-flow" || current.BuiltIn {
+	if current.Alias != desired.Alias || current.Description != desired.Description || current.ProviderID != desired.ProviderID || current.BuiltIn {
 		t.Fatalf("authentication flow %s = %#v", desired.Alias, current)
 	}
 	executions := append([]authenticationExecutionInfoRepresentation(nil), fake.authenticationExecutions[flowID]...)
@@ -1041,6 +1055,8 @@ type fakeKeycloak struct {
 	nextID                 int
 	writes                 int
 	realm                  *realmRepresentation
+	smtpServer             map[string]string
+	userProfile            map[string]any
 	normalizeClientCreates bool
 
 	realmRoles                map[string]roleRepresentation
@@ -1135,10 +1151,22 @@ func (f *fakeKeycloak) ServeHTTP(writer http.ResponseWriter, request *http.Reque
 		}
 		switch request.Method {
 		case http.MethodGet:
-			writeJSON(writer, http.StatusOK, f.realm)
+			writeJSON(writer, http.StatusOK, struct {
+				*realmRepresentation
+				SMTPServer map[string]string `json:"smtpServer"`
+			}{f.realm, f.smtpServer})
 		case http.MethodPut:
-			var realm realmRepresentation
-			if decodeFakeRequest(writer, request, &realm) {
+			var payload struct {
+				realmRepresentation
+				SMTPServer *map[string]string `json:"smtpServer"`
+			}
+			if decodeFakeRequest(writer, request, &payload) {
+				if payload.SMTPServer != nil {
+					f.smtpServer = *payload.SMTPServer
+					f.mutated(writer, http.StatusNoContent)
+					return
+				}
+				realm := payload.realmRepresentation
 				attributes := cloneStringPointerMap(f.realm.Attributes)
 				for key, value := range realm.Attributes {
 					if value == nil {
@@ -1411,8 +1439,12 @@ func (f *fakeKeycloak) handleAuthenticationFlows(writer http.ResponseWriter, req
 		alias, _ := payload["alias"].(string)
 		description, _ := payload["description"].(string)
 		childID := f.id("authentication-flow")
+		providerType, _ := payload["type"].(string)
 		f.authenticationFlows[childID] = authenticationFlowRepresentation{
-			ID: childID, Alias: alias, Description: description, ProviderID: "basic-flow", TopLevel: false, BuiltIn: false,
+			ID: childID, Alias: alias, Description: description, ProviderID: providerType, TopLevel: false, BuiltIn: false,
+		}
+		if providerType == "form-flow" {
+			execution.ProviderID, _ = payload["provider"].(string)
 		}
 		f.authenticationExecutions[childID] = []authenticationExecutionInfoRepresentation{}
 		execution.AuthenticationFlow = true
@@ -2200,6 +2232,23 @@ func (f *fakeKeycloak) deleteOrganizationGroup(organizationID, groupID string) {
 }
 
 func (f *fakeKeycloak) handleUsers(writer http.ResponseWriter, request *http.Request, tail []string) {
+	if len(tail) == 2 && tail[1] == "profile" {
+		switch request.Method {
+		case http.MethodGet:
+			if f.userProfile == nil {
+				writeJSON(writer, http.StatusOK, map[string]any{})
+				return
+			}
+			writeJSON(writer, http.StatusOK, f.userProfile)
+		case http.MethodPut:
+			if decodeFakeRequest(writer, request, &f.userProfile) {
+				f.mutated(writer, http.StatusNoContent)
+			}
+		default:
+			http.Error(writer, "method", http.StatusMethodNotAllowed)
+		}
+		return
+	}
 	if len(tail) < 3 || tail[2] != "role-mappings" {
 		http.Error(writer, "unhandled user", http.StatusNotFound)
 		return
@@ -2538,8 +2587,8 @@ func (f *fakeKeycloak) injectWalletAuthorizerDrift() {
 		client.WebOrigins = []string{"https://hostile.invalid"}
 		client.Attributes = cloneStringMap(client.Attributes)
 		client.Attributes["pkce.code.challenge.method"] = "plain"
-		client.Attributes["default.acr.values"] = googleACR
-		client.Attributes["minimum.acr.value"] = googleACR
+		client.Attributes["default.acr.values"] = primaryACR
+		client.Attributes["minimum.acr.value"] = primaryACR
 		client.Attributes["hostile.attribute"] = "true"
 		f.clients[id] = client
 		return
@@ -2572,14 +2621,15 @@ func (f *fakeKeycloak) injectAuthenticationDrift(state DesiredState) {
 	f.realm.OTPPolicyAlgorithm = "HmacSHA256"
 	f.realm.OTPPolicyCodeReusable = true
 	f.realm.Attributes = cloneStringPointerMap(f.realm.Attributes)
-	hostileACRMap := `{"urn:noebs:acr:google":1,"urn:noebs:acr:google-totp":1}`
+	hostileACRMap := `{"urn:noebs:acr:primary":1,"urn:noebs:acr:mfa":1}`
 	f.realm.Attributes["acr.loa.map"] = &hostileACRMap
 
 	browserID := f.authenticationFlowIDByAlias(state.Authentication.BrowserFlow)
-	loa1ID := f.authenticationFlowIDByAlias(googleLoA1FlowAlias)
+	loa1ID := f.authenticationFlowIDByAlias(primaryCredentialsFlowAlias)
 	for index := range f.authenticationExecutions[loa1ID] {
 		execution := &f.authenticationExecutions[loa1ID][index]
 		if execution.ProviderID == "identity-provider-redirector" {
+			execution.AuthenticationConfig = f.id("hostile-config")
 			f.authenticatorConfigs[execution.AuthenticationConfig] = authenticatorConfigRepresentation{
 				ID: execution.AuthenticationConfig, Alias: "hostile-redirect", Config: map[string]string{"defaultProvider": "hostile"},
 			}
@@ -2588,7 +2638,7 @@ func (f *fakeKeycloak) injectAuthenticationDrift(state DesiredState) {
 	f.authenticationExecutions[browserID] = append(f.authenticationExecutions[browserID], authenticationExecutionInfoRepresentation{
 		ID: f.id("hostile-execution"), ProviderID: "auth-username-password-form", Requirement: "ALTERNATIVE", Priority: 30,
 	})
-	for _, alias := range []string{googleTOTPLoA2FlowAlias, googlePostBrokerLoA2FlowAlias} {
+	for _, alias := range []string{mfaLoA2FlowAlias, postBrokerLoA2FlowAlias, registrationFlowAlias + "-loa2", resetCredentialsFlowAlias + "-loa2"} {
 		loa2ID := f.authenticationFlowIDByAlias(alias)
 		for index := range f.authenticationExecutions[loa2ID] {
 			execution := &f.authenticationExecutions[loa2ID][index]

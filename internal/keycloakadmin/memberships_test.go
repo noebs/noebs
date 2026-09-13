@@ -258,13 +258,13 @@ func TestAssignMembershipsFailuresAreTyped(t *testing.T) {
 	})
 }
 
-func TestLookupSubjectByEmailExact(t *testing.T) {
+func TestLookupSubjectEmailExact(t *testing.T) {
 	state := repositoryDesiredState(t)
 	fake, reconciler := newMembershipTestReconciler(t, state)
 
-	subject, err := reconciler.LookupSubjectByEmail(context.Background(), "user@example.com")
+	subject, err := reconciler.LookupSubject(context.Background(), SubjectLookup{Field: SubjectLookupEmail, Value: "user@example.com"})
 	if err != nil || subject != membershipTestSubject {
-		t.Fatalf("LookupSubjectByEmail() = %q, %v", subject, err)
+		t.Fatalf("LookupSubject() = %q, %v", subject, err)
 	}
 	if query := fake.lookupQuery(); query != "email=user%40example.com&exact=true&first=0&max=2" {
 		t.Fatalf("lookup query = %q", query)
@@ -274,16 +274,16 @@ func TestLookupSubjectByEmailExact(t *testing.T) {
 	}
 
 	fake.deleteUser(membershipTestSubject)
-	if _, err := reconciler.LookupSubjectByEmail(context.Background(), "user@example.com"); !errors.Is(err, ErrMembershipSubjectMissing) {
-		t.Fatalf("missing LookupSubjectByEmail() error = %v", err)
+	if _, err := reconciler.LookupSubject(context.Background(), SubjectLookup{Field: SubjectLookupEmail, Value: "user@example.com"}); !errors.Is(err, ErrMembershipSubjectMissing) {
+		t.Fatalf("missing LookupSubject() error = %v", err)
 	}
 	fake.addUser("22222222-2222-4222-8222-222222222222", "duplicate@example.com")
 	fake.addUser("33333333-3333-4333-8333-333333333333", "duplicate@example.com")
-	if _, err := reconciler.LookupSubjectByEmail(context.Background(), "duplicate@example.com"); !errors.Is(err, ErrMembershipSubjectMany) {
-		t.Fatalf("ambiguous LookupSubjectByEmail() error = %v", err)
+	if _, err := reconciler.LookupSubject(context.Background(), SubjectLookup{Field: SubjectLookupEmail, Value: "duplicate@example.com"}); !errors.Is(err, ErrMembershipSubjectMany) {
+		t.Fatalf("ambiguous LookupSubject() error = %v", err)
 	}
-	if _, err := reconciler.LookupSubjectByEmail(context.Background(), "User <user@example.com>"); !errors.Is(err, ErrInvalidLookupEmail) {
-		t.Fatalf("invalid LookupSubjectByEmail() error = %v", err)
+	if _, err := reconciler.LookupSubject(context.Background(), SubjectLookup{Field: SubjectLookupEmail, Value: "User <user@example.com>"}); !errors.Is(err, ErrInvalidSubjectLookup) {
+		t.Fatalf("invalid LookupSubject() error = %v", err)
 	}
 }
 
@@ -414,9 +414,10 @@ func (f *membershipFake) ServeHTTP(writer http.ResponseWriter, request *http.Req
 	if request.Method == http.MethodGet && request.URL.Path == base+"/users" {
 		f.query = request.URL.RawQuery
 		email := request.URL.Query().Get("email")
+		username := request.URL.Query().Get("username")
 		var users []membershipUserRepresentation
 		for _, user := range f.users {
-			if strings.EqualFold(user.Email, email) {
+			if (email != "" && strings.EqualFold(user.Email, email)) || (username != "" && strings.EqualFold(user.Username, username)) {
 				users = append(users, user)
 			}
 		}
@@ -719,4 +720,43 @@ func (f *membershipFake) String() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return fmt.Sprintf("membershipFake{writes:%v}", f.writes)
+}
+
+func TestLookupSubjectUsernameExact(t *testing.T) {
+	fake, reconciler := newMembershipTestReconciler(t, repositoryDesiredState(t))
+	fake.mu.Lock()
+	fake.users[membershipTestSubject] = membershipUserRepresentation{ID: membershipTestSubject, Username: "+249912345678"}
+	fake.mu.Unlock()
+	subject, err := reconciler.LookupSubject(context.Background(), SubjectLookup{Field: SubjectLookupUsername, Value: "+249912345678"})
+	if err != nil || subject != membershipTestSubject {
+		t.Fatalf("phone lookup = %q, %v", subject, err)
+	}
+	if got := fake.lookupQuery(); got != "exact=true&first=0&max=2&username=%2B249912345678" {
+		t.Fatalf("lookup query = %q", got)
+	}
+	if fake.writeCount() != 0 {
+		t.Fatal("lookup mutated the identity authority")
+	}
+	if _, err := reconciler.LookupSubject(context.Background(), SubjectLookup{Field: SubjectLookupUsername, Value: "249912345678"}); !errors.Is(err, ErrMembershipSubjectMissing) {
+		t.Fatalf("lookup silently normalized the phone: %v", err)
+	}
+}
+
+func TestLookupSubjectValidatesBeforeRequest(t *testing.T) {
+	fake, reconciler := newMembershipTestReconciler(t, repositoryDesiredState(t))
+	for _, lookup := range []SubjectLookup{
+		{}, {Field: SubjectLookupEmail}, {Field: SubjectLookupUsername},
+		{Field: "phone", Value: "+249912345678"},
+		{Field: SubjectLookupUsername, Value: " +249912345678"},
+		{Field: SubjectLookupUsername, Value: "+249912345678\n"},
+		{Field: SubjectLookupUsername, Value: strings.Repeat("x", 256)},
+		{Field: SubjectLookupEmail, Value: "not-an-email"},
+	} {
+		if _, err := reconciler.LookupSubject(context.Background(), lookup); !errors.Is(err, ErrInvalidSubjectLookup) {
+			t.Fatalf("invalid lookup error = %v", err)
+		}
+	}
+	if fake.lookupQuery() != "" || fake.writeCount() != 0 {
+		t.Fatal("invalid input reached the authority")
+	}
 }

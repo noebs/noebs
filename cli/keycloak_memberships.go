@@ -106,24 +106,41 @@ func runLookupKeycloakSubject(args []string, httpClient *http.Client) (string, e
 	flags := flag.NewFlagSet("lookup-keycloak-subject", flag.ContinueOnError)
 	email := flags.String("email", "", "exact realm user email")
 	emailFile := flags.String("email-file", "", "path containing the exact realm user email")
+	username := flags.String("username", "", "exact realm username, including international phone identifiers")
+	usernameFile := flags.String("username-file", "", "path containing the exact realm username")
 	configPath := flags.String("config", "", "path to the realm-local Keycloak reconciler Secret config")
 	caPath := flags.String("ca", "", "path to the Keycloak transport CA certificate")
 	if err := flags.Parse(args); err != nil {
 		return "", err
 	}
-	if (*email == "") == (*emailFile == "") || *configPath == "" || *caPath == "" || flags.NArg() != 0 {
-		return "", errors.New("lookup-keycloak-subject requires exactly one of --email or --email-file, and --config and --ca")
+	selectorCount := 0
+	flags.Visit(func(flag *flag.Flag) {
+		switch flag.Name {
+		case "email", "email-file", "username", "username-file":
+			selectorCount++
+		}
+	})
+	if selectorCount != 1 || *configPath == "" || *caPath == "" || flags.NArg() != 0 {
+		return "", errors.New("lookup-keycloak-subject requires exactly one of --email, --email-file, --username or --username-file, and --config and --ca")
 	}
-	lookupEmail := *email
-	if *emailFile != "" {
-		payload, err := os.ReadFile(*emailFile)
+	lookup := keycloakadmin.SubjectLookup{Field: keycloakadmin.SubjectLookupEmail, Value: *email}
+	lookupFile := *emailFile
+	flags.Visit(func(flag *flag.Flag) {
+		if flag.Name == "username" || flag.Name == "username-file" {
+			lookup.Field = keycloakadmin.SubjectLookupUsername
+			lookup.Value = *username
+			lookupFile = *usernameFile
+		}
+	})
+	if lookupFile != "" {
+		payload, err := os.ReadFile(lookupFile)
 		if err != nil {
-			return "", fmt.Errorf("read Keycloak lookup email: %w", err)
+			return "", fmt.Errorf("read Keycloak subject lookup: %w", err)
 		}
-		lookupEmail = strings.TrimSuffix(string(payload), "\n")
-		if strings.ContainsAny(lookupEmail, "\r\n") {
-			return "", keycloakadmin.ErrInvalidLookupEmail
-		}
+		lookup.Value = strings.TrimSuffix(string(payload), "\n")
+	}
+	if err := lookup.Validate(); err != nil {
+		return "", err
 	}
 	configFile, err := os.Open(*configPath)
 	if err != nil {
@@ -148,7 +165,7 @@ func runLookupKeycloakSubject(args []string, httpClient *http.Client) (string, e
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), keycloakReconcileTimeout)
 	defer cancel()
-	return reconciler.LookupSubjectByEmail(ctx, lookupEmail)
+	return reconciler.LookupSubject(ctx, lookup)
 }
 
 func loadKeycloakMembershipAuthority(catalogPath, statePath, configPath string) (tenantcatalog.Catalog, keycloakadmin.DesiredState, keycloakadmin.Config, error) {

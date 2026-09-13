@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -435,11 +436,11 @@ func (f *cliMembershipFake) ServeHTTP(writer http.ResponseWriter, request *http.
 	case request.URL.Path == base+"/clients/client-noebs-api/roles":
 		writeCLIMembershipJSON(writer, http.StatusOK, cliMembershipClientRoles())
 	case request.URL.Path == base+"/users":
-		if request.URL.Query().Get("email") != "user@example.com" || request.URL.Query().Get("exact") != "true" {
+		if (request.URL.Query().Get("email") != "user@example.com" && request.URL.Query().Get("username") != "+249912345678") || request.URL.Query().Get("exact") != "true" {
 			http.Error(writer, "lookup is not exact", http.StatusBadRequest)
 			return
 		}
-		writeCLIMembershipJSON(writer, http.StatusOK, []map[string]string{{"id": cliMembershipSubject, "email": "user@example.com"}})
+		writeCLIMembershipJSON(writer, http.StatusOK, []map[string]string{{"id": cliMembershipSubject, "email": "user@example.com", "username": "+249912345678"}})
 	case request.URL.Path == base+"/users/"+cliMembershipSubject:
 		writeCLIMembershipJSON(writer, http.StatusOK, map[string]string{"id": cliMembershipSubject, "email": "user@example.com"})
 	case request.URL.Path == base+"/organizations":
@@ -552,4 +553,39 @@ func writeCLIMembershipJSON(writer http.ResponseWriter, status int, value any) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(status)
 	_ = json.NewEncoder(writer).Encode(value)
+}
+
+func TestLookupKeycloakSubjectUsernameSelectors(t *testing.T) {
+	fake := newCLIMembershipFake()
+	server, caPath := newKeycloakTransportTestServer(t, fake)
+	configPath := writeCLIMembershipConfig(t, server.URL)
+	usernamePath := filepath.Join(t.TempDir(), "username")
+	if err := os.WriteFile(usernamePath, []byte("+249912345678\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, selector := range [][]string{{"--username", "+249912345678"}, {"--username-file", usernamePath}} {
+		subject, err := runLookupKeycloakSubject(append(selector, "--config", configPath, "--ca", caPath), nil)
+		if err != nil || subject != cliMembershipSubject {
+			t.Fatalf("username selector returned %q, %v", subject, err)
+		}
+	}
+	if fake.writeCount() != 0 {
+		t.Fatal("subject lookup wrote identity state")
+	}
+}
+
+func TestLookupKeycloakSubjectRejectsAmbiguousAndEmptySelectors(t *testing.T) {
+	selectors := []string{"--email", "--email-file", "--username", "--username-file"}
+	for i, first := range selectors {
+		for _, second := range selectors[i+1:] {
+			_, err := runLookupKeycloakSubject([]string{first, "value", second, "value", "--config", "missing-config", "--ca", "missing-ca"}, http.DefaultClient)
+			if err == nil || !strings.Contains(err.Error(), "exactly one") {
+				t.Fatalf("ambiguous selectors %s/%s reached config loading: %v", first, second, err)
+			}
+		}
+		_, err := runLookupKeycloakSubject([]string{first, "", "--config", "missing-config", "--ca", "missing-ca"}, http.DefaultClient)
+		if !errors.Is(err, keycloakadmin.ErrInvalidSubjectLookup) {
+			t.Fatalf("empty %s reached config loading: %v", first, err)
+		}
+	}
 }

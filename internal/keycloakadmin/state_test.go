@@ -58,8 +58,8 @@ func TestRepositoryDesiredStateContract(t *testing.T) {
 		len(authorizer.PostLogoutRedirectURIs) != 0 || len(authorizer.WebOrigins) != 0 {
 		t.Fatalf("wallet authorizer contract = %#v", authorizer)
 	}
-	if len(state.Authentication.Levels) != 2 || state.Authentication.Levels[0] != (AuthenticationLevel{ACR: googleACR, Level: 1, MaxAgeSeconds: state.Realm.SSOSessionMaxLifespanSeconds}) ||
-		state.Authentication.Levels[1] != (AuthenticationLevel{ACR: googleTOTPACR, Level: 2, MaxAgeSeconds: 0}) {
+	if len(state.Authentication.Levels) != 2 || state.Authentication.Levels[0] != (AuthenticationLevel{ACR: primaryACR, Level: 1, MaxAgeSeconds: state.Realm.SSOSessionMaxLifespanSeconds}) ||
+		state.Authentication.Levels[1] != (AuthenticationLevel{ACR: mfaACR, Level: 2, MaxAgeSeconds: 0}) {
 		t.Fatalf("authentication levels = %#v", state.Authentication.Levels)
 	}
 	if got := state.IdentityProviders[0].Config["forwardParameters"]; got != "login_hint" {
@@ -238,7 +238,7 @@ func TestDesiredStateRejectsLegacyPostBrokerFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	legacy := strings.Replace(string(data),
-		"  post_broker_login_flow: noebs-google-post-broker\n",
+		"  post_broker_login_flow: noebs-post-broker\n",
 		"  post_broker_login_flow: noebs-google-otp\n",
 		1,
 	)
@@ -380,6 +380,7 @@ func repositoryTenantCatalog(t *testing.T) tenantcatalog.Catalog {
 func validTestConfig(baseURL string) Config {
 	return Config{
 		BaseURL:      baseURL,
+		SMTP:         &SMTPConfig{Host: "127.0.0.1", Port: 2525, From: "accounts@example.test", FromDisplayName: "Test accounts"},
 		AdminRealm:   "master",
 		ClientID:     BootstrapClientID,
 		ClientSecret: "temporary-bootstrap-secret",

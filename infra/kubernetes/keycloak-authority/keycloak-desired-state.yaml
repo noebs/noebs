@@ -8,14 +8,19 @@ realm:
   revoke_refresh_token: true
   refresh_token_max_reuse: 0
 authentication:
+  local_accounts:
+    registration_allowed: true
+    verify_email: true
+    reset_password_allowed: true
+    minimum_password_length: 12
   browser_flow: noebs-browser
   first_broker_login_flow: noebs-first-broker-login
-  post_broker_login_flow: noebs-google-post-broker
+  post_broker_login_flow: noebs-post-broker
   levels:
-    - acr: urn:noebs:acr:google
+    - acr: urn:noebs:acr:primary
       level: 1
       max_age_seconds: 28800
-    - acr: urn:noebs:acr:google-totp
+    - acr: urn:noebs:acr:mfa
       level: 2
       # Current authorization only; never persisted into the SSO session.
       max_age_seconds: 0

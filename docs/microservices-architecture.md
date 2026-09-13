@@ -11,7 +11,8 @@ fallback.
 Noebs builds one Go image, but every process starts exactly one configured
 service role. Traefik provides Kubernetes ingress routing. Public API and back-office
 traffic enters `api-gateway`; the edge exposes only the Keycloak endpoints used
-by Authorization Code, PKCE, Google brokering, and login-theme assets. Keycloak
+by Authorization Code, PKCE, local registration and recovery, configured OIDC
+brokering, and login-theme assets. Keycloak
 administration, account management, client registration, and unused protocols
 remain private. Other workloads use ClusterIP services and are not public entry
 points.
@@ -27,8 +28,12 @@ Keycloak is the sole human credential and membership authority. The `noebs`
 realm contains the public `noebs-mobile` client, confidential
 `noebs-backoffice` BFF client, and confidential `noebs-wallet-authorizer`
 transaction-authorization client. `noebs-api` is the resource-server audience.
-Google is a Keycloak identity provider; the application has no separate
-Google-login path.
+The shared Keycloak browser flow accepts local email, phone or username and
+password, alongside optional Google or OIDC providers. Registration, password
+policy, email verification, recovery and TOTP remain inside Keycloak. The
+application has no separate password or social-login implementation. See
+[local accounts and identity providers](local-accounts.md) for configuration and
+the distinction between a phone login identifier and a verified contact.
 
 Each tenant is a Keycloak Organization. Organization membership groups grant
 the tenant roles `user`, `backoffice`, and `tenant-admin` and their explicit
@@ -57,7 +62,9 @@ opaque secure session cookie. Tenant context is the canonical
 operations also require same-origin evidence and a session-bound CSRF token.
 
 Protected wallet writes use a separate Authorization Code with PKCE flow at
-Keycloak LoA2. The gateway binds the callback to the exact tenant, subject,
+Keycloak LoA2 (`urn:noebs:acr:mfa`). Both local-password and brokered users must
+complete fresh primary authentication followed by TOTP. Normal login uses
+`urn:noebs:acr:primary`. The gateway binds the callback to the exact tenant, subject,
 operation, canonical request digest, idempotency key, and freshly authenticated
 session, then issues a one-use authorization consumed atomically by the wallet
 route. It cannot authorize a different request or be replayed after success.

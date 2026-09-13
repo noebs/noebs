@@ -115,7 +115,7 @@ def probe(origin, get, report):
         "response_type": "code", "response_mode": "query", "scope": " ".join(scopes),
         "state": secrets.token_urlsafe(32), "nonce": secrets.token_urlsafe(32),
         "code_challenge": secrets.token_urlsafe(32), "code_challenge_method": "S256",
-        "acr_values": "urn:noebs:acr:google", "kc_idp_hint": "google",
+        "acr_values": "urn:noebs:acr:primary", "kc_idp_hint": "google",
     })
     status, location, _ = get(authorization)
     require(status in (302, 303), "Keycloak did not start the Google broker flow")

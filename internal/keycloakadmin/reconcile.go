@@ -32,6 +32,7 @@ type realmRepresentation struct {
 	DisplayName                         string             `json:"displayName"`
 	Enabled                             bool               `json:"enabled"`
 	OrganizationsEnabled                bool               `json:"organizationsEnabled"`
+	PasswordPolicy                      string             `json:"passwordPolicy"`
 	RegistrationAllowed                 bool               `json:"registrationAllowed"`
 	RegistrationEmailAsUsername         bool               `json:"registrationEmailAsUsername"`
 	RememberMe                          bool               `json:"rememberMe"`
@@ -211,7 +212,7 @@ type identityProviderMapperRepresentation struct {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, state DesiredState) (Result, error) {
-	if err := state.Validate(); err != nil {
+	if err := r.config.ValidateForState(state); err != nil {
 		return Result{}, err
 	}
 	session, err := r.session(ctx)
@@ -232,6 +233,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, state DesiredState) (Result,
 		return Result{}, err
 	}
 	if err := ensureRealm(ctx, session, state, true, &result); err != nil {
+		return Result{}, err
+	}
+	if err := reconcileLocalAccountProfile(ctx, session, state.Realm.Name, &result); err != nil {
+		return Result{}, err
+	}
+	if err := reconcileSMTP(ctx, session, state.Realm.Name, r.config.SMTP, &result); err != nil {
 		return Result{}, err
 	}
 	reconcilerClient, err := reconcileReconcilerClient(ctx, session, state, r.config.ClientCredentials, &result)
@@ -502,6 +509,8 @@ func ensureRealm(ctx context.Context, session *adminSession, state DesiredState,
 	if !found {
 		initial := wanted
 		initial.BrowserFlow = "browser"
+		initial.RegistrationFlow = "registration"
+		initial.ResetCredentialsFlow = "reset credentials"
 		initial.FirstBrokerLoginFlow = "first broker login"
 		if err := session.post(ctx, "/admin/realms", initial); err != nil {
 			return fmt.Errorf("create realm %s: %w", desired.Name, err)
@@ -511,6 +520,8 @@ func ensureRealm(ctx context.Context, session *adminSession, state DesiredState,
 	}
 	if !bindAuthentication {
 		wanted.BrowserFlow = existing.BrowserFlow
+		wanted.RegistrationFlow = existing.RegistrationFlow
+		wanted.ResetCredentialsFlow = existing.ResetCredentialsFlow
 		wanted.FirstBrokerLoginFlow = existing.FirstBrokerLoginFlow
 	}
 	if !realmMatches(existing, wanted) {
@@ -530,13 +541,14 @@ func desiredRealmRepresentation(state DesiredState) realmRepresentation {
 		DisplayName:                         desired.DisplayName,
 		Enabled:                             true,
 		OrganizationsEnabled:                true,
-		RegistrationAllowed:                 false,
+		PasswordPolicy:                      fmt.Sprintf("length(%d) and maxLength(128) and notUsername(undefined) and notEmail(undefined)", state.Authentication.LocalAccounts.MinimumPasswordLength),
+		RegistrationAllowed:                 state.Authentication.LocalAccounts.RegistrationAllowed,
 		RegistrationEmailAsUsername:         false,
 		RememberMe:                          false,
-		VerifyEmail:                         false,
+		VerifyEmail:                         state.Authentication.LocalAccounts.VerifyEmail,
 		LoginWithEmailAllowed:               true,
 		DuplicateEmailsAllowed:              false,
-		ResetPasswordAllowed:                false,
+		ResetPasswordAllowed:                state.Authentication.LocalAccounts.ResetPasswordAllowed,
 		EditUsernameAllowed:                 false,
 		SSLRequired:                         "all",
 		DefaultSignatureAlgorithm:           "RS256",
@@ -572,9 +584,9 @@ func desiredRealmRepresentation(state DesiredState) realmRepresentation {
 		OTPPolicyPeriod:                     otp.PeriodSeconds,
 		OTPPolicyCodeReusable:               otp.Reusable,
 		BrowserFlow:                         state.Authentication.BrowserFlow,
-		RegistrationFlow:                    "registration",
+		RegistrationFlow:                    registrationFlowAlias,
 		DirectGrantFlow:                     "direct grant",
-		ResetCredentialsFlow:                "reset credentials",
+		ResetCredentialsFlow:                resetCredentialsFlowAlias,
 		ClientAuthenticationFlow:            "clients",
 		DockerAuthenticationFlow:            "docker auth",
 		FirstBrokerLoginFlow:                state.Authentication.FirstBrokerLoginFlow,
@@ -1507,7 +1519,7 @@ func reconcileIdentityProviders(ctx context.Context, session *adminSession, stat
 			DisplayName:               desired.DisplayName,
 			ProviderID:                desired.ProviderID,
 			Enabled:                   true,
-			TrustEmail:                true,
+			TrustEmail:                false,
 			StoreToken:                false,
 			AddReadTokenRoleOnCreate:  false,
 			AuthenticateByDefault:     false,

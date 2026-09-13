@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/internal/keycloakadmin"
+	"github.com/adonese/noebs/internal/tenantcatalog"
 	"gopkg.in/yaml.v3"
 )
 
@@ -540,13 +541,15 @@ func newTestKubernetesReleaseInputs(t *testing.T, tenantID string) kubernetesRel
 	return kubernetesReleaseInputs{Noebs: kubernetesReleaseNoebsInputs{
 		DefaultTenantID:          tenantID,
 		ServiceDatabasePasswords: serviceDatabasePasswords,
-		GoogleClientID:           "google-client-id",
-		GoogleClientSecret:       "google-client-secret",
 		CardVaultDataKey:         "card-vault-data-key",
 		TemporalPostgresPassword: "temporal-postgres-password",
 		KeycloakPostgresPassword: "keycloak-postgres-password",
 		GHCRDockerConfigJSON:     `{"auths":{"ghcr.io":{"auth":"` + base64.StdEncoding.EncodeToString([]byte("noebs:test-token")) + `"}}}`,
 		Keycloak: kubernetesReleaseKeycloakInputs{
+			IdentityProviders: map[string]keycloakadmin.IdentityProviderCredential{
+				"google": {ClientID: "google-client-id", ClientSecret: "google-client-secret"},
+			},
+			SMTP:                               &keycloakadmin.SMTPConfig{Host: "smtp.example.test", Port: 465, From: "accounts@example.test", FromDisplayName: "Test Accounts", Username: "accounts", Password: "smtp-secret", TLS: true},
 			ReconcilerClientSecret:             testCanonicalReleaseSecret(1),
 			BackofficeClientSecret:             testCanonicalReleaseSecret(2),
 			WalletAuthorizerClientSecret:       testCanonicalReleaseSecret(12),
@@ -658,4 +661,64 @@ func readYAMLMapFileMust(t *testing.T, path string) map[string]interface{} {
 		t.Fatalf("readYAMLMapFile(%s): %v", path, err)
 	}
 	return result
+}
+
+func TestKeycloakReleaseCredentialsMatchEnabledProviders(t *testing.T) {
+	catalog, err := tenantcatalog.LoadFile("../infra/kubernetes/keycloak-authority/tenant-catalog.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile("../infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"configured provider", "local accounts only", "missing provider", "unexpected provider", "incomplete provider", "missing smtp"} {
+		t.Run(name, func(t *testing.T) {
+			state, err := keycloakadmin.LoadDesiredState(bytes.NewReader(payload), catalog)
+			if err != nil {
+				t.Fatal(err)
+			}
+			inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+			wantError := false
+			switch name {
+			case "local accounts only":
+				state.IdentityProviders = nil
+				inputs.Noebs.Keycloak.IdentityProviders = nil
+			case "missing provider":
+				inputs.Noebs.Keycloak.IdentityProviders = nil
+				wantError = true
+			case "unexpected provider":
+				inputs.Noebs.Keycloak.IdentityProviders["unused"] = keycloakadmin.IdentityProviderCredential{ClientID: "unused-client", ClientSecret: "unused-secret"}
+				wantError = true
+			case "incomplete provider":
+				inputs.Noebs.Keycloak.IdentityProviders["google"] = keycloakadmin.IdentityProviderCredential{ClientID: "google-client"}
+				wantError = true
+			case "missing smtp":
+				inputs.Noebs.Keycloak.SMTP = nil
+				wantError = true
+			}
+			prepared, err := prepareKeycloakRelease(inputs.Noebs.Keycloak)
+			if err != nil {
+				t.Fatal(err)
+			}
+			release := preparedKubernetesRelease{inputs: inputs, keycloak: prepared, keycloakDesiredState: state}
+			result, err := release.keycloakReconcilerConfig()
+			if wantError {
+				if !errors.Is(err, keycloakadmin.ErrInvalidConfig) || result != "" {
+					t.Fatalf("invalid credentials produced output or wrong error: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config keycloakadmin.Config
+			if err := yaml.Unmarshal([]byte(result), &config); err != nil {
+				t.Fatal(err)
+			}
+			if len(config.IdentityProviders) != len(state.IdentityProviders) || config.SMTP == nil || *config.SMTP != *inputs.Noebs.Keycloak.SMTP {
+				t.Fatal("release changed the explicit provider or SMTP credentials")
+			}
+		})
+	}
 }

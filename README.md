@@ -57,6 +57,8 @@ You can however have this system architecture, suppose that you're building a mo
 - rate limiting, geographical blocking and other API gateway protections.
 These capabilities run as explicit microservice roles. Human authentication is part of the supported runtime: Keycloak owns credentials, federation, tenant Organizations, memberships, and roles. The API gateway verifies Keycloak OIDC access tokens, requires one explicit active tenant, and propagates only its derived tenant-scoped principal through the signed internal workload boundary. Downstream services do not parse bearer tokens or accept caller-supplied tenant, role, user, or actor identity.
 
+Users can create a Keycloak account with a username or international phone number, an optional email and a password. Sign-in accepts the username, phone number or account email. Google and other OIDC providers are optional choices in the same browser flow. Password recovery, email verification and authenticator enrollment use that same authority. See [local accounts and identity providers](docs/local-accounts.md) for deployment settings, phone identifier semantics and client integration.
+
 
 ## Services we offer
 `noebs` implements *ALL* of EBS merchant services. We are working to extend our support into other EBS services, e.g., consumer services, TITP, etc. However, those other services are not stable and some of them (consumer) are deem to deprecation.

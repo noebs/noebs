@@ -23,3 +23,12 @@ identity_providers:
   google:
     client_id: REPLACE_WITH_GOOGLE_CLIENT_ID
     client_secret: REPLACE_WITH_GOOGLE_CLIENT_SECRET
+# Required when local email verification or password recovery is enabled.
+smtp:
+  host: smtp.example.com
+  port: 465
+  from: accounts@example.com
+  from_display_name: Accounts
+  username: REPLACE_WITH_SMTP_USERNAME
+  password: REPLACE_WITH_SMTP_PASSWORD
+  tls: true

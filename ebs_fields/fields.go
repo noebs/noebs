@@ -912,6 +912,7 @@ type PSPWebhookRoute struct {
 type NoebsConfig struct {
 	ServiceRole                                string                     `json:"service_role"`
 	OIDC                                       oidcauth.RuntimeConfig     `json:"oidc"`
+	MobileRedirectURL                          string                     `json:"mobile_redirect_url"`
 	KeycloakCACertificate                      string                     `json:"keycloak_ca_certificate"`
 	BackofficeClientSecret                     string                     `json:"backoffice_client_secret"`
 	KeycloakProxyTrustedAddresses              string                     `json:"keycloak_proxy_trusted_addresses"`

@@ -24,6 +24,7 @@ import (
 
 const (
 	realGoogleUserEmail = "wallet-authorizer@example.invalid"
+	realGoogleUsername  = "google-test-account"
 	realMobileClientID  = "noebs-mobile"
 	realMobileRedirect  = "https://api.noebs.sd/mobile/oauth/callback"
 )
@@ -62,6 +63,7 @@ func TestRealKeycloak26_7OrganizationClaim(t *testing.T) {
 	httpClient := &http.Client{Timeout: 30 * time.Second, Transport: transport}
 	config := validTestConfig(baseURL)
 	config.ClientSecret = secret
+	_, config.SMTP = startRealSMTP(t)
 	bootstrap, err := New(config, httpClient)
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +99,7 @@ func assertRealOrganizationAccessToken(
 ) {
 	t.Helper()
 	ctx := context.Background()
-	subject, err := reconciler.LookupSubjectByEmail(ctx, realGoogleUserEmail)
+	subject, err := reconciler.LookupSubject(ctx, SubjectLookup{Field: SubjectLookupEmail, Value: realGoogleUserEmail})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +211,7 @@ func realOrganizationAuthorizationURL(t *testing.T, baseURL, verifier string) st
 	query.Set("code_challenge", base64.RawURLEncoding.EncodeToString(digest[:]))
 	query.Set("code_challenge_method", "S256")
 	query.Set("login_hint", realGoogleUserEmail)
+	query.Set("kc_idp_hint", "google")
 	authorization.RawQuery = query.Encode()
 	return authorization.String()
 }

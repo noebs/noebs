@@ -28,8 +28,6 @@ type kubernetesReleaseInputs struct {
 type kubernetesReleaseNoebsInputs struct {
 	DefaultTenantID          string                                   `yaml:"default_tenant_id"`
 	ServiceDatabasePasswords map[string]string                        `yaml:"service_database_passwords"`
-	GoogleClientID           string                                   `yaml:"google_client_id"`
-	GoogleClientSecret       string                                   `yaml:"google_client_secret"`
 	CardVaultDataKey         string                                   `yaml:"card_vault_data_key"`
 	TemporalPostgresPassword string                                   `yaml:"temporal_postgres_password"`
 	KeycloakPostgresPassword string                                   `yaml:"keycloak_postgres_password"`
@@ -43,14 +41,16 @@ type kubernetesReleaseNoebsInputs struct {
 }
 
 type kubernetesReleaseKeycloakInputs struct {
-	ReconcilerClientSecret             string `yaml:"reconciler_client_secret"`
-	BackofficeClientSecret             string `yaml:"backoffice_client_secret"`
-	WalletAuthorizerClientSecret       string `yaml:"wallet_authorizer_client_secret"`
-	TemporalLedgerClientSecret         string `yaml:"temporal_ledger_client_secret"`
-	TemporalWorkerClientSecret         string `yaml:"temporal_worker_client_secret"`
-	TemporalIdentityClientSecret       string `yaml:"temporal_identity_client_secret"`
-	TemporalIdentityWorkerClientSecret string `yaml:"temporal_identity_worker_client_secret"`
-	TemporalBootstrapClientSecret      string `yaml:"temporal_bootstrap_client_secret"`
+	IdentityProviders                  map[string]keycloakadmin.IdentityProviderCredential `yaml:"identity_providers"`
+	SMTP                               *keycloakadmin.SMTPConfig                           `yaml:"smtp"`
+	ReconcilerClientSecret             string                                              `yaml:"reconciler_client_secret"`
+	BackofficeClientSecret             string                                              `yaml:"backoffice_client_secret"`
+	WalletAuthorizerClientSecret       string                                              `yaml:"wallet_authorizer_client_secret"`
+	TemporalLedgerClientSecret         string                                              `yaml:"temporal_ledger_client_secret"`
+	TemporalWorkerClientSecret         string                                              `yaml:"temporal_worker_client_secret"`
+	TemporalIdentityClientSecret       string                                              `yaml:"temporal_identity_client_secret"`
+	TemporalIdentityWorkerClientSecret string                                              `yaml:"temporal_identity_worker_client_secret"`
+	TemporalBootstrapClientSecret      string                                              `yaml:"temporal_bootstrap_client_secret"`
 }
 
 type kubernetesReleaseGatewayAuthInputs struct {
@@ -94,6 +94,7 @@ type preparedKubernetesRelease struct {
 	inputs                  kubernetesReleaseInputs
 	ageKeyPath              string
 	tenantCatalog           []byte
+	keycloakDesiredState    keycloakadmin.DesiredState
 	keycloak                preparedKeycloakRelease
 	gatewayAuth             preparedGatewayAuthRelease
 	workloadAuth            preparedWorkloadAuthRelease
@@ -164,6 +165,18 @@ func prepareKubernetesRelease(repoRoot, inputsPath, ageKeyPath, outputRoot strin
 	if err != nil {
 		return fmt.Errorf("read Kubernetes tenant catalog: %w", err)
 	}
+	catalog, err := tenantcatalog.Load(bytes.NewReader(tenantCatalogPayload))
+	if err != nil {
+		return fmt.Errorf("load Kubernetes tenant catalog: %w", err)
+	}
+	desiredPayload, err := os.ReadFile(filepath.Join(repoRoot, "infra", "kubernetes", "keycloak-authority", "keycloak-desired-state.yaml"))
+	if err != nil {
+		return fmt.Errorf("read Keycloak desired state: %w", err)
+	}
+	desiredState, err := keycloakadmin.LoadDesiredState(bytes.NewReader(desiredPayload), catalog)
+	if err != nil {
+		return fmt.Errorf("load Keycloak desired state: %w", err)
+	}
 	inputs, err := readKubernetesReleaseInputs(inputsPath, ageKeyPath, decrypt)
 	if err != nil {
 		return err
@@ -207,6 +220,7 @@ func prepareKubernetesRelease(repoRoot, inputsPath, ageKeyPath, outputRoot strin
 		inputs:                  inputs,
 		ageKeyPath:              ageKeyPath,
 		tenantCatalog:           tenantCatalogPayload,
+		keycloakDesiredState:    desiredState,
 		keycloak:                preparedKeycloak,
 		gatewayAuth:             preparedGatewayAuth,
 		workloadAuth:            preparedWorkloadAuth,
@@ -329,6 +343,9 @@ func readKubernetesReleaseInputs(path, ageKeyPath string, decrypt deploymentDecr
 }
 
 func (r preparedKubernetesRelease) validate() error {
+	if _, err := r.keycloakReconcilerConfig(); err != nil {
+		return err
+	}
 	tenantID := r.inputs.Noebs.DefaultTenantID
 	if _, err := validateTenantID(tenantID); err != nil {
 		return fmt.Errorf("kubernetes release input default_tenant_id: %w", err)
@@ -341,8 +358,6 @@ func (r preparedKubernetesRelease) validate() error {
 		return fmt.Errorf("kubernetes release input default_tenant_id: %w", err)
 	}
 	for label, value := range map[string]string{
-		"noebs.google_client_id":           r.inputs.Noebs.GoogleClientID,
-		"noebs.google_client_secret":       r.inputs.Noebs.GoogleClientSecret,
 		"noebs.card_vault_data_key":        r.inputs.Noebs.CardVaultDataKey,
 		"noebs.temporal_postgres_password": r.inputs.Noebs.TemporalPostgresPassword,
 		"noebs.keycloak_postgres_password": r.inputs.Noebs.KeycloakPostgresPassword,
@@ -962,14 +977,6 @@ func requireCanonicalReleaseSecret(label, value string) (string, error) {
 }
 
 func (r preparedKubernetesRelease) keycloakReconcilerConfig() (string, error) {
-	googleClientID, err := requiredKubernetesReleaseInput("noebs.google_client_id", r.inputs.Noebs.GoogleClientID)
-	if err != nil {
-		return "", err
-	}
-	googleClientSecret, err := requiredKubernetesReleaseInput("noebs.google_client_secret", r.inputs.Noebs.GoogleClientSecret)
-	if err != nil {
-		return "", err
-	}
 	config := keycloakadmin.Config{
 		BaseURL:      "https://keycloak.noebs.svc.cluster.local:8443/auth",
 		AdminRealm:   "noebs",
@@ -985,11 +992,10 @@ func (r preparedKubernetesRelease) keycloakReconcilerConfig() (string, error) {
 			temporalIdentityWorkerClientID: {ClientSecret: r.keycloak.temporalIdentityWorkerClientSecret},
 			temporalBootstrapClientID:      {ClientSecret: r.keycloak.temporalBootstrapClientSecret},
 		},
-		IdentityProviders: map[string]keycloakadmin.IdentityProviderCredential{
-			"google": {ClientID: googleClientID, ClientSecret: googleClientSecret},
-		},
+		IdentityProviders: r.inputs.Noebs.Keycloak.IdentityProviders,
+		SMTP:              r.inputs.Noebs.Keycloak.SMTP,
 	}
-	if err := config.Validate(); err != nil {
+	if err := config.ValidateForState(r.keycloakDesiredState); err != nil {
 		return "", err
 	}
 	payload, err := yaml.Marshal(config)

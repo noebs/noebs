@@ -10,6 +10,7 @@ noebs:
     max_future_issued_at_seconds: 5
     jwks_refresh_seconds: 300
     unknown_key_refresh_interval_seconds: 30
+  mobile_redirect_url: "https://api.noebs.sd/mobile/oauth/callback"
   backoffice_redirect_url: "https://api.noebs.sd/backoffice/oauth/callback"
   backoffice_post_logout_url: "https://api.noebs.sd/backoffice/oauth/logout/callback"
   wallet_authorizer_redirect_url: "https://api.noebs.sd/wallet/authorizations/oauth/callback"

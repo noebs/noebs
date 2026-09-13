@@ -120,7 +120,7 @@ class GoogleBrokerPreflightTest(unittest.TestCase):
 
     def test_broker_callback_drift_and_local_auth_parameters_fail_before_google(self):
         for changes in ({"redirect_uri": ORIGIN + "/mobile/oauth/callback"},
-                        {"acr_values": "urn:noebs:acr:google"}, {"client_secret": "private-secret"}):
+                        {"acr_values": "urn:noebs:acr:primary"}, {"client_secret": "private-secret"}):
             with self.subTest(keys=list(changes)):
                 _, requested, failure = self.run_probe(lambda _: self.fail("Google should not be reached"),
                     provider_changes=changes)

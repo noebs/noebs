@@ -34,7 +34,7 @@ func TestServiceAuthorizesAndClaimsExactlyOnce(t *testing.T) {
 	oauth.identity = VerifiedIdentity{
 		Issuer:             binding.Issuer,
 		Subject:            binding.Subject,
-		ACR:                "urn:noebs:acr:google-totp",
+		ACR:                "urn:noebs:acr:mfa",
 		AuthenticationTime: clock.Now().Add(-time.Second),
 	}
 	state := repository.onlyStateToken(t, oauth.state)
@@ -70,7 +70,7 @@ func TestClaimDoesNotConsumeOnBindingMismatch(t *testing.T) {
 			oauth.identity = VerifiedIdentity{
 				Issuer:             binding.Issuer,
 				Subject:            binding.Subject,
-				ACR:                "urn:noebs:acr:google-totp",
+				ACR:                "urn:noebs:acr:mfa",
 				AuthenticationTime: clock.Now(),
 			}
 			if _, err := service.Complete(context.Background(), oauth.state, challenge.BrowserBinding, "code"); err != nil {
@@ -95,7 +95,7 @@ func TestConcurrentClaimHasOneWinner(t *testing.T) {
 	oauth.identity = VerifiedIdentity{
 		Issuer:             binding.Issuer,
 		Subject:            binding.Subject,
-		ACR:                "urn:noebs:acr:google-totp",
+		ACR:                "urn:noebs:acr:mfa",
 		AuthenticationTime: clock.Now(),
 	}
 	if _, err := service.Complete(context.Background(), oauth.state, challenge.BrowserBinding, "code"); err != nil {
@@ -148,7 +148,7 @@ func TestFlowAndAuthorizationExpiryFailClosed(t *testing.T) {
 		oauth.identity = VerifiedIdentity{
 			Issuer:             binding.Issuer,
 			Subject:            binding.Subject,
-			ACR:                "urn:noebs:acr:google-totp",
+			ACR:                "urn:noebs:acr:mfa",
 			AuthenticationTime: clock.Now(),
 		}
 		if _, err := service.Complete(context.Background(), oauth.state, challenge.BrowserBinding, "code"); err != nil {
@@ -181,7 +181,7 @@ func TestCallbackIdentityMustMatchInitiator(t *testing.T) {
 	validIdentity := VerifiedIdentity{
 		Issuer:             testBinding().Issuer,
 		Subject:            testBinding().Subject,
-		ACR:                "urn:noebs:acr:google-totp",
+		ACR:                "urn:noebs:acr:mfa",
 		AuthenticationTime: testNow,
 	}
 	for name, mutate := range map[string]func(*VerifiedIdentity){
@@ -207,7 +207,7 @@ func TestCallbackAuthenticationMustFollowBrowserStart(t *testing.T) {
 	oauth.identity = VerifiedIdentity{
 		Issuer:             testBinding().Issuer,
 		Subject:            testBinding().Subject,
-		ACR:                "urn:noebs:acr:google-totp",
+		ACR:                "urn:noebs:acr:mfa",
 		AuthenticationTime: clock.Now().Add(-2 * time.Second),
 	}
 	if _, err := service.Complete(context.Background(), oauth.state, challenge.BrowserBinding, "code"); !errors.Is(err, ErrAuthorizationDenied) {
@@ -299,7 +299,7 @@ func serviceFixture(t *testing.T) (*Service, *memoryRepository, *testOAuth, *tes
 		Keys:             keys,
 		Clock:            clock,
 		Entropy:          entropy,
-		RequiredACR:      "urn:noebs:acr:google-totp",
+		RequiredACR:      "urn:noebs:acr:mfa",
 		BrowserStartTTL:  10 * time.Minute,
 		FlowTTL:          5 * time.Minute,
 		AuthorizationTTL: 2 * time.Minute,

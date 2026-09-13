@@ -71,7 +71,7 @@ func BenchmarkServiceIntentLifecycle(b *testing.B) {
 		Keys:             keyring,
 		Clock:            clock,
 		Entropy:          rand.Reader,
-		RequiredACR:      "urn:noebs:acr:google-totp",
+		RequiredACR:      "urn:noebs:acr:mfa",
 		BrowserStartTTL:  10 * time.Minute,
 		FlowTTL:          5 * time.Minute,
 		AuthorizationTTL: 2 * time.Minute,
@@ -83,7 +83,7 @@ func BenchmarkServiceIntentLifecycle(b *testing.B) {
 	oauth.identity = VerifiedIdentity{
 		Issuer:             binding.Issuer,
 		Subject:            binding.Subject,
-		ACR:                "urn:noebs:acr:google-totp",
+		ACR:                "urn:noebs:acr:mfa",
 		AuthenticationTime: clock.Now(),
 	}
 	ctx := context.Background()

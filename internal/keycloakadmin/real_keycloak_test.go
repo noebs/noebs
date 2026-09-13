@@ -79,6 +79,8 @@ func TestRealKeycloak26_7Reconcile(t *testing.T) {
 	}
 	config := validTestConfig(baseURL)
 	config.ClientSecret = secret
+	mailbox, smtpConfig := startRealSMTP(t)
+	config.SMTP = smtpConfig
 	reconciler, err := New(config, httpClient)
 	if err != nil {
 		t.Fatal(err)
@@ -107,9 +109,14 @@ func TestRealKeycloak26_7Reconcile(t *testing.T) {
 		t.Fatalf("second real Reconcile() result = %#v", second)
 	}
 	assertRealKeycloakAuthority(t, steady, state)
+	if !t.Run("NativeLocalAccounts", func(t *testing.T) {
+		assertRealLocalAccounts(t, baseURL, transport, steady, state, mailbox)
+	}) {
+		return
+	}
 	if googleAddress != "" {
 		if !t.Run("FreshMicrosoftCompatibleOTPEnrollment", func(t *testing.T) {
-			assertRealFreshOTPEnrollment(t, baseURL, transport, steady, state)
+			assertRealFreshOTPEnrollment(t, baseURL, transport, steady, state, mailbox)
 		}) {
 			return
 		}
@@ -158,6 +165,7 @@ func assertRealGoogleBrokerRedirect(t *testing.T, baseURL string, transport http
 		t.Fatal(err)
 	}
 	query := authorization.Query()
+	query.Set("kc_idp_hint", "google")
 	query.Set("client_id", clientID)
 	query.Set("redirect_uri", redirectURI)
 	query.Set("response_type", "code")
@@ -167,7 +175,7 @@ func assertRealGoogleBrokerRedirect(t *testing.T, baseURL string, transport http
 	query.Set("code_challenge", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 	query.Set("code_challenge_method", "S256")
 	if clientID == walletAuthorizerClientID {
-		query.Set("acr_values", googleACR)
+		query.Set("acr_values", primaryACR)
 		query.Set("login_hint", "wallet-authorizer@example.invalid")
 	} else {
 		query.Set("scope", "openid organization:*")
@@ -217,7 +225,7 @@ const realTestOTPSecret = "noebs-real-keycloak-test-otp-secret"
 
 var otpFormActionPattern = regexp.MustCompile(`<form id="kc-otp-login-form"[^>]+action="([^"]+)"`)
 
-func assertRealFreshOTPEnrollment(t *testing.T, baseURL string, transport http.RoundTripper, reconciler *Reconciler, state DesiredState) {
+func assertRealFreshOTPEnrollment(t *testing.T, baseURL string, transport http.RoundTripper, reconciler *Reconciler, state DesiredState, mailbox <-chan string) {
 	t.Helper()
 	ctx := context.Background()
 	session, err := reconciler.session(ctx)
@@ -225,7 +233,7 @@ func assertRealFreshOTPEnrollment(t *testing.T, baseURL string, transport http.R
 		t.Fatal("fresh enrollment: admin session failed")
 	}
 	base := realmPath(state.Realm.Name)
-	lookupPath := base + "/users?exact=true&username=" + url.QueryEscape("wallet-authorizer@example.invalid")
+	lookupPath := base + "/users?exact=true&username=" + url.QueryEscape(realGoogleUsername)
 	var users []userRepresentation
 	if _, err := session.get(ctx, lookupPath, &users); err != nil || len(users) != 0 {
 		t.Fatal("fresh enrollment requires an unused isolated mock Google identity")
@@ -264,7 +272,7 @@ func assertRealFreshOTPEnrollment(t *testing.T, baseURL string, transport http.R
 	if err != nil {
 		t.Fatal("fresh enrollment: authorization request failed")
 	}
-	pageURL, body := followRealEnrollment(t, client, response, authorization, true)
+	pageURL, body := followRealEnrollment(t, client, response, authorization, mailbox, baseURL)
 	if _, err := session.get(ctx, lookupPath, &users); err != nil || len(users) != 1 {
 		t.Fatal("fresh enrollment: first broker login did not create exactly one isolated user")
 	}
@@ -289,7 +297,7 @@ func assertRealFreshOTPEnrollment(t *testing.T, baseURL string, transport http.R
 	if err != nil {
 		t.Fatal("fresh enrollment: manual setup request failed")
 	}
-	pageURL, body = followRealEnrollment(t, client, response, authorization, true)
+	pageURL, body = followRealEnrollment(t, client, response, authorization, mailbox, baseURL)
 	for id, expected := range map[string]string{"algorithm": "SHA1", "digits": "6", "period": "30"} {
 		value := realOTPSetupMatch(t, body, `<li id="kc-totp-`+id+`">[^<]*:\s*([^<]+)</li>`, "manual policy "+id)
 		if strings.TrimSpace(value) != expected {
@@ -323,7 +331,12 @@ func assertRealFreshOTPEnrollment(t *testing.T, baseURL string, transport http.R
 	if err != nil {
 		t.Fatal("fresh enrollment: setup submission failed")
 	}
-	callback, _ := followRealEnrollment(t, client, response, authorization, false)
+	callback, body := realLocalFollow(t, client, response)
+	if callback.Host != "api.noebs.sd" {
+		assertNoPasswordBody(t, body)
+		callback, body = realLocalGet(t, client, realLocalEmailLink(t, mailbox, baseURL))
+		assertNoPasswordBody(t, body)
+	}
 	if callback.Query().Get("state") != "fresh-enrollment-state" || callback.Query().Get("code") == "" || callback.Query().Get("error") != "" {
 		t.Fatal("fresh enrollment: authorization did not complete successfully")
 	}
@@ -352,13 +365,39 @@ func realOTPSetupMatch(t *testing.T, body []byte, pattern, field string) string 
 	return html.UnescapeString(string(matches[0][1]))
 }
 
-func followRealEnrollment(t *testing.T, client *http.Client, response *http.Response, issuer *url.URL, wantSetup bool) (*url.URL, []byte) {
+func followRealEnrollment(t *testing.T, client *http.Client, response *http.Response, issuer *url.URL, mailbox <-chan string, baseURL string) (*url.URL, []byte) {
 	t.Helper()
 	for range 16 {
 		body := readRealResponse(t, response)
+		if response.StatusCode == http.StatusOK && strings.Contains(string(body), `id="kc-idp-review-profile-form"`) {
+			// A broker's email-shaped preferred username must be corrected to
+			// a handle. This profile form must never request a local password.
+			for _, marker := range []string{`name="password"`, `name='password'`} {
+				if strings.Contains(string(body), marker) {
+					t.Fatal("broker profile correction requested a local password")
+				}
+			}
+			action := realLocalForm(t, response.Request.URL, body, "kc-idp-review-profile-form")
+			var err error
+			response, err = client.PostForm(action, url.Values{
+				"username": {realGoogleUsername}, "email": {realGoogleUserEmail}, "firstName": {"Wallet"}, "lastName": {"Authorizer"},
+			})
+			if err != nil {
+				t.Fatal("broker profile correction submission failed")
+			}
+			continue
+		}
 		assertNoPasswordBody(t, body)
-		if response.StatusCode == http.StatusOK && wantSetup && strings.Contains(string(body), `id="kc-totp-settings-form"`) {
+		if response.StatusCode == http.StatusOK && strings.Contains(string(body), `id="kc-totp-settings-form"`) {
 			return response.Request.URL, body
+		}
+		if response.StatusCode == http.StatusOK && (strings.Contains(string(body), "verify-email") || strings.Contains(string(body), "verification link")) {
+			var err error
+			response, err = client.Get(realLocalEmailLink(t, mailbox, baseURL))
+			if err != nil {
+				t.Fatal("fresh enrollment: email verification request failed")
+			}
+			continue
 		}
 		if response.StatusCode < 300 || response.StatusCode >= 400 {
 			t.Fatalf("fresh enrollment: unexpected HTTP status %d", response.StatusCode)
@@ -368,10 +407,7 @@ func followRealEnrollment(t *testing.T, client *http.Client, response *http.Resp
 			t.Fatal("fresh enrollment: invalid redirect")
 		}
 		if next.Host == "api.noebs.sd" && next.Path == "/mobile/oauth/callback" {
-			if wantSetup {
-				t.Fatal("fresh enrollment: authentication completed without required OTP setup")
-			}
-			return next, nil // Never fetch a public callback or log its query.
+			t.Fatal("fresh enrollment: authentication completed without required OTP setup")
 		}
 		if next.Host != issuer.Host && next.Host != "accounts.google.com" {
 			t.Fatal("fresh enrollment: redirect is outside the isolated issuer and Google mock")
@@ -394,7 +430,7 @@ func seedRealGoogleUser(t *testing.T, reconciler *Reconciler, state DesiredState
 	}
 	base := realmPath(state.Realm.Name)
 	user := map[string]any{
-		"username":        "wallet-authorizer@example.invalid",
+		"username":        realGoogleUsername,
 		"email":           "wallet-authorizer@example.invalid",
 		"emailVerified":   true,
 		"enabled":         true,
@@ -411,13 +447,18 @@ func seedRealGoogleUser(t *testing.T, reconciler *Reconciler, state DesiredState
 		t.Fatal(err)
 	}
 	var users []userRepresentation
-	if _, err := session.get(ctx, base+"/users?exact=true&username="+url.QueryEscape("wallet-authorizer@example.invalid"), &users); err != nil {
+	if _, err := session.get(ctx, base+"/users?exact=true&username="+url.QueryEscape(realGoogleUsername), &users); err != nil {
 		t.Fatal(err)
 	}
 	if len(users) != 1 {
 		t.Fatalf("seeded Google users = %#v", users)
 	}
 	userPath := base + "/users/" + url.PathEscape(users[0].ID)
+	t.Cleanup(func() {
+		if err := session.delete(context.Background(), userPath, nil); err != nil {
+			t.Error("seeded Google test-user cleanup failed")
+		}
+	})
 	var created map[string]any
 	if _, err := session.get(ctx, userPath, &created); err != nil {
 		t.Fatal(err)
@@ -504,6 +545,7 @@ func realWalletAuthorizationURL(t *testing.T, baseURL, verifier, state, nonce st
 	}
 	digest := sha256.Sum256([]byte(verifier))
 	query := authorization.Query()
+	query.Set("kc_idp_hint", "google")
 	query.Set("client_id", walletAuthorizerClientID)
 	query.Set("redirect_uri", walletAuthorizationCallbackURI)
 	query.Set("response_type", "code")
@@ -512,7 +554,7 @@ func realWalletAuthorizationURL(t *testing.T, baseURL, verifier, state, nonce st
 	query.Set("nonce", nonce)
 	query.Set("code_challenge", base64.RawURLEncoding.EncodeToString(digest[:]))
 	query.Set("code_challenge_method", "S256")
-	query.Set("acr_values", googleACR)
+	query.Set("acr_values", primaryACR)
 	// Match the production transaction-authorizer request. OIDC requires
 	// auth_time in the ID token when max_age is supplied.
 	query.Set("max_age", "0")
@@ -637,7 +679,7 @@ func exchangeRealAuthorizationCode(t *testing.T, client *http.Client, baseURL, c
 	if err := verified.Claims(&claims); err != nil {
 		t.Fatal("wallet ID token claims are malformed")
 	}
-	if claims.ACR != googleTOTPACR || claims.AuthorizedParty != walletAuthorizerClientID {
+	if claims.ACR != mfaACR || claims.AuthorizedParty != walletAuthorizerClientID {
 		t.Fatal("wallet ID token lacks the required authorizer and LoA2 binding")
 	}
 	authenticationTime := time.Unix(claims.AuthenticationTime, 0)
@@ -706,8 +748,8 @@ func assertRealKeycloakAuthority(t *testing.T, reconciler *Reconciler, state Des
 	attributes["access.token.signed.response.alg"] = "RS256"
 	attributes["id.token.signed.response.alg"] = "RS256"
 	attributes["pkce.code.challenge.method"] = "S256"
-	attributes["default.acr.values"] = googleTOTPACR
-	attributes["minimum.acr.value"] = googleTOTPACR
+	attributes["default.acr.values"] = mfaACR
+	attributes["minimum.acr.value"] = mfaACR
 	attributes[managedClientSecretHash] = secretHash(reconciler.config.ClientCredentials[walletAuthorizerClientID].ClientSecret)
 	wanted := clientRepresentation{
 		ClientID:                           walletAuthorizerClientID,
@@ -825,6 +867,20 @@ func injectRealAuthenticationDrift(t *testing.T, reconciler *Reconciler, state D
 	if err := session.post(ctx, authenticationBase+"/flows", rogue); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		flows, err := listAuthenticationFlows(context.Background(), session, authenticationBase)
+		if err != nil {
+			t.Error("hostile test-flow cleanup lookup failed")
+			return
+		}
+		for _, flow := range flows {
+			if flow.Alias == rogue.Alias {
+				if err := session.delete(context.Background(), authenticationBase+"/flows/"+url.PathEscape(flow.ID), nil); err != nil {
+					t.Error("hostile test-flow cleanup failed")
+				}
+			}
+		}
+	})
 	password := managedAuthenticationExecution{ProviderID: "auth-username-password-form", Requirement: "REQUIRED", Priority: 10}
 	if err := createAuthenticationExecution(ctx, session, authenticationBase, rogue.Alias, password); err != nil {
 		t.Fatal(err)
@@ -840,7 +896,7 @@ func injectRealAuthenticationDrift(t *testing.T, reconciler *Reconciler, state D
 	realm.OTPPolicyAlgorithm = "HmacSHA256"
 	realm.OTPPolicyCodeReusable = true
 	realm.MaxSecondaryAuthFailures = 0
-	hostileACRMap := `{"urn:noebs:acr:google":1,"urn:noebs:acr:google-totp":1}`
+	hostileACRMap := `{"urn:noebs:acr:primary":1,"urn:noebs:acr:mfa":1}`
 	realm.Attributes["acr.loa.map"] = &hostileACRMap
 	if err := session.put(ctx, base, realm); err != nil {
 		t.Fatal(err)
@@ -852,7 +908,7 @@ func injectRealAuthenticationDrift(t *testing.T, reconciler *Reconciler, state D
 		t.Fatal(err)
 	}
 	setRealExecutionRequirement(t, session, authenticationBase, state.Authentication.BrowserFlow, password)
-	executions, err := listDirectAuthenticationExecutions(ctx, session, authenticationBase, googleLoA1FlowAlias)
+	executions, err := listDirectAuthenticationExecutions(ctx, session, authenticationBase, primaryCredentialsFlowAlias)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -860,17 +916,14 @@ func injectRealAuthenticationDrift(t *testing.T, reconciler *Reconciler, state D
 		if execution.ProviderID != "identity-provider-redirector" {
 			continue
 		}
-		var config authenticatorConfigRepresentation
-		if _, err := session.get(ctx, authenticationBase+"/config/"+url.PathEscape(execution.AuthenticationConfig), &config); err != nil {
-			t.Fatal(err)
+		config := authenticatorConfigRepresentation{
+			Alias: "hostile-redirect", Config: map[string]string{"defaultProvider": "hostile"},
 		}
-		config.Alias = "hostile-redirect"
-		config.Config = map[string]string{"defaultProvider": "hostile"}
-		if err := session.put(ctx, authenticationBase+"/config/"+url.PathEscape(config.ID), config); err != nil {
+		if err := session.post(ctx, authenticationBase+"/executions/"+url.PathEscape(execution.ID)+"/config", config); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, alias := range []string{googleTOTPLoA2FlowAlias, googlePostBrokerLoA2FlowAlias} {
+	for _, alias := range []string{mfaLoA2FlowAlias, postBrokerLoA2FlowAlias} {
 		loa2Executions, err := listDirectAuthenticationExecutions(ctx, session, authenticationBase, alias)
 		if err != nil {
 			t.Fatal(err)
@@ -955,8 +1008,8 @@ func injectRealAuthenticationDrift(t *testing.T, reconciler *Reconciler, state D
 	authorizer.RedirectURIs = []string{"https://hostile.invalid/callback"}
 	authorizer.WebOrigins = []string{"https://hostile.invalid"}
 	authorizer.Attributes["pkce.code.challenge.method"] = "plain"
-	authorizer.Attributes["default.acr.values"] = googleACR
-	authorizer.Attributes["minimum.acr.value"] = googleACR
+	authorizer.Attributes["default.acr.values"] = primaryACR
+	authorizer.Attributes["minimum.acr.value"] = primaryACR
 	authorizer.Attributes["hostile.attribute"] = "true"
 	if err := session.put(ctx, base+"/clients/"+url.PathEscape(authorizer.ID), authorizer); err != nil {
 		t.Fatal(err)

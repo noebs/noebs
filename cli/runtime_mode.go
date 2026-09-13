@@ -185,6 +185,9 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 		return err
 	}
 	if role == serviceRoleAPIGateway {
+		if err := requireExactHTTPSCallbackPath(cfg.MobileRedirectURL, mobileOAuthCallbackPath); err != nil {
+			return fmt.Errorf("mobile OIDC callback: %w", err)
+		}
 		if err := validateBackofficeRuntimeConfig(cfg); err != nil {
 			return fmt.Errorf("back-office OIDC runtime: %w", err)
 		}

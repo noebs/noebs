@@ -17,13 +17,26 @@ noebs:
     wallet_ledger_runtime: REPLACE_WITH_WALLET_LEDGER_RUNTIME_PASSWORD_BASE64URL
     wallet_ledger_worker: REPLACE_WITH_WALLET_LEDGER_WORKER_PASSWORD_BASE64URL
     wallet_ledger_webhook: REPLACE_WITH_WALLET_LEDGER_WEBHOOK_PASSWORD_BASE64URL
-  google_client_id: REPLACE_WITH_GOOGLE_CLIENT_ID
-  google_client_secret: REPLACE_WITH_GOOGLE_CLIENT_SECRET
   card_vault_data_key: REPLACE_WITH_CARD_VAULT_DATA_KEY
   temporal_postgres_password: REPLACE_WITH_TEMPORAL_POSTGRES_PASSWORD
   keycloak_postgres_password: REPLACE_WITH_KEYCLOAK_POSTGRES_PASSWORD
   ghcr_dockerconfigjson: '{"auths":{"ghcr.io":{"auth":"REPLACE_WITH_GHCR_AUTH_BASE64"}}}'
   keycloak:
+    # Match the credential keys in keycloak-desired-state.yaml. Use {} when
+    # identity_providers in desired state is [] for local accounts only.
+    identity_providers:
+      google:
+        client_id: REPLACE_WITH_GOOGLE_CLIENT_ID
+        client_secret: REPLACE_WITH_GOOGLE_CLIENT_SECRET
+    # Required when local_accounts.verify_email or reset_password_allowed is true.
+    smtp:
+      host: REPLACE_WITH_SMTP_HOST
+      port: 465
+      from: REPLACE_WITH_SMTP_FROM_EMAIL
+      from_display_name: REPLACE_WITH_BRAND_NAME
+      username: REPLACE_WITH_SMTP_USERNAME
+      password: REPLACE_WITH_SMTP_PASSWORD
+      tls: true
     reconciler_client_secret: REPLACE_WITH_KEYCLOAK_RECONCILER_CLIENT_SECRET_BASE64URL
     backoffice_client_secret: REPLACE_WITH_KEYCLOAK_BACKOFFICE_CLIENT_SECRET_BASE64URL
     wallet_authorizer_client_secret: REPLACE_WITH_KEYCLOAK_WALLET_AUTHORIZER_CLIENT_SECRET_BASE64URL

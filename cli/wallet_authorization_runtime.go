@@ -19,7 +19,7 @@ import (
 
 const (
 	walletAuthorizerClientID                = "noebs-wallet-authorizer"
-	walletAuthorizerRequiredACR             = "urn:noebs:acr:google-totp"
+	walletAuthorizerRequiredACR             = "urn:noebs:acr:mfa"
 	walletAuthorizationFlowCookieName       = "__Host-noebs_wallet_authorization_flow"
 	walletAuthorizationBrowserStartPath     = "/wallet/authorizations/browser"
 	walletAuthorizationCallbackPath         = "/wallet/authorizations/oauth/callback"

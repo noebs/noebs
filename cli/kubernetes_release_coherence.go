@@ -123,6 +123,9 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 	if apiGateway.KeycloakProxyTrustedAddresses != keycloakValues["proxy-trusted-addresses"] {
 		return errors.New("Keycloak proxy trust does not match the explicit release source address")
 	}
+	if apiGateway.MobileRedirectURL != origin+mobileOAuthCallbackPath {
+		return errors.New("api-gateway mobile redirect URL does not match the release Keycloak boundary")
+	}
 	if apiGateway.WalletAuthorizerRedirectURL != origin+"/wallet/authorizations/oauth/callback" {
 		return errors.New("api-gateway wallet authorizer redirect URL does not match the Keycloak client boundary")
 	}

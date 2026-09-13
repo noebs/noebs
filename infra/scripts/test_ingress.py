@@ -231,11 +231,14 @@ class IngressBehaviorTests(unittest.TestCase):
         metadata = ['.well-known/openid-configuration', 'protocol/openid-connect/certs']
         gets = ['protocol/openid-connect/userinfo', 'protocol/openid-connect/auth',
                 'protocol/openid-connect/logout', 'login-actions/authenticate',
-                'login-actions/required-action', 'login-actions/restart',
+                'login-actions/registration', 'login-actions/reset-credentials',
+                'login-actions/required-action', 'login-actions/restart', 'login-actions/action-token',
                 'login-actions/first-broker-login', 'login-actions/post-broker-login',
                 'broker/google/login', 'broker/google/endpoint',
+                'broker/customer-idp/login', 'broker/customer-idp/endpoint',
                 'broker/after-first-broker-login', 'broker/after-post-broker-login']
         posts = ['protocol/openid-connect/token', 'login-actions/authenticate',
+                 'login-actions/registration', 'login-actions/reset-credentials',
                  'login-actions/required-action', 'login-actions/first-broker-login',
                  'login-actions/post-broker-login', 'broker/after-post-broker-login']
         allow = {('/auth/realms/noebs/' + path, method) for paths, methods in [
@@ -246,7 +249,11 @@ class IngressBehaviorTests(unittest.TestCase):
             '/auth', '/auth/', '/auth/admin/', '/auth/realms/master/.well-known/openid-configuration',
             '/auth/realms/noebs/account', '/auth/realms/noebs/protocol/openid-connect/token/introspect',
             '/auth/realms/noebs/protocol/openid-connect/revoke', '/auth/realms/noebs/protocol/openid-connect/auth/extra',
-            '/auth/realms/noebs/broker/evil/endpoint', '/auth/resources', '/auth%2Fadmin', '/auth//admin'}
+            '/auth/realms/noebs/broker/UPPER/endpoint',
+            '/auth/realms/noebs/broker/-invalid/endpoint',
+            '/auth/realms/noebs/broker/' + 'a' * 64 + '/endpoint',
+            '/auth/realms/noebs/broker/customer-idp/endpoint/extra',
+            '/auth/realms/noebs/broker/customer-idp/token', '/auth/resources', '/auth%2Fadmin', '/auth//admin'}
         with self.proxy() as port:
             for path in sorted(paths):
                 for method in ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'TRACE']:

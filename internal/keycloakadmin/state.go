@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/adonese/noebs/internal/tenantcatalog"
@@ -20,9 +21,9 @@ const (
 	temporalIdentityClientID       = "noebs-temporal-identity-auth"
 	temporalIdentityWorkerClientID = "noebs-temporal-identity-worker"
 	temporalBootstrapClientID      = "noebs-temporal-namespace-bootstrap"
-	googleACR                      = "urn:noebs:acr:google"
-	googleTOTPACR                  = "urn:noebs:acr:google-totp"
-	acrLoAMap                      = `{"urn:noebs:acr:google":1,"urn:noebs:acr:google-totp":2}`
+	primaryACR                     = "urn:noebs:acr:primary"
+	mfaACR                         = "urn:noebs:acr:mfa"
+	acrLoAMap                      = `{"urn:noebs:acr:primary":1,"urn:noebs:acr:mfa":2}`
 )
 
 var (
@@ -39,6 +40,7 @@ type Config struct {
 	ClientSecret      string                                `yaml:"client_secret"`
 	ClientCredentials map[string]ClientCredential           `yaml:"client_credentials"`
 	IdentityProviders map[string]IdentityProviderCredential `yaml:"identity_providers"`
+	SMTP              *SMTPConfig                           `yaml:"smtp"`
 }
 
 type ClientCredential struct {
@@ -82,7 +84,15 @@ type Realm struct {
 	RefreshTokenMaxReuse         int    `yaml:"refresh_token_max_reuse"`
 }
 
+type LocalAccounts struct {
+	RegistrationAllowed   bool `yaml:"registration_allowed"`
+	ResetPasswordAllowed  bool `yaml:"reset_password_allowed"`
+	VerifyEmail           bool `yaml:"verify_email"`
+	MinimumPasswordLength int  `yaml:"minimum_password_length"`
+}
+
 type Authentication struct {
+	LocalAccounts        LocalAccounts         `yaml:"local_accounts"`
 	BrowserFlow          string                `yaml:"browser_flow"`
 	FirstBrokerLoginFlow string                `yaml:"first_broker_login_flow"`
 	PostBrokerLoginFlow  string                `yaml:"post_broker_login_flow"`
@@ -213,20 +223,20 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("%w: admin_realm must be master or noebs", ErrInvalidConfig)
 	}
-	providerNames := make(map[string]struct{}, len(c.IdentityProviders))
-	for name := range c.IdentityProviders {
-		providerNames[name] = struct{}{}
-	}
-	if !exactStringSet(providerNames, "google") {
-		return fmt.Errorf("%w: identity_providers must contain only google", ErrInvalidConfig)
-	}
-	for _, name := range []string{"google"} {
-		credential := c.IdentityProviders[name]
+	for name, credential := range c.IdentityProviders {
+		if !providerAliasPattern.MatchString(name) {
+			return fmt.Errorf("%w: invalid identity provider credential name", ErrInvalidConfig)
+		}
 		if err := validateValue("identity_providers."+name+".client_id", credential.ClientID); err != nil {
 			return fmt.Errorf("%w: %v", ErrInvalidConfig, err)
 		}
 		if err := validateValue("identity_providers."+name+".client_secret", credential.ClientSecret); err != nil {
 			return fmt.Errorf("%w: %v", ErrInvalidConfig, err)
+		}
+	}
+	if c.SMTP != nil {
+		if err := c.SMTP.Validate(); err != nil {
+			return err
 		}
 	}
 	clientNames := make(map[string]struct{}, len(c.ClientCredentials))
@@ -300,13 +310,20 @@ func (s DesiredState) Validate() error {
 	}
 	if s.Authentication.BrowserFlow != "noebs-browser" ||
 		s.Authentication.FirstBrokerLoginFlow != "noebs-first-broker-login" ||
-		s.Authentication.PostBrokerLoginFlow != "noebs-google-post-broker" {
-		return fmt.Errorf("%w: authentication must bind the repository-owned browser, first-broker, and Google post-broker flows", ErrInvalidDesiredState)
+		s.Authentication.PostBrokerLoginFlow != "noebs-post-broker" {
+		return fmt.Errorf("%w: authentication must bind the repository-owned browser, first-broker, and post-broker flows", ErrInvalidDesiredState)
+	}
+	local := s.Authentication.LocalAccounts
+	if local.MinimumPasswordLength < 12 || local.MinimumPasswordLength > 128 {
+		return fmt.Errorf("%w: authentication.local_accounts.minimum_password_length must be between 12 and 128", ErrInvalidDesiredState)
+	}
+	if local.ResetPasswordAllowed && !local.VerifyEmail {
+		return fmt.Errorf("%w: email verification is required when password recovery is enabled", ErrInvalidDesiredState)
 	}
 	levels := s.Authentication.Levels
 	if len(levels) != 2 ||
-		levels[0].ACR != googleACR || levels[0].Level != 1 || levels[0].MaxAgeSeconds != s.Realm.SSOSessionMaxLifespanSeconds ||
-		levels[1].ACR != googleTOTPACR || levels[1].Level != 2 || levels[1].MaxAgeSeconds != 0 {
+		levels[0].ACR != primaryACR || levels[0].Level != 1 || levels[0].MaxAgeSeconds != s.Realm.SSOSessionMaxLifespanSeconds ||
+		levels[1].ACR != mfaACR || levels[1].Level != 2 || levels[1].MaxAgeSeconds != 0 {
 		return fmt.Errorf("%w: authentication.levels must declare reusable LoA1 followed by one-request LoA2 with max age zero", ErrInvalidDesiredState)
 	}
 	otp := s.Authentication.OTP
@@ -475,9 +492,6 @@ func (s DesiredState) Validate() error {
 	if !exactStringSet(serviceClientIDs, temporalLedgerClientID, temporalWorkerClientID, temporalIdentityClientID, temporalIdentityWorkerClientID, temporalBootstrapClientID) {
 		return fmt.Errorf("%w: service_clients must contain the exact Temporal client set", ErrInvalidDesiredState)
 	}
-	if len(s.IdentityProviders) == 0 {
-		return fmt.Errorf("%w: identity_providers is required", ErrInvalidDesiredState)
-	}
 	providerAliases := make(map[string]struct{}, len(s.IdentityProviders))
 	for providerIndex, provider := range s.IdentityProviders {
 		prefix := fmt.Sprintf("identity_providers[%d]", providerIndex)
@@ -494,6 +508,12 @@ func (s DesiredState) Validate() error {
 		if _, exists := providerAliases[provider.Alias]; exists {
 			return fmt.Errorf("%w: duplicate identity provider alias %q", ErrInvalidDesiredState, provider.Alias)
 		}
+		if !providerAliasPattern.MatchString(provider.Alias) || !providerAliasPattern.MatchString(provider.Credential) {
+			return fmt.Errorf("%w: %s alias and credential must be lowercase provider names", ErrInvalidDesiredState, prefix)
+		}
+		if err := validateIdentityProvider(provider); err != nil {
+			return err
+		}
 		providerAliases[provider.Alias] = struct{}{}
 		if len(provider.Config) == 0 {
 			return fmt.Errorf("%w: %s.config is required", ErrInvalidDesiredState, prefix)
@@ -509,21 +529,6 @@ func (s DesiredState) Validate() error {
 				return fmt.Errorf("%w: %v", ErrInvalidDesiredState, err)
 			}
 		}
-	}
-	if !exactStringSet(providerAliases, "google") {
-		return fmt.Errorf("%w: identity_providers must contain only google", ErrInvalidDesiredState)
-	}
-	provider := s.IdentityProviders[0]
-	if provider.Alias != "google" || provider.ProviderID != "google" || provider.Credential != "google" {
-		return fmt.Errorf("%w: google identity provider alias, provider_id, and credential must all be %q", ErrInvalidDesiredState, "google")
-	}
-	if !exactStringMap(provider.Config, map[string]string{
-		"defaultScope":      "openid profile email",
-		"forwardParameters": "login_hint",
-		"issuer":            "https://accounts.google.com",
-		"syncMode":          "IMPORT",
-	}) {
-		return fmt.Errorf("%w: google identity provider config must declare the exact issuer, scopes, forwarding allowlist, and import mode", ErrInvalidDesiredState)
 	}
 	if len(s.Organizations) == 0 {
 		return fmt.Errorf("%w: organizations is required", ErrInvalidDesiredState)
@@ -797,4 +802,59 @@ func exactStringMap(values, expected map[string]string) bool {
 		}
 	}
 	return true
+}
+
+var providerAliasPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+
+func validateIdentityProvider(provider IdentityProvider) error {
+	required := map[string]string{"defaultScope": "openid profile email", "forwardParameters": "login_hint", "syncMode": "IMPORT"}
+	switch provider.ProviderID {
+	case "google":
+		required["issuer"] = "https://accounts.google.com"
+	case "oidc":
+		required["validateSignature"] = "true"
+		required["useJwksUrl"] = "true"
+		required["pkceEnabled"] = "true"
+		required["pkceMethod"] = "S256"
+		for _, key := range []string{"issuer", "authorizationUrl", "tokenUrl", "jwksUrl", "userInfoUrl"} {
+			value := provider.Config[key]
+			parsed, err := url.Parse(value)
+			if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+				return fmt.Errorf("%w: identity provider %s requires an absolute HTTPS %s without credentials, query or fragment", ErrInvalidDesiredState, provider.Alias, key)
+			}
+			required[key] = value
+		}
+	default:
+		return fmt.Errorf("%w: identity provider %s must use google or oidc", ErrInvalidDesiredState, provider.Alias)
+	}
+	if !exactStringMap(provider.Config, required) {
+		return fmt.Errorf("%w: identity provider %s must declare its exact secure OIDC configuration and login_hint forwarding allowlist", ErrInvalidDesiredState, provider.Alias)
+	}
+	return nil
+}
+
+// ValidateForState checks all runtime dependencies before reconciliation mutates Keycloak.
+func (c Config) ValidateForState(state DesiredState) error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	if err := state.Validate(); err != nil {
+		return err
+	}
+	required := make(map[string]struct{}, len(state.IdentityProviders))
+	for _, provider := range state.IdentityProviders {
+		required[provider.Credential] = struct{}{}
+		if _, found := c.IdentityProviders[provider.Credential]; !found {
+			return fmt.Errorf("%w: identity provider credential %q is required", ErrInvalidConfig, provider.Credential)
+		}
+	}
+	for name := range c.IdentityProviders {
+		if _, found := required[name]; !found {
+			return fmt.Errorf("%w: identity provider credential %q is outside desired state", ErrInvalidConfig, name)
+		}
+	}
+	if (state.Authentication.LocalAccounts.VerifyEmail || state.Authentication.LocalAccounts.ResetPasswordAllowed) && c.SMTP == nil {
+		return fmt.Errorf("%w: smtp is required for email verification and password recovery", ErrInvalidConfig)
+	}
+	return nil
 }

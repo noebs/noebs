@@ -31,6 +31,7 @@ func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 	noebsConfig.ChatEnabled = true
 	noebsConfig.OIDC.Issuer = "https://identity.example/realms/noebs"
 	noebsConfig.OIDC.Audience = "noebs-api"
+	noebsConfig.MobileRedirectURL = "https://customer.example/mobile/oauth/callback"
 
 	route := GetMainEngine()
 	req := httptest.NewRequest(http.MethodGet, "/app/config", nil)
@@ -75,7 +76,7 @@ func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 	}
 	if payload.OAuth.Issuer != noebsConfig.OIDC.Issuer || payload.OAuth.ClientID != "noebs-mobile" || payload.OAuth.Audience != "noebs-api" ||
 		!slices.Equal(payload.OAuth.Scopes, []string{"openid", "organization:*"}) ||
-		payload.OAuth.RedirectURI != "https://api.noebs.sd/mobile/oauth/callback" {
+		payload.OAuth.RedirectURI != "https://customer.example/mobile/oauth/callback" {
 		t.Fatalf("oauth = %+v, want Keycloak mobile client metadata", payload.OAuth)
 	}
 
@@ -89,7 +90,7 @@ func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 }
 
 func TestPublicAppConfigCapabilitiesDefaultOff(t *testing.T) {
-	payload, err := publicAppConfig(ebs_fields.NoebsConfig{DefaultTenantID: "tenant-1"})
+	payload, err := publicAppConfig(ebs_fields.NoebsConfig{DefaultTenantID: "tenant-1", MobileRedirectURL: "https://customer.example/mobile/oauth/callback"})
 	if err != nil {
 		t.Fatalf("publicAppConfig(): %v", err)
 	}
@@ -112,5 +113,15 @@ func TestPublicAppConfigRejectsDefaultTenant(t *testing.T) {
 	_, err := publicAppConfig(ebs_fields.NoebsConfig{DefaultTenantID: "default"})
 	if !errors.Is(err, store.ErrInvalidTenantID) {
 		t.Fatalf("error = %v, want %v", err, store.ErrInvalidTenantID)
+	}
+}
+
+func TestPublicAppConfigRejectsInvalidMobileCallback(t *testing.T) {
+	for _, callback := range []string{"", "http://customer.example/mobile/oauth/callback", "https://customer.example/other", "https://customer.example/mobile/oauth/callback?tenant=other", "https://customer.example/mobile/oauth/callback#fragment"} {
+		t.Run(callback, func(t *testing.T) {
+			if _, err := publicAppConfig(ebs_fields.NoebsConfig{DefaultTenantID: "tenant-1", MobileRedirectURL: callback}); err == nil {
+				t.Fatal("invalid mobile callback was accepted")
+			}
+		})
 	}
 }
