@@ -19,7 +19,7 @@ import (
 
 func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "noebs")
 	outputRoot := filepath.Join(t.TempDir(), "missing-parent", "release")
 
 	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
@@ -96,15 +96,26 @@ func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 	if got := firstString(apiNoebs, "wallet_authorizer_client_secret"); got != wantWalletAuthorizer {
 		t.Fatalf("api-gateway wallet authorizer secret = %q", got)
 	}
+	if firstString(apiNoebs, "web_client_secret") != testCanonicalReleaseSecret(132) {
+		t.Fatal("account web secret did not reach the gateway")
+	}
+	if _, present := apiNoebs["account_enrollment"]; present {
+		t.Fatal("enrollment authority credential reached the gateway")
+	}
+	identityNoebs := getMap(readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "identity-auth.secrets.yaml")), "noebs")
+	enrollment := getMap(identityNoebs, "account_enrollment")
+	if firstString(enrollment, "keycloak_client_secret") != testCanonicalReleaseSecret(133) || firstString(enrollment, "keycloak_client_id") != "noebs-account-enroller" {
+		t.Fatal("enrollment credential did not reach its identity-auth owner")
+	}
 	routes := getMap(apiNoebs, "psp_webhook_routes")
-	if route := getMap(routes, testCanonicalReleaseSecret(11)); firstString(route, "tenant_id") != "tenant-cutover" || firstString(route, "provider_code") != "test-provider" {
+	if route := getMap(routes, testCanonicalReleaseSecret(11)); firstString(route, "tenant_id") != "noebs" || firstString(route, "provider_code") != "test-provider" {
 		t.Fatalf("api-gateway PSP webhook routes = %#v", routes)
 	}
 	pspSecret := getMap(readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "psp-webhook.secrets.yaml")), "noebs")
 	if _, present := pspSecret["psp_webhook_routes"]; present {
 		t.Fatal("psp-webhook secret contains gateway callback routes")
 	}
-	provider := getMap(getMap(getMap(pspSecret, "psp"), "tenant-cutover"), "test-provider")
+	provider := getMap(getMap(getMap(pspSecret, "psp"), "noebs"), "test-provider")
 	if _, present := provider["callback_id"]; present {
 		t.Fatal("PSP provider credential map contains public callback authority")
 	}
@@ -131,8 +142,8 @@ func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 
 func TestPrepareKubernetesReleaseRejectsDuplicatePSPCallbackID(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
-	inputs.Noebs.PSP["tenant-cutover"]["second-provider"] = pspSecret{
+	inputs := newTestKubernetesReleaseInputs(t, "noebs")
+	inputs.Noebs.PSP["noebs"]["second-provider"] = pspSecret{
 		CallbackID: testCanonicalReleaseSecret(11), APIKey: "key", APISecret: "secret", WebhookSecret: "webhook", WebhookPublicKey: "public",
 	}
 	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
@@ -145,10 +156,10 @@ func TestPrepareKubernetesReleaseRejectsDuplicatePSPCallbackID(t *testing.T) {
 
 func TestPrepareKubernetesReleaseRejectsInvalidPSPProviderCode(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
-	provider := inputs.Noebs.PSP["tenant-cutover"]["test-provider"]
-	delete(inputs.Noebs.PSP["tenant-cutover"], "test-provider")
-	inputs.Noebs.PSP["tenant-cutover"]["test_provider"] = provider
+	inputs := newTestKubernetesReleaseInputs(t, "noebs")
+	provider := inputs.Noebs.PSP["noebs"]["test-provider"]
+	delete(inputs.Noebs.PSP["noebs"], "test-provider")
+	inputs.Noebs.PSP["noebs"]["test_provider"] = provider
 	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
 
 	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), filepath.Join(t.TempDir(), "release"), readPlainPreflightSecret, plainKubernetesSecretEncrypt)
@@ -159,7 +170,7 @@ func TestPrepareKubernetesReleaseRejectsInvalidPSPProviderCode(t *testing.T) {
 
 func TestPrepareKubernetesReleaseRejectsUnsafeEBSEndpoint(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+	inputs := newTestKubernetesReleaseInputs(t, "noebs")
 	inputs.Noebs.EBS.ConsumerEndpoint = "http://consumer.input.example"
 	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
 
@@ -171,15 +182,15 @@ func TestPrepareKubernetesReleaseRejectsUnsafeEBSEndpoint(t *testing.T) {
 
 func TestPrepareKubernetesReleaseValidatesEveryPSPProvider(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
-	inputs.Noebs.PSP["tenant-cutover"]["a-provider"] = pspSecret{
+	inputs := newTestKubernetesReleaseInputs(t, "noebs")
+	inputs.Noebs.PSP["noebs"]["a-provider"] = pspSecret{
 		CallbackID:       testCanonicalReleaseSecret(13),
 		APIKey:           "api-key",
 		APISecret:        "api-secret",
 		WebhookSecret:    "webhook-secret",
 		WebhookPublicKey: "webhook-public-key",
 	}
-	inputs.Noebs.PSP["tenant-cutover"]["z-provider"] = pspSecret{
+	inputs.Noebs.PSP["noebs"]["z-provider"] = pspSecret{
 		CallbackID:    testCanonicalReleaseSecret(14),
 		APIKey:        "api-key",
 		APISecret:     "api-secret",
@@ -188,14 +199,15 @@ func TestPrepareKubernetesReleaseValidatesEveryPSPProvider(t *testing.T) {
 	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
 
 	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), filepath.Join(t.TempDir(), "release"), readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err == nil || !strings.Contains(err.Error(), "noebs.psp.tenant-cutover.z-provider missing webhook_public_key") {
+	if err == nil || !strings.Contains(err.Error(), "noebs.psp.noebs.z-provider missing webhook_public_key") {
 		t.Fatalf("prepareKubernetesRelease() error = %v, want incomplete second PSP provider rejection", err)
 	}
 }
 
 func TestPrepareKubernetesReleaseValidatesNonDefaultTenantPSPProvider(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+	source := releaseSourceWithSyntheticTenant(t)
+	inputs := newTestKubernetesReleaseInputs(t, "noebs")
 	inputs.Noebs.PSP["tenant-sandbox"] = map[string]pspSecret{
 		"sandbox-provider": {
 			CallbackID:       testCanonicalReleaseSecret(13),
@@ -206,10 +218,46 @@ func TestPrepareKubernetesReleaseValidatesNonDefaultTenantPSPProvider(t *testing
 	}
 	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
 
-	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), filepath.Join(t.TempDir(), "release"), readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	err := prepareKubernetesRelease(source, inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), filepath.Join(t.TempDir(), "release"), readPlainPreflightSecret, plainKubernetesSecretEncrypt)
 	if err == nil || !strings.Contains(err.Error(), "noebs.psp.tenant-sandbox.sandbox-provider missing api_secret") {
 		t.Fatalf("prepareKubernetesRelease() error = %v, want incomplete non-default-tenant PSP provider rejection", err)
 	}
+}
+
+// The production catalog contains only Noebs. Add a second tenant only inside
+// this fixture to retain validation coverage for non-default provider secrets.
+func releaseSourceWithSyntheticTenant(t *testing.T) string {
+	t.Helper()
+	source := t.TempDir()
+	for _, relative := range []string{
+		"infra/kubernetes/base/configmap.yaml",
+		"infra/kubernetes/keycloak-authority/tenant-catalog.yaml",
+		"infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml",
+		"deploy/docker/postgres/001-service-databases.sql",
+	} {
+		payload, err := os.ReadFile(filepath.Join("..", relative))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasSuffix(relative, "tenant-catalog.yaml") {
+			payload = append(payload, []byte("  - id: tenant-sandbox\n    name: Synthetic Tenant\n")...)
+		}
+		if strings.HasSuffix(relative, "keycloak-desired-state.yaml") {
+			var state keycloakadmin.DesiredState
+			if err := yaml.Unmarshal(payload, &state); err != nil {
+				t.Fatal(err)
+			}
+			organization := state.Organizations[0]
+			organization.Alias, organization.Name = "tenant-sandbox", "Synthetic Tenant"
+			state.Organizations = append(state.Organizations, organization)
+			payload, err = yaml.Marshal(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		writePreflightFile(t, source, relative, string(payload))
+	}
+	return source
 }
 
 func TestPrepareKubernetesReleaseRejectsUnknownTenant(t *testing.T) {
@@ -226,7 +274,7 @@ func TestPrepareKubernetesReleaseRejectsUnknownTenant(t *testing.T) {
 
 func TestPrepareKubernetesReleaseRejectsNoncanonicalTenant(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, " tenant-cutover ")
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, " noebs ")
 	outputRoot := filepath.Join(t.TempDir(), "release")
 
 	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
@@ -280,7 +328,7 @@ func TestPrepareKubernetesReleaseRejectsMissingExplicitAuthority(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inputRoot := t.TempDir()
-			inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+			inputs := newTestKubernetesReleaseInputs(t, "noebs")
 			tt.edit(&inputs)
 			inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
 			outputRoot := filepath.Join(t.TempDir(), "release")
@@ -296,7 +344,7 @@ func TestPrepareKubernetesReleaseRejectsMissingExplicitAuthority(t *testing.T) {
 
 func TestPrepareKubernetesReleaseRejectsNonEmptyOutputRoot(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "noebs")
 	outputRoot := t.TempDir()
 	writePreflightFile(t, outputRoot, "stale", "do not overwrite")
 
@@ -308,7 +356,7 @@ func TestPrepareKubernetesReleaseRejectsNonEmptyOutputRoot(t *testing.T) {
 
 func TestPrepareKubernetesReleaseRemovesSensitiveStagingAfterValidationFailure(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "noebs")
 	outputParent := t.TempDir()
 	outputRoot := filepath.Join(outputParent, "release")
 	injectedErr := errors.New("injected release validation failure")
@@ -345,7 +393,7 @@ func TestPrepareKubernetesReleaseRemovesSensitiveStagingAfterValidationFailure(t
 
 func TestPrepareKubernetesReleaseRejectsExistingEmptyOutputRoot(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "noebs")
 	outputParent := t.TempDir()
 	outputRoot := filepath.Join(outputParent, "release")
 	if err := os.Mkdir(outputRoot, 0o711); err != nil {
@@ -363,7 +411,7 @@ func TestPrepareKubernetesReleaseRejectsExistingEmptyOutputRoot(t *testing.T) {
 
 func TestPrepareKubernetesReleaseRejectsDanglingOutputSymlink(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "noebs")
 	outputParent := t.TempDir()
 	outputRoot := filepath.Join(outputParent, "release")
 	if err := os.Symlink(filepath.Join(outputParent, "missing-target"), outputRoot); err != nil {
@@ -386,7 +434,7 @@ func TestPrepareKubernetesReleaseRejectsDanglingOutputSymlink(t *testing.T) {
 
 func TestPrepareKubernetesReleasePreservesConcurrentDestination(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "noebs")
 	outputParent := t.TempDir()
 	outputRoot := filepath.Join(outputParent, "release")
 	createdDestination := false
@@ -460,7 +508,7 @@ func TestKubernetesReleaseInputsExampleMatchesStrictSchema(t *testing.T) {
 
 func TestKubernetesReleaseManifestRejectsSplicedArtifact(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "noebs")
 	outputRoot := filepath.Join(t.TempDir(), "release")
 	if err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt); err != nil {
 		t.Fatal(err)
@@ -555,6 +603,8 @@ func newTestKubernetesReleaseInputs(t *testing.T, tenantID string) kubernetesRel
 			SMTP:                               &keycloakadmin.SMTPConfig{Host: "smtp.example.test", Port: 465, From: "accounts@example.test", FromDisplayName: "Test Accounts", Username: "accounts", Password: "smtp-secret", TLS: true},
 			ReconcilerClientSecret:             testCanonicalReleaseSecret(1),
 			BackofficeClientSecret:             testCanonicalReleaseSecret(2),
+			WebClientSecret:                    testCanonicalReleaseSecret(132),
+			AccountEnrollerClientSecret:        testCanonicalReleaseSecret(133),
 			WalletAuthorizerClientSecret:       testCanonicalReleaseSecret(12),
 			TemporalLedgerClientSecret:         testCanonicalReleaseSecret(13),
 			TemporalWorkerClientSecret:         testCanonicalReleaseSecret(14),
@@ -681,7 +731,7 @@ func TestKeycloakReleaseCredentialsMatchEnabledProviders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+			inputs := newTestKubernetesReleaseInputs(t, "noebs")
 			wantError := false
 			switch name {
 			case "local accounts only":

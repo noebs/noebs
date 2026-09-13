@@ -28,7 +28,7 @@ func TestPrepareKubernetesReleaseScopesSMTPEgress(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			inputRoot := t.TempDir()
-			inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+			inputs := newTestKubernetesReleaseInputs(t, "noebs")
 			source := ".."
 			if test.host == "" {
 				inputs.Noebs.Keycloak.SMTP = nil
@@ -104,7 +104,7 @@ func TestPrepareKubernetesReleaseRejectsInvalidSMTPBeforePublishing(t *testing.T
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			inputRoot := t.TempDir()
-			inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+			inputs := newTestKubernetesReleaseInputs(t, "noebs")
 			test.mutate(&inputs)
 			inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
 			root := filepath.Join(t.TempDir(), "release")
@@ -128,7 +128,7 @@ func TestPrepareKubernetesReleaseRejectsInvalidSMTPBeforePublishing(t *testing.T
 
 func TestKubernetesReleaseRejectsAlteredSMTPEgress(t *testing.T) {
 	inputRoot := t.TempDir()
-	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+	inputs := newTestKubernetesReleaseInputs(t, "noebs")
 	inputs.Noebs.Keycloak.SMTP.Host = "100.101.102.103"
 	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
 	root := filepath.Join(t.TempDir(), "release")

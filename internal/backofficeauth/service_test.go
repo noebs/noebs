@@ -442,7 +442,7 @@ type testRepository interface {
 	SessionRepository
 }
 
-func serviceForTest(t testing.TB, clock Clock, repository testRepository, oauthClient *OAuthClient) *Service {
+func serviceForTest(t testing.TB, clock Clock, repository testRepository, oauthClient *OAuthClient, allowUnenrolled ...bool) *Service {
 	t.Helper()
 	key := make([]byte, aes256KeyBytes)
 	if _, err := rand.Read(key); err != nil {
@@ -464,19 +464,20 @@ func serviceForTest(t testing.TB, clock Clock, repository testRepository, oauthC
 		t.Fatal(err)
 	}
 	service, err := NewService(ServiceConfig{
-		Flows:            repository,
-		Sessions:         repository,
-		OAuth:            oauthClient,
-		Keys:             keys,
-		Cookies:          cookies,
-		Clock:            clock,
-		Entropy:          rand.Reader,
-		FlowTTL:          5 * time.Minute,
-		IdleTTL:          30 * time.Minute,
-		AbsoluteTTL:      8 * time.Hour,
-		RefreshSkew:      time.Minute,
-		TouchInterval:    time.Minute,
-		ReturnPathPrefix: "/backoffice/",
+		Flows:                   repository,
+		Sessions:                repository,
+		OAuth:                   oauthClient,
+		Keys:                    keys,
+		Cookies:                 cookies,
+		Clock:                   clock,
+		Entropy:                 rand.Reader,
+		FlowTTL:                 5 * time.Minute,
+		IdleTTL:                 30 * time.Minute,
+		AbsoluteTTL:             8 * time.Hour,
+		RefreshSkew:             time.Minute,
+		TouchInterval:           time.Minute,
+		ReturnPathPrefix:        "/backoffice/",
+		AllowUnenrolledAccounts: len(allowUnenrolled) == 1 && allowUnenrolled[0],
 	})
 	if err != nil {
 		t.Fatal(err)

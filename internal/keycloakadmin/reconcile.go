@@ -254,6 +254,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, state DesiredState) (Result,
 	if err := reconcileExactClientScopes(ctx, session, state.Realm.Name, reconcilerClient, "optional", nil, &result); err != nil {
 		return Result{}, err
 	}
+	if state.EnrollmentClient != nil {
+		// Provision a separate service account for identity-auth. Reuse exact
+		// scope/role convergence without sharing the realm-admin credential.
+		enrollmentState := state
+		enrollmentState.ReconcilerClient = *state.EnrollmentClient
+		enroller, err := reconcileReconcilerClient(ctx, session, enrollmentState, r.config.ClientCredentials, &result)
+		if err != nil {
+			return Result{}, err
+		}
+		if err := reconcileExactClientProtocolMappers(ctx, session, state.Realm.Name, enroller, nil, &result); err != nil {
+			return Result{}, err
+		}
+		if err := reconcileExactClientScopes(ctx, session, state.Realm.Name, enroller, "default", []string{"roles"}, &result); err != nil {
+			return Result{}, err
+		}
+		if err := reconcileExactClientScopes(ctx, session, state.Realm.Name, enroller, "optional", nil, &result); err != nil {
+			return Result{}, err
+		}
+	}
 	if err := reconcileRealmRoles(ctx, session, state, &result); err != nil {
 		return Result{}, err
 	}
@@ -805,6 +824,9 @@ func reconcileInteractiveClients(ctx context.Context, session *adminSession, sta
 		}
 		mappers := []protocolMapperRepresentation{audienceMapper(state.ResourceClient.ClientID), subjectMapper()}
 		optionalScopes := []string{state.OrganizationClaim.ClientScope}
+		if desired.ClientID == "noebs-web" {
+			optionalScopes = append(optionalScopes, "profile", "email")
+		}
 		if desired.ClientID == walletAuthorizerClientID {
 			mappers = []protocolMapperRepresentation{authenticationTimeMapper()}
 			optionalScopes = nil
@@ -1090,6 +1112,9 @@ func reconcileExactClientScopes(ctx context.Context, session *adminSession, real
 
 func reconcileExactClients(ctx context.Context, session *adminSession, state DesiredState, interactive, service []clientRepresentation, resource, reconciler clientRepresentation, result *Result) error {
 	keep := map[string]struct{}{resource.ClientID: {}, reconciler.ClientID: {}}
+	if state.EnrollmentClient != nil {
+		keep[state.EnrollmentClient.ClientID] = struct{}{}
+	}
 	for _, client := range interactive {
 		keep[client.ClientID] = struct{}{}
 	}

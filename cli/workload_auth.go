@@ -295,6 +295,8 @@ func workloadCapabilities(role serviceRole) []workloadCapability {
 	}
 	switch role {
 	case serviceRoleIdentityAuth:
+		add(string(serviceRoleAPIGateway), http.MethodGet, accountContextInternalPath)
+		add(string(serviceRoleAPIGateway), http.MethodPost, accountEnrollmentInternalPath)
 		add(string(serviceRoleAPIGateway), http.MethodPost, "/internal/identity-auth/principals/resolve")
 		add(string(serviceRoleAPIGateway), http.MethodPost, "/internal/identity-auth/accounts/display-name")
 	case serviceRoleCardVault:

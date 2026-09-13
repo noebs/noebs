@@ -2,6 +2,10 @@
 # Uses age encryption (modern replacement for PGP)
 
 creation_rules:
+  # Release infrastructure retains both existing deployment operators.
+  - path_regex: ^infra/exe/release\.secrets\.yaml$
+    age: age1jmq9nl0haxetduys37jfj7ha93vee9pd7me7mtyw5ztm4n8flyrse3mwum,age1haq4w7h3xh2cm73yesfrv82drmhhdwqmykr3hccltaac582ggdhqlruhra
+
   # Mail infrastructure retains both existing deployment operators.
   - path_regex: ^infra/mail/.*secrets.*\.yaml$
     age: age1jmq9nl0haxetduys37jfj7ha93vee9pd7me7mtyw5ztm4n8flyrse3mwum,age1haq4w7h3xh2cm73yesfrv82drmhhdwqmykr3hccltaac582ggdhqlruhra

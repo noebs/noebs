@@ -109,6 +109,7 @@ func TestRealKeycloak26_7Reconcile(t *testing.T) {
 		t.Fatalf("second real Reconcile() result = %#v", second)
 	}
 	assertRealKeycloakAuthority(t, steady, state)
+	t.Run("AccountEnrollmentAuthority", func(t *testing.T) { assertRealAccountEnrollmentAuthority(t, steady, state) })
 	if !t.Run("NativeLocalAccounts", func(t *testing.T) {
 		assertRealLocalAccounts(t, baseURL, transport, steady, state, mailbox)
 	}) {

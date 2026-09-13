@@ -21,9 +21,7 @@ func TestRepositoryCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Tenant{
-		{ID: "tenant-cutover", Name: "Tenant Cutover"},
-		{ID: "tenant-mojaloop", Name: "Mojaloop Synthetic Demo"},
-		{ID: "tenant-sandbox", Name: "Tenant Sandbox"},
+		{ID: "noebs", Name: "Noebs"},
 	}
 	if got := catalog.All(); !slices.Equal(got, want) {
 		t.Fatalf("catalog = %#v, want %#v", got, want)

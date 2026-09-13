@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/adonese/noebs/internal/accountenrollment"
 	"github.com/adonese/noebs/internal/oidcauth"
 	"github.com/adonese/noebs/internal/transportauth"
 	"github.com/adonese/noebs/internal/workloadauth"
@@ -910,41 +911,46 @@ type PSPWebhookRoute struct {
 
 // NoebsConfig contains the merged runtime configuration.
 type NoebsConfig struct {
-	ServiceRole                                string                     `json:"service_role"`
-	OIDC                                       oidcauth.RuntimeConfig     `json:"oidc"`
-	MobileRedirectURL                          string                     `json:"mobile_redirect_url"`
-	KeycloakCACertificate                      string                     `json:"keycloak_ca_certificate"`
-	BackofficeClientSecret                     string                     `json:"backoffice_client_secret"`
-	KeycloakProxyTrustedAddresses              string                     `json:"keycloak_proxy_trusted_addresses"`
-	BackofficeRedirectURL                      string                     `json:"backoffice_redirect_url"`
-	BackofficePostLogoutURL                    string                     `json:"backoffice_post_logout_url"`
-	WalletAuthorizerClientSecret               string                     `json:"wallet_authorizer_client_secret"`
-	WalletAuthorizerRedirectURL                string                     `json:"wallet_authorizer_redirect_url"`
-	GatewayAuthEncryptionKeyID                 string                     `json:"gateway_auth_encryption_key_id"`
-	GatewayAuthEncryptionKeys                  map[string]string          `json:"gateway_auth_encryption_keys"`
-	WorkloadAuth                               workloadauth.Config        `json:"workload_auth"`
-	InternalTransport                          transportauth.Config       `json:"internal_transport"`
-	ServiceDiscovery                           map[string]string          `json:"service_discovery"`
-	GRPCServiceDiscovery                       map[string]string          `json:"grpc_service_discovery"`
-	PSPWebhookRoutes                           map[string]PSPWebhookRoute `json:"psp_webhook_routes"`
-	KafkaBrokers                               []string                   `json:"kafka_brokers"`
-	KafkaTransactionTopic                      string                     `json:"kafka_transaction_topic"`
-	KafkaStatusTopic                           string                     `json:"kafka_status_topic"`
-	StatusEventBatchSize                       int                        `json:"status_event_batch_size"`
-	StatusEventPollIntervalMs                  int                        `json:"status_event_poll_interval_ms"`
-	StatusNotificationConsumerGroup            string                     `json:"status_notification_consumer_group"`
-	AdminReportingKafkaConsumerGroup           string                     `json:"admin_reporting_kafka_consumer_group"`
-	EBSTransactionEventPublisherBatchSize      int                        `json:"ebs_transaction_event_publisher_batch_size"`
-	EBSTransactionEventPublisherPollIntervalMs int                        `json:"ebs_transaction_event_publisher_poll_interval_ms"`
-	RuntimeDir                                 string                     `json:"runtime_dir"`
-	DataKey                                    string                     `json:"data_key"`
-	DatabaseURL                                string                     `json:"db_url"`
-	DatabaseDriver                             string                     `json:"db_driver"`
-	DatabaseCACertificate                      string                     `json:"database_ca_certificate"`
-	DefaultTenantID                            string                     `json:"default_tenant_id"`
-	RedisPort                                  string                     `json:"redis_port"`
-	Sentry                                     string                     `json:"sentry"`
-	Port                                       string                     `json:"port"`
+	ServiceRole                                string                          `json:"service_role"`
+	OIDC                                       oidcauth.RuntimeConfig          `json:"oidc"`
+	AccountEnrollment                          accountenrollment.RuntimeConfig `json:"account_enrollment"`
+	MobileRedirectURL                          string                          `json:"mobile_redirect_url"`
+	KeycloakCACertificate                      string                          `json:"keycloak_ca_certificate"`
+	BackofficeClientSecret                     string                          `json:"backoffice_client_secret"`
+	KeycloakProxyTrustedAddresses              string                          `json:"keycloak_proxy_trusted_addresses"`
+	BackofficeRedirectURL                      string                          `json:"backoffice_redirect_url"`
+	BackofficePostLogoutURL                    string                          `json:"backoffice_post_logout_url"`
+	WebClientSecret                            string                          `json:"web_client_secret"`
+	WebRedirectURL                             string                          `json:"web_redirect_url"`
+	WebPostLogoutURL                           string                          `json:"web_post_logout_url"`
+	WebTenantID                                string                          `json:"web_tenant_id"`
+	WalletAuthorizerClientSecret               string                          `json:"wallet_authorizer_client_secret"`
+	WalletAuthorizerRedirectURL                string                          `json:"wallet_authorizer_redirect_url"`
+	GatewayAuthEncryptionKeyID                 string                          `json:"gateway_auth_encryption_key_id"`
+	GatewayAuthEncryptionKeys                  map[string]string               `json:"gateway_auth_encryption_keys"`
+	WorkloadAuth                               workloadauth.Config             `json:"workload_auth"`
+	InternalTransport                          transportauth.Config            `json:"internal_transport"`
+	ServiceDiscovery                           map[string]string               `json:"service_discovery"`
+	GRPCServiceDiscovery                       map[string]string               `json:"grpc_service_discovery"`
+	PSPWebhookRoutes                           map[string]PSPWebhookRoute      `json:"psp_webhook_routes"`
+	KafkaBrokers                               []string                        `json:"kafka_brokers"`
+	KafkaTransactionTopic                      string                          `json:"kafka_transaction_topic"`
+	KafkaStatusTopic                           string                          `json:"kafka_status_topic"`
+	StatusEventBatchSize                       int                             `json:"status_event_batch_size"`
+	StatusEventPollIntervalMs                  int                             `json:"status_event_poll_interval_ms"`
+	StatusNotificationConsumerGroup            string                          `json:"status_notification_consumer_group"`
+	AdminReportingKafkaConsumerGroup           string                          `json:"admin_reporting_kafka_consumer_group"`
+	EBSTransactionEventPublisherBatchSize      int                             `json:"ebs_transaction_event_publisher_batch_size"`
+	EBSTransactionEventPublisherPollIntervalMs int                             `json:"ebs_transaction_event_publisher_poll_interval_ms"`
+	RuntimeDir                                 string                          `json:"runtime_dir"`
+	DataKey                                    string                          `json:"data_key"`
+	DatabaseURL                                string                          `json:"db_url"`
+	DatabaseDriver                             string                          `json:"db_driver"`
+	DatabaseCACertificate                      string                          `json:"database_ca_certificate"`
+	DefaultTenantID                            string                          `json:"default_tenant_id"`
+	RedisPort                                  string                          `json:"redis_port"`
+	Sentry                                     string                          `json:"sentry"`
+	Port                                       string                          `json:"port"`
 
 	IsConsumerProd bool `json:"is_consumer_prod"`
 	IsMerchantProd bool `json:"is_merchant_prod"`

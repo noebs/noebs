@@ -7,6 +7,10 @@ client_credentials:
     client_secret: REPLACE_WITH_RECONCILER_CLIENT_SECRET
   noebs-backoffice:
     client_secret: REPLACE_WITH_BACKOFFICE_CLIENT_SECRET
+  noebs-web:
+    client_secret: REPLACE_WITH_WEB_CLIENT_SECRET
+  noebs-account-enroller:
+    client_secret: REPLACE_WITH_ACCOUNT_ENROLLER_CLIENT_SECRET
   noebs-wallet-authorizer:
     client_secret: REPLACE_WITH_WALLET_AUTHORIZER_CLIENT_SECRET
   noebs-temporal-wallet-ledger:

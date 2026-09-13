@@ -36,6 +36,8 @@ func TestWorkloadCapabilitiesMatchReviewedMatrix(t *testing.T) {
 	}
 	add(serviceRoleIdentityAuth, string(serviceRoleAPIGateway), http.MethodPost, "/internal/identity-auth/principals/resolve")
 	add(serviceRoleIdentityAuth, string(serviceRoleAPIGateway), http.MethodPost, "/internal/identity-auth/accounts/display-name")
+	add(serviceRoleIdentityAuth, string(serviceRoleAPIGateway), http.MethodGet, accountContextInternalPath)
+	add(serviceRoleIdentityAuth, string(serviceRoleAPIGateway), http.MethodPost, accountEnrollmentInternalPath)
 	for _, path := range []string{
 		"/internal/card-vault/enrollment-intents",
 		"/internal/card-vault/enrollment-intents/begin",

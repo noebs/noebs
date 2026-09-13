@@ -94,7 +94,7 @@ func TestValidateDeploymentRootRejectsMissingDockerServiceConfig(t *testing.T) {
 func TestValidateDeploymentRootRejectsUnexpectedDockerServiceSecret(t *testing.T) {
 	root := writePreflightRoot(t, preflightRootOptions{})
 	writePreflightFile(t, root, "deploy/docker/secrets/monolith.secrets.yaml", `noebs:
-  default_tenant_id: tenant-cutover
+  default_tenant_id: noebs
 `)
 
 	err := validateDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
@@ -377,7 +377,7 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 	root := t.TempDir()
 	defaultTenantID := opts.defaultTenantID
 	if defaultTenantID == "" {
-		defaultTenantID = "tenant-cutover"
+		defaultTenantID = "noebs"
 	}
 	keycloakPassword := opts.keycloakPassword
 	if keycloakPassword == "" {
@@ -437,6 +437,8 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 			noebs["internal_transport"] = transport.configForRole(role)
 		}
 		switch role {
+		case serviceRoleAPIGateway:
+			noebs["web_tenant_id"] = defaultTenantID
 		case serviceRoleIdentityAuth:
 			noebs["temporal_client_secret"] = testCanonicalReleaseSecret(72)
 			noebs["temporal_ca_certificate"] = transport.caCertificate

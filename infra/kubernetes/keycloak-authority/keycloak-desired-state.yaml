@@ -45,6 +45,13 @@ reconciler_client:
   credential: noebs-keycloak-reconciler
   realm_management_roles:
     - realm-admin
+enrollment_client:
+  client_id: noebs-account-enroller
+  name: Noebs Account Enroller
+  credential: noebs-account-enroller
+  realm_management_roles:
+    - manage-organizations
+    - manage-users
 resource_client:
   client_id: noebs-api
   name: Noebs API
@@ -106,6 +113,16 @@ interactive_clients:
       - https://api.noebs.sd/wallet/authorizations/oauth/callback
     post_logout_redirect_uris: []
     web_origins: []
+  - client_id: noebs-web
+    name: Noebs Web
+    access_type: confidential
+    credential: noebs-web
+    authentication_level: 1
+    redirect_uris:
+      - https://api.noebs.sd/account/oauth/callback
+    post_logout_redirect_uris:
+      - https://api.noebs.sd/account/oauth/logout/callback
+    web_origins: []
 service_clients:
   - client_id: noebs-temporal-wallet-ledger
     name: Noebs Temporal Wallet Ledger
@@ -161,105 +178,37 @@ identity_providers:
       issuer: https://accounts.google.com
       syncMode: IMPORT
 organizations:
-  - alias: tenant-cutover
-    name: Tenant Cutover
+- alias: noebs
+  name: Noebs
+  attributes: {}
+  groups:
+  - name: user
+    description: Tenant users
     attributes: {}
-    groups:
-      - name: user
-        description: Tenant users
-        attributes: {}
-        client_roles:
-          - user
-      - name: backoffice
-        description: Tenant back-office operators
-        attributes: {}
-        client_roles:
-          - backoffice
-          - reporting:read
-          - wallet:read
-          - wallet:audit:read
-          - identity:review:read
-      - name: tenant-admin
-        description: Tenant administrators
-        attributes: {}
-        client_roles:
-          - tenant-admin
-          - reporting:read
-          - wallet:read
-          - wallet:audit:read
-          - identity:review:read
-          - wallet:manual:create
-          - wallet:fees:write
-          - wallet:rates:write
-          - wallet:workflow:approve
-          - wallet:workflow:reject
-          - identity:review:decide
-          - wallet:transaction:resolve
-  - alias: tenant-mojaloop
-    name: Mojaloop Synthetic Demo
+    client_roles:
+    - user
+  - name: backoffice
+    description: Tenant back-office operators
     attributes: {}
-    groups:
-      - name: user
-        description: Tenant users
-        attributes: {}
-        client_roles:
-          - user
-      - name: backoffice
-        description: Tenant back-office operators
-        attributes: {}
-        client_roles:
-          - backoffice
-          - reporting:read
-          - wallet:read
-          - wallet:audit:read
-          - identity:review:read
-      - name: tenant-admin
-        description: Tenant administrators
-        attributes: {}
-        client_roles:
-          - tenant-admin
-          - reporting:read
-          - wallet:read
-          - wallet:audit:read
-          - identity:review:read
-          - wallet:manual:create
-          - wallet:fees:write
-          - wallet:rates:write
-          - wallet:workflow:approve
-          - wallet:workflow:reject
-          - identity:review:decide
-          - wallet:transaction:resolve
-  - alias: tenant-sandbox
-    name: Tenant Sandbox
+    client_roles:
+    - backoffice
+    - reporting:read
+    - wallet:read
+    - wallet:audit:read
+    - identity:review:read
+  - name: tenant-admin
+    description: Tenant administrators
     attributes: {}
-    groups:
-      - name: user
-        description: Tenant users
-        attributes: {}
-        client_roles:
-          - user
-      - name: backoffice
-        description: Tenant back-office operators
-        attributes: {}
-        client_roles:
-          - backoffice
-          - reporting:read
-          - wallet:read
-          - wallet:audit:read
-          - identity:review:read
-      - name: tenant-admin
-        description: Tenant administrators
-        attributes: {}
-        client_roles:
-          - tenant-admin
-          - reporting:read
-          - wallet:read
-          - wallet:audit:read
-          - identity:review:read
-          - wallet:manual:create
-          - wallet:fees:write
-          - wallet:rates:write
-          - wallet:workflow:approve
-          - wallet:workflow:reject
-          - identity:review:decide
-          - wallet:transaction:resolve
+    client_roles:
+    - tenant-admin
+    - reporting:read
+    - wallet:read
+    - wallet:audit:read
+    - identity:review:read
+    - wallet:manual:create
+    - wallet:fees:write
+    - wallet:rates:write
+    - wallet:workflow:approve
+    - wallet:workflow:reject
+    - identity:review:decide
+    - wallet:transaction:resolve

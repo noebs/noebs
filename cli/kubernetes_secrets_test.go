@@ -231,7 +231,7 @@ func TestRenderKubernetesSecretsRejectsMissingMigrationServiceConfig(t *testing.
 func TestRenderKubernetesSecretsRejectsUnexpectedServiceSecret(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 	writePreflightFile(t, root, "secrets/monolith.secrets.yaml", `noebs:
-  default_tenant_id: tenant-cutover
+  default_tenant_id: noebs
 `)
 
 	var output bytes.Buffer
@@ -278,7 +278,7 @@ func TestPreparedWorkloadAuthDoesNotGrantNotificationCallerAuthority(t *testing.
 func writeKubernetesSecretReleaseRoot(t *testing.T) string {
 	t.Helper()
 	inputRoot := t.TempDir()
-	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "noebs")
 	root := filepath.Join(t.TempDir(), "release")
 	if err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), root, readPlainPreflightSecret, plainKubernetesSecretEncrypt); err != nil {
 		t.Fatalf("prepare test Kubernetes release: %v", err)
@@ -303,15 +303,16 @@ func kubernetesSecretTestPayloads() map[string]string {
 	}
 	payloads := map[string]string{
 		"api-gateway.secrets.yaml": `noebs:
-  default_tenant_id: tenant-cutover
+  default_tenant_id: noebs
   backoffice_client_secret: backoffice-client-secret
+  web_client_secret: web-client-secret
   wallet_authorizer_client_secret: wallet-authorizer-client-secret
   gateway_auth_encryption_key_id: ` + gatewayAuth.encryptionKeyID + `
   gateway_auth_encryption_keys:
     ` + gatewayAuth.encryptionKeyID + `: ` + gatewayAuth.encryptionKeys[gatewayAuth.encryptionKeyID] + `
   psp_webhook_routes:
     ` + testCanonicalReleaseSecret(11) + `:
-      tenant_id: tenant-cutover
+      tenant_id: noebs
       provider_code: test-provider
   service_databases:
     api-gateway: "` + gatewayAuthDatabaseURL("gateway_auth_runtime", gatewayAuth.runtimePassword) + `"
@@ -337,7 +338,7 @@ func kubernetesSecretTestPayloads() map[string]string {
 		"admin-reporting.secrets.yaml":   serviceDatabaseSecret("admin-reporting"),
 		"notification-chat.secrets.yaml": serviceDatabaseSecret("notification-chat"),
 		"wallet-api.secrets.yaml": `noebs:
-  default_tenant_id: tenant-cutover
+  default_tenant_id: noebs
 `,
 		"wallet-ledger.secrets.yaml": serviceDatabaseSecret("wallet-ledger"),
 		"wallet-worker.secrets.yaml": serviceDatabaseSecret("wallet-ledger") + pspSecretMap(),
@@ -373,28 +374,28 @@ func kubernetesSecretTestPayloads() map[string]string {
 		panic(err)
 	}
 	payloads["workload-auth-migrate.secrets.yaml"] = `noebs:
-  default_tenant_id: tenant-cutover
+  default_tenant_id: noebs
   database_ca_certificate: |-
 ` + indentYAMLBlock(preparedTransport.caCertificate, 4) + `
   service_databases:
     workload-auth-migrate: "` + workloadAuthDatabaseURL("workload_auth_migrate", prepared.database.migratePassword) + `"
 `
 	payloads["workload-auth-cleanup.secrets.yaml"] = `noebs:
-  default_tenant_id: tenant-cutover
+  default_tenant_id: noebs
   database_ca_certificate: |-
 ` + indentYAMLBlock(preparedTransport.caCertificate, 4) + `
   service_databases:
     workload-auth-migrate: "` + workloadAuthDatabaseURL("workload_auth_cleanup", prepared.database.cleanupPassword) + `"
 `
 	payloads["gateway-auth-migrate.secrets.yaml"] = `noebs:
-  default_tenant_id: tenant-cutover
+  default_tenant_id: noebs
   database_ca_certificate: |-
 ` + indentYAMLBlock(preparedTransport.caCertificate, 4) + `
   service_databases:
     api-gateway: "` + gatewayAuthDatabaseURL("gateway_auth_migrate", gatewayAuth.migratePassword) + `"
 `
 	payloads["gateway-auth-cleanup.secrets.yaml"] = `noebs:
-  default_tenant_id: tenant-cutover
+  default_tenant_id: noebs
   database_ca_certificate: |-
 ` + indentYAMLBlock(preparedTransport.caCertificate, 4) + `
   service_databases:
@@ -452,7 +453,7 @@ func kubernetesSecretTestPayloads() map[string]string {
 func serviceDatabaseSecret(serviceName string) string {
 	databaseName := strings.ReplaceAll(serviceName, "-", "_")
 	return `noebs:
-  default_tenant_id: tenant-cutover
+  default_tenant_id: noebs
   service_databases:
     ` + serviceName + `: "postgres://noebs:service-password@postgres:5432/` + databaseName + `?sslmode=verify-full"
 `
@@ -465,7 +466,7 @@ func indentYAMLBlock(value string, spaces int) string {
 
 func pspSecretMap() string {
 	return `  psp:
-    tenant-cutover:
+    noebs:
       test-provider:
         api_key: psp-api-key
         api_secret: psp-api-secret

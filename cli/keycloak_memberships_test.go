@@ -25,7 +25,7 @@ func TestRunAssignKeycloakMembershipsDryRun(t *testing.T) {
 	server, caPath := newKeycloakTransportTestServer(t, fake)
 	configPath := writeCLIMembershipConfig(t, server.URL)
 	membershipsPath := filepath.Join(t.TempDir(), "memberships.yaml")
-	if err := os.WriteFile(membershipsPath, []byte("api_version: "+keycloakadmin.MembershipsAPIVersion+"\nsubject: "+cliMembershipSubject+"\nmemberships:\n  - tenant: tenant-cutover\n    class: backoffice\n"), 0o600); err != nil {
+	if err := os.WriteFile(membershipsPath, []byte("api_version: "+keycloakadmin.MembershipsAPIVersion+"\nsubject: "+cliMembershipSubject+"\nmemberships:\n  - tenant: noebs\n    class: backoffice\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -42,7 +42,7 @@ func TestRunAssignKeycloakMembershipsDryRun(t *testing.T) {
 	}
 	want := []keycloakadmin.PlannedMembershipAction{{
 		Subject: cliMembershipSubject,
-		Tenant:  "tenant-cutover",
+		Tenant:  "noebs",
 		Class:   keycloakadmin.MembershipClassBackoffice,
 		Action:  keycloakadmin.MembershipActionAdd,
 	}}
@@ -470,9 +470,7 @@ func (f *cliMembershipFake) writeCount() int {
 
 func cliMembershipOrganizations() []map[string]any {
 	return []map[string]any{
-		{"id": "org-tenant-cutover", "alias": "tenant-cutover", "name": "Tenant Cutover", "enabled": true, "attributes": map[string][]string{"noebs.managed": {"true"}}},
-		{"id": "org-tenant-mojaloop", "alias": "tenant-mojaloop", "name": "Mojaloop Synthetic Demo", "enabled": true, "attributes": map[string][]string{"noebs.managed": {"true"}}},
-		{"id": "org-tenant-sandbox", "alias": "tenant-sandbox", "name": "Tenant Sandbox", "enabled": true, "attributes": map[string][]string{"noebs.managed": {"true"}}},
+		{"id": "org-noebs", "alias": "noebs", "name": "Noebs", "enabled": true, "attributes": map[string][]string{"noebs.managed": {"true"}}},
 	}
 }
 

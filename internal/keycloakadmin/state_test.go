@@ -84,8 +84,8 @@ func TestRepositoryDesiredStateContract(t *testing.T) {
 	for _, organization := range state.Organizations {
 		organizations = append(organizations, organization.Alias)
 	}
-	if !equalStrings(organizations, []string{"tenant-cutover", "tenant-mojaloop", "tenant-sandbox"}) {
-		t.Fatalf("organizations = %v, want cutover, Mojaloop demo and sandbox", organizations)
+	if !equalStrings(organizations, []string{"noebs"}) {
+		t.Fatalf("organizations = %v, want Noebs", organizations)
 	}
 }
 
@@ -269,11 +269,11 @@ func TestDesiredStateOrganizationsExactlyMatchTenantCatalog(t *testing.T) {
 		mutate func(*DesiredState)
 	}{
 		{name: "missing", mutate: func(state *DesiredState) {
-			state.Organizations = state.Organizations[:1]
+			state.Organizations = nil
 		}},
 		{name: "extra", mutate: func(state *DesiredState) {
 			state.Organizations = append(state.Organizations, state.Organizations[0])
-			state.Organizations[2].Alias = "tenant-extra"
+			state.Organizations[len(state.Organizations)-1].Alias = "tenant-extra"
 		}},
 		{name: "alias", mutate: func(state *DesiredState) {
 			state.Organizations[0].Alias = "tenant-renamed"
@@ -387,6 +387,8 @@ func validTestConfig(baseURL string) Config {
 		ClientCredentials: map[string]ClientCredential{
 			"noebs-keycloak-reconciler":    {ClientSecret: "steady-reconciler-secret"},
 			"noebs-backoffice":             {ClientSecret: "backoffice-secret"},
+			"noebs-web":                    {ClientSecret: "web-secret"},
+			"noebs-account-enroller":       {ClientSecret: "account-enroller-secret"},
 			walletAuthorizerClientID:       {ClientSecret: "wallet-authorizer-secret"},
 			temporalLedgerClientID:         {ClientSecret: "temporal-ledger-secret"},
 			temporalWorkerClientID:         {ClientSecret: "temporal-worker-secret"},

@@ -116,6 +116,28 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 	if apiGateway.BackofficeClientSecret != reconciler.ClientCredentials["noebs-backoffice"].ClientSecret {
 		return errors.New("api-gateway back-office client secret does not match the Keycloak managed credential")
 	}
+	if apiGateway.WebClientSecret != reconciler.ClientCredentials["noebs-web"].ClientSecret {
+		return errors.New("api-gateway account web client secret does not match the Keycloak managed credential")
+	}
+	if _, err := catalog.Require(apiGateway.WebTenantID); err != nil {
+		return fmt.Errorf("account web tenant: %w", err)
+	}
+	enrollment := services[serviceRoleIdentityAuth].value.AccountEnrollment
+	if enrollment.KeycloakClientID != "noebs-account-enroller" || enrollment.KeycloakClientSecret != reconciler.ClientCredentials["noebs-account-enroller"].ClientSecret ||
+		enrollment.KeycloakBaseURL != reconciler.BaseURL {
+		return errors.New("identity-auth enrollment authority does not match the managed Keycloak client")
+	}
+	if apiGateway.AccountEnrollment.Enabled != enrollment.Enabled {
+		return errors.New("gateway and identity-auth account enrollment must be enabled together")
+	}
+	if enrollment.Enabled {
+		if enrollment.Issuer != apiGateway.OIDC.Issuer || apiGateway.AccountEnrollment.Issuer != enrollment.Issuer {
+			return errors.New("account enrollment issuer does not match the gateway identity authority")
+		}
+		if err := enrollment.Validate(catalog, true); err != nil {
+			return err
+		}
+	}
 	if apiGateway.WalletAuthorizerClientSecret != reconciler.ClientCredentials["noebs-wallet-authorizer"].ClientSecret {
 		return errors.New("api-gateway wallet authorizer client secret does not match the Keycloak managed credential")
 	}
@@ -134,6 +156,9 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 	}
 	if apiGateway.BackofficeRedirectURL != origin+"/backoffice/oauth/callback" || apiGateway.BackofficePostLogoutURL != origin+"/backoffice/oauth/logout/callback" {
 		return errors.New("api-gateway back-office redirects do not match the release Keycloak boundary")
+	}
+	if apiGateway.WebRedirectURL != origin+"/account/oauth/callback" || apiGateway.WebPostLogoutURL != origin+"/account/oauth/logout/callback" {
+		return errors.New("api-gateway account redirects do not match the release Keycloak boundary")
 	}
 	if apiGateway.OIDC.Issuer != origin+"/auth/realms/noebs" ||
 		apiGateway.OIDC.JWKSURL != "https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/certs" {

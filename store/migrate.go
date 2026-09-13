@@ -46,6 +46,7 @@ var migrationAuthorityContracts = map[string]migrationAuthorityContract{
 		broadDMLRoles: []string{"identity_auth_runtime"},
 		sequenceRoles: []string{"identity_auth_runtime"},
 		specialGrants: []string{
+			`REVOKE DELETE ON TABLE public.account_enrollments FROM identity_auth_runtime`,
 			`REVOKE INSERT, UPDATE, DELETE ON TABLE public.identity_verifications FROM identity_auth_runtime`,
 			`REVOKE INSERT, UPDATE, DELETE ON TABLE public.identity_review_events FROM identity_auth_runtime`,
 			`GRANT INSERT (id, tenant_id, user_id, session_id, actor, action, revision, request_sha256, details) ON TABLE public.identity_review_events TO identity_auth_runtime`,

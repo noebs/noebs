@@ -58,6 +58,7 @@ func registerAPIGatewayProxyRoutes(
 	if oidcVerifier == nil {
 		return errors.New("OIDC verifier is not initialized")
 	}
+	registerAccountEnrollmentGatewayRoutes(route, cfg)
 	mobileAuth, err := gateway.NewOIDCAuthMiddleware(gateway.OIDCAuthConfig{
 		Verifier:       oidcVerifier,
 		SelectTenant:   selectActiveTenant(catalog),
@@ -66,6 +67,12 @@ func registerAPIGatewayProxyRoutes(
 	})
 	if err != nil {
 		return fmt.Errorf("configure mobile OIDC authorization: %w", err)
+	}
+	accountProfileAuth, err := gateway.NewOIDCAuthMiddleware(gateway.OIDCAuthConfig{
+		Verifier: oidcVerifier, SelectTenant: selectActiveTenant(catalog), AllowedClients: []string{"noebs-mobile", "noebs-web"}, AllowedRoles: []tenantauth.Role{tenantauth.RoleUser},
+	})
+	if err != nil {
+		return err
 	}
 	profileResolver, err := newIdentityProfileProjectionResolver(cfg, workloadSigners)
 	if err != nil {
@@ -113,9 +120,17 @@ func registerAPIGatewayProxyRoutes(
 		case gatewayAuthPublic:
 			handlers = append(handlers, clearPublicCredentialHeaders)
 		case gatewayAuthMobilePrincipal:
-			handlers = append(handlers, mobileAuth, propagateGatewayOIDCPrincipal(nil))
+			profileAuth := mobileAuth
+			if spec.method == http.MethodPost && spec.path == "/consumer/auth/profile" {
+				profileAuth = accountProfileAuth
+			}
+			handlers = append(handlers, profileAuth, propagateGatewayOIDCPrincipal(nil))
 		case gatewayAuthMobileUser:
-			handlers = append(handlers, mobileAuth, propagateGatewayOIDCPrincipal(profileResolver))
+			profileAuth := mobileAuth
+			if spec.method == http.MethodGet && spec.path == "/consumer/user" {
+				profileAuth = accountProfileAuth
+			}
+			handlers = append(handlers, profileAuth, propagateGatewayOIDCPrincipal(profileResolver))
 		case gatewayAuthTenantWebhook:
 			handlers = append(handlers, clearPublicCredentialHeaders, webhookResolver.Resolve)
 		default:

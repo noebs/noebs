@@ -172,6 +172,9 @@ func validateRoleDatabaseConfig(role serviceRole, dbURL, driver string) error {
 }
 
 func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	if err := validateAccountEnrollmentRuntimeConfig(role, cfg); err != nil {
+		return err
+	}
 	if err := validateInteropRuntimeConfig(role, cfg); err != nil {
 		return err
 	}
@@ -190,6 +193,9 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 		}
 		if err := validateBackofficeRuntimeConfig(cfg); err != nil {
 			return fmt.Errorf("back-office OIDC runtime: %w", err)
+		}
+		if err := validateAccountWebRuntimeConfig(cfg); err != nil {
+			return fmt.Errorf("account web OIDC runtime: %w", err)
 		}
 		if err := validateWalletAuthorizationRuntimeConfig(cfg); err != nil {
 			return fmt.Errorf("wallet transaction authorization runtime: %w", err)

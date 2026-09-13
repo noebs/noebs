@@ -209,7 +209,7 @@ func cliTestConfig(role serviceRole, dbURL string) ebs_fields.NoebsConfig {
 		cfg.OIDC.Issuer = "https://identity.example/realms/noebs"
 		cfg.OIDC.JWKSURL = "https://127.0.0.1:1/realms/noebs/protocol/openid-connect/certs"
 		cfg.OIDC.Audience = "noebs-api"
-		cfg.OIDC.AllowedClients = []string{"noebs-mobile", "noebs-backoffice"}
+		cfg.OIDC.AllowedClients = []string{"noebs-mobile", "noebs-backoffice", "noebs-web"}
 		cfg.OIDC.AccessTokenType = "Bearer"
 		cfg.OIDC.MaxFutureIssuedAtSeconds = 5
 		cfg.OIDC.JWKSRefreshSeconds = 300
@@ -219,6 +219,10 @@ func cliTestConfig(role serviceRole, dbURL string) ebs_fields.NoebsConfig {
 		cfg.BackofficeClientSecret = "test-backoffice-client-secret"
 		cfg.BackofficeRedirectURL = "https://app.example/backoffice/oauth/callback"
 		cfg.BackofficePostLogoutURL = "https://app.example/backoffice/oauth/logout/callback"
+		cfg.WebClientSecret = "test-web-client-secret"
+		cfg.WebRedirectURL = "https://app.example/account/oauth/callback"
+		cfg.WebPostLogoutURL = "https://app.example/account/oauth/logout/callback"
+		cfg.WebTenantID = "test-tenant"
 		cfg.WalletAuthorizerClientSecret = "test-wallet-authorizer-client-secret"
 		cfg.WalletAuthorizerRedirectURL = "https://app.example/wallet/authorizations/oauth/callback"
 		cfg.GatewayAuthEncryptionKeyID = "test-key"

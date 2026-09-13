@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your Noebs account</title><link rel="stylesheet" href="/account/style.css"></head>
+<body><header><a class="brand" href="https://noebs.sd/">noebs<span>Keepin’ it simple</span></a><a href="https://noebs.sd/#android-wallet">Get the Android app</a></header>
+<main><p class="eyebrow">YOUR NOEBS ACCOUNT</p>
+{{if eq .Stage "signin"}}
+<h1>One account.<br>Ready when you are.</h1><p class="intro">Sign in or create your Noebs account, then confirm your details. You can resume here or in the Android app.</p>
+{{if .Message}}<p role="status">{{.Message}}</p>{{end}}
+<a class="button" href="/account/login">Sign in or create account <span aria-hidden="true">↗</span></a><p class="hint">Email, phone or username. Email verification and password recovery are part of the same secure sign-in.</p>
+{{else if eq .Stage "enrollment"}}
+<h1>Let’s set up<br>your account.</h1><p class="intro">Your sign-in is ready. Continue to prepare your {{.TenantName}} account.</p><form action="/account/enrollment" method="post"><input type="hidden" name="_csrf" value="{{.CSRF}}"><button class="button" type="submit">Continue account setup <span aria-hidden="true">→</span></button></form><p class="hint">If you closed this page earlier, we’ll continue from your saved progress.</p>
+{{else if eq .Stage "refresh"}}
+<h1>Your account<br>access is ready.</h1><p class="intro">Continue through sign-in to finish setting up your {{.TenantName}} account.</p><a class="button" href="/account/login">Continue <span aria-hidden="true">→</span></a>
+{{else if eq .Stage "profile"}}
+<p class="account-label">{{.TenantName}}</p><h1>A name for<br>your account.</h1><p class="intro">Confirm how your name should appear on this Noebs account.</p><form action="/account/profile" method="post"><input type="hidden" name="_csrf" value="{{.CSRF}}"><label for="fullname">Full name</label><input id="fullname" name="fullname" value="{{.Fullname}}" autocomplete="name" maxlength="128" required><button class="button" type="submit">Complete account setup <span aria-hidden="true">→</span></button></form>
+{{else if eq .Stage "ready"}}
+<p class="account-label">{{.TenantName}}</p><div class="complete-mark" aria-hidden="true">✓</div><h1>Your account<br>is ready.</h1><p class="intro">Continue in the Noebs Android app. Use the same sign-in to access your {{.TenantName}} account.</p><a class="button" href="https://noebs.sd/#android-wallet">Get the Android app <span aria-hidden="true">↗</span></a>
+{{else}}
+<h1>Let’s get you<br>back on track.</h1><p class="intro" role="alert">{{.Message}}</p><a class="button" href="/account/home">Open account setup <span aria-hidden="true">→</span></a>
+{{end}}
+{{if .CSRF}}<form class="signout" action="/account/logout" method="post"><input type="hidden" name="_csrf" value="{{.CSRF}}"><button type="submit" class="text-link">Sign out</button></form>{{end}}
+</main><footer><span>The same account, on web and Android.</span><a href="https://noebs.sd/policies/privacy/">Privacy</a></footer></body></html>

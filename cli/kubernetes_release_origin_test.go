@@ -19,7 +19,7 @@ func TestPrepareReleaseUsesExplicitDeploymentOriginAndProxy(t *testing.T) {
 		writePreflightFile(t, source, relative, text)
 	}
 	inputRoot := t.TempDir()
-	inputs := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	inputs := writeKubernetesReleaseInputsFile(t, inputRoot, "noebs")
 	output := filepath.Join(t.TempDir(), "release")
 	if err := prepareKubernetesRelease(source, inputs, kubernetesReleaseTestAgeKeyPath(inputRoot), output, readPlainPreflightSecret, plainKubernetesSecretEncrypt); err != nil {
 		t.Fatal(err)

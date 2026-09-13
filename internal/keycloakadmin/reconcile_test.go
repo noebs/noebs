@@ -63,7 +63,7 @@ func TestReconcileEmptyRealmThenNoOp(t *testing.T) {
 	if !fake.clientScopeHasRole("noebs-keycloak-reconciler", "realm-management", "realm-admin") {
 		t.Fatal("realm-management/realm-admin is not in the steady reconciler token scope")
 	}
-	if got := fake.organizationGroupRoles("tenant-cutover", "tenant-admin"); !equalStrings(got, []string{
+	if got := fake.organizationGroupRoles("noebs", "tenant-admin"); !equalStrings(got, []string{
 		"tenant-admin", "reporting:read", "wallet:read", "wallet:audit:read", "wallet:manual:create",
 		"wallet:fees:write", "wallet:rates:write", "wallet:workflow:approve", "wallet:workflow:reject",
 		"identity:review:read", "identity:review:decide", "wallet:transaction:resolve",
@@ -114,7 +114,7 @@ func TestReconcileDeletesOrganizationsAndGroupsOutsideDesiredState(t *testing.T)
 		t.Fatalf("initial Reconcile() error = %v", err)
 	}
 	fake.addUnmanagedOrganization("tenant-unmanaged", "Unmanaged Tenant")
-	fake.addUnmanagedOrganizationGroup("tenant-cutover", "unmanaged-group")
+	fake.addUnmanagedOrganizationGroup("noebs", "unmanaged-group")
 
 	writes := fake.writeCount()
 	result, err := reconciler.Reconcile(context.Background(), state)
@@ -127,7 +127,7 @@ func TestReconcileDeletesOrganizationsAndGroupsOutsideDesiredState(t *testing.T)
 	if fake.hasOrganization("tenant-unmanaged") {
 		t.Fatal("organization outside desired state was retained")
 	}
-	if fake.hasOrganizationGroup("tenant-cutover", "unmanaged-group") {
+	if fake.hasOrganizationGroup("noebs", "unmanaged-group") {
 		t.Fatal("organization group outside desired state was retained")
 	}
 	if got := fake.writeCount() - writes; got != 2+len(state.IdentityProviders) {
@@ -357,7 +357,7 @@ func TestReconcilePrunesScopeAndRoleMappingDrift(t *testing.T) {
 	fake.addClientScopeRole("noebs-api", "realm-management", "realm-admin")
 	fake.addClientRealmScopeRole("noebs-keycloak-reconciler", "platform-admin")
 	fake.addClientScopeRole("noebs-keycloak-reconciler", "noebs-api", "tenant-admin")
-	fake.addOrganizationGroupClientRole("tenant-cutover", "user", "realm-management", "realm-admin")
+	fake.addOrganizationGroupClientRole("noebs", "user", "realm-management", "realm-admin")
 
 	result, err := reconciler.Reconcile(context.Background(), state)
 	if err != nil {
@@ -396,7 +396,7 @@ func TestReconcilePrunesScopeAndRoleMappingDrift(t *testing.T) {
 	if len(reconcilerMappings.RealmMappings) != 0 || !equalStrings(roleNames(reconcilerMappings.ClientMappings["realm-management"].Mappings), []string{"realm-admin"}) || len(reconcilerMappings.ClientMappings) != 1 {
 		t.Fatalf("reconciler role scope mappings = %#v", reconcilerMappings)
 	}
-	if clients := fake.organizationGroupRoleMappingClients("tenant-cutover", "user"); !equalStrings(clients, []string{"noebs-api"}) {
+	if clients := fake.organizationGroupRoleMappingClients("noebs", "user"); !equalStrings(clients, []string{"noebs-api"}) {
 		t.Fatalf("organization group role-mapping clients = %v", clients)
 	}
 
@@ -758,9 +758,9 @@ func TestReconcileDeletesUndeclaredOrganizationDescendants(t *testing.T) {
 	if _, err := reconciler.Reconcile(context.Background(), state); err != nil {
 		t.Fatalf("initial Reconcile() error = %v", err)
 	}
-	childID := fake.addUnmanagedOrganizationChildGroup("tenant-cutover", "user", "rogue-child")
-	grandchildID := fake.addUnmanagedOrganizationChildGroup("tenant-cutover", "rogue-child", "rogue-grandchild")
-	fake.addOrganizationGroupClientRole("tenant-cutover", "rogue-grandchild", "noebs-api", "tenant-admin")
+	childID := fake.addUnmanagedOrganizationChildGroup("noebs", "user", "rogue-child")
+	grandchildID := fake.addUnmanagedOrganizationChildGroup("noebs", "rogue-child", "rogue-grandchild")
+	fake.addOrganizationGroupClientRole("noebs", "rogue-grandchild", "noebs-api", "tenant-admin")
 	fake.addOrganizationGroupMember(grandchildID, "hostile-member")
 
 	result, err := reconciler.Reconcile(context.Background(), state)
@@ -776,7 +776,7 @@ func TestReconcileDeletesUndeclaredOrganizationDescendants(t *testing.T) {
 	if fake.hasOrganizationGroupMember(grandchildID, "hostile-member") {
 		t.Fatal("undeclared descendant membership survived deletion")
 	}
-	if got := fake.organizationGroupRoleMappingClients("tenant-cutover", "rogue-grandchild"); len(got) != 0 {
+	if got := fake.organizationGroupRoleMappingClients("noebs", "rogue-grandchild"); len(got) != 0 {
 		t.Fatalf("undeclared descendant role mappings survived deletion: %v", got)
 	}
 	result, err = reconciler.Reconcile(context.Background(), state)
@@ -1249,6 +1249,9 @@ func (f *fakeKeycloak) initializeRealmBuiltins() {
 		}
 		if client.ClientID == "realm-management" {
 			f.clientRoles[id]["realm-admin"] = roleRepresentation{ID: f.id("role"), Name: "realm-admin", ClientRole: true, ContainerID: id}
+			for _, name := range []string{"manage-organizations", "manage-users"} {
+				f.clientRoles[id][name] = roleRepresentation{ID: f.id("role"), Name: name, ClientRole: true, ContainerID: id}
+			}
 		}
 	}
 	for _, clientID := range []string{"account", "account-console", "admin-cli", "security-admin-console"} {

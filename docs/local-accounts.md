@@ -22,14 +22,18 @@ application databases.
    registration skips email verification.
 4. Keycloak returns to the same client callback. Exchange the code with its
    PKCE verifier and use the normal bearer token and `X-Active-Tenant` header.
-5. A tenant membership and its `user` role must exist before the gateway admits
-   tenant requests. Create the application profile explicitly through
-   `POST /consumer/auth/profile` with that admitted principal.
+5. The frontend supplies its configured `X-Active-Tenant` to
+   `GET /consumer/auth/context` and, when required, `POST /consumer/auth/enrollment`.
+   Server policy admits only that selected tenant. Refresh tokens after a grant,
+   then create the application profile explicitly through
+   `POST /consumer/auth/profile` with the admitted principal. See
+   [account enrollment](account-enrollment.md) for the complete contract.
 
 Registration creates a realm identity. It does not assign an organization,
-create a wallet, grant a tenant role or create an application profile. Use the
-existing Keycloak membership operations to assign the intended tenant and role
-by subject. `lookup-keycloak-subject --username-file <path> --config <path>
+create a wallet, grant a tenant role or create an application profile. The shared
+enrollment boundary applies explicit policy after authentication; operators can
+also use existing Keycloak membership operations to assign tenant and role by
+subject. `lookup-keycloak-subject --username-file <path> --config <path>
 --ca <path>` resolves the subject of a phone-only account; the file contains its
 exact international username. Use `--email-file` for email lookup. Choose
 exactly one selector. The same rule applies to Google, other OIDC providers and local

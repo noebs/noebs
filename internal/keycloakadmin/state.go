@@ -57,6 +57,7 @@ type DesiredState struct {
 	Realm              Realm               `yaml:"realm"`
 	Authentication     Authentication      `yaml:"authentication"`
 	ReconcilerClient   ReconcilerClient    `yaml:"reconciler_client"`
+	EnrollmentClient   *ReconcilerClient   `yaml:"enrollment_client,omitempty"`
 	ResourceClient     ResourceClient      `yaml:"resource_client"`
 	InteractiveClients []InteractiveClient `yaml:"interactive_clients"`
 	ServiceClients     []ServiceClient     `yaml:"service_clients"`
@@ -243,12 +244,15 @@ func (c Config) Validate() error {
 	for name := range c.ClientCredentials {
 		clientNames[name] = struct{}{}
 	}
+	// These separately deployed human-account capabilities are optional in
+	// older isolated fixtures, but their credentials are always validated.
+	delete(clientNames, "noebs-account-enroller")
+	delete(clientNames, "noebs-web")
 	if !exactStringSet(clientNames, "noebs-keycloak-reconciler", "noebs-backoffice", walletAuthorizerClientID,
 		temporalLedgerClientID, temporalWorkerClientID, temporalIdentityClientID, temporalIdentityWorkerClientID, temporalBootstrapClientID) {
 		return fmt.Errorf("%w: client_credentials must contain the exact repository-owned client set", ErrInvalidConfig)
 	}
-	for _, name := range []string{"noebs-keycloak-reconciler", "noebs-backoffice", walletAuthorizerClientID,
-		temporalLedgerClientID, temporalWorkerClientID, temporalIdentityClientID, temporalIdentityWorkerClientID, temporalBootstrapClientID} {
+	for name := range c.ClientCredentials {
 		credential := c.ClientCredentials[name]
 		if err := validateValue("client_credentials."+name+".client_secret", credential.ClientSecret); err != nil {
 			return fmt.Errorf("%w: %v", ErrInvalidConfig, err)
@@ -348,6 +352,13 @@ func (s DesiredState) Validate() error {
 	if !exactStringSet(reconcilerRoles, "realm-admin") {
 		return fmt.Errorf("%w: reconciler_client.realm_management_roles must contain only realm-admin", ErrInvalidDesiredState)
 	}
+	if s.EnrollmentClient != nil {
+		client := s.EnrollmentClient
+		roles, err := validateStrings("enrollment_client.realm_management_roles", client.RealmManagementRoles)
+		if err != nil || client.ClientID != "noebs-account-enroller" || client.Credential != client.ClientID || client.Name == "" || !exactStringSet(roles, "manage-organizations", "manage-users") {
+			return fmt.Errorf("%w: enrollment_client must be the dedicated account enroller with manage-organizations and manage-users", ErrInvalidDesiredState)
+		}
+	}
 	if s.OrganizationClaim.ClientScope != "organization" ||
 		s.OrganizationClaim.MapperName != "noebs-organization-groups" ||
 		s.OrganizationClaim.ProtocolMapper != "oidc-organization-group-membership-mapper" {
@@ -425,8 +436,9 @@ func (s DesiredState) Validate() error {
 			return fmt.Errorf("%w: interactive client %q is required", ErrInvalidDesiredState, requiredClient)
 		}
 	}
-	if len(interactiveClientIDs) != 3 {
-		return fmt.Errorf("%w: interactive_clients must contain only noebs-mobile, noebs-backoffice, and %s", ErrInvalidDesiredState, walletAuthorizerClientID)
+	_, webEnabled := interactiveClientIDs["noebs-web"]
+	if len(interactiveClientIDs) != 3 && !(webEnabled && len(interactiveClientIDs) == 4) {
+		return fmt.Errorf("%w: interactive_clients must contain the mobile, backoffice, wallet authorizer and optional web clients", ErrInvalidDesiredState)
 	}
 	origin, err := s.PublicOrigin()
 	if err != nil {
@@ -451,6 +463,12 @@ func (s DesiredState) Validate() error {
 				!equalStrings(client.RedirectURIs, []string{origin + "/wallet/authorizations/oauth/callback"}) ||
 				len(client.PostLogoutRedirectURIs) != 0 || len(client.WebOrigins) != 0 {
 				return fmt.Errorf("%w: %s must declare the exact confidential one-request LoA2 client", ErrInvalidDesiredState, walletAuthorizerClientID)
+			}
+		case "noebs-web":
+			if client.Name != "Noebs Web" || client.AccessType != "confidential" || client.Credential != "noebs-web" || client.AuthenticationLevel != 1 ||
+				!equalStrings(client.RedirectURIs, []string{origin + "/account/oauth/callback"}) ||
+				!equalStrings(client.PostLogoutRedirectURIs, []string{origin + "/account/oauth/logout/callback"}) || len(client.WebOrigins) != 0 {
+				return fmt.Errorf("%w: noebs-web must declare the exact confidential account LoA1 client", ErrInvalidDesiredState)
 			}
 		}
 	}

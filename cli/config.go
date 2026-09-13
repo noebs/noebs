@@ -587,6 +587,7 @@ func GetMainEngine() *fiber.App {
 	if role == serviceRoleIdentityAuth {
 		consumerHandler := buildConsumerHandler()
 		registerIdentityAuthRoutes(route, principalIdentity, userIdentity, consumerHandler)
+		registerAccountEnrollmentInternalRoutes(route)
 		return route
 	}
 	if role == serviceRoleCardVault {
@@ -626,6 +627,9 @@ func GetMainEngine() *fiber.App {
 	}
 	if err := registerBackofficeProxyRoutes(route, noebsConfig, backofficeAuthHandler); err != nil {
 		logrusLogger.Fatalf("error registering back-office proxy routes: %v", err)
+	}
+	if err := registerAccountWebRoutes(route, accountWebAuthHandler); err != nil {
+		logrusLogger.Fatalf("error registering account signup routes: %v", err)
 	}
 	if err := registerAPIGatewayProxyRoutes(route, noebsConfig, runtimeTenantCatalog, walletAuthorizationHandler); err != nil {
 		logrusLogger.Fatalf("error in api gateway service discovery: %v", err)
@@ -774,6 +778,9 @@ func initConfig() {
 	if err := initBackofficeAuth(role, noebsConfig, database, runtimeTenantCatalog); err != nil {
 		logrusLogger.Fatalf("error initializing back-office authentication: %v", err)
 	}
+	if err := initAccountWebAuth(role, noebsConfig, database, runtimeTenantCatalog); err != nil {
+		logrusLogger.Fatalf("error initializing account web authentication: %v", err)
+	}
 	if err := initWalletAuthorization(role, noebsConfig, database); err != nil {
 		logrusLogger.Fatalf("error initializing wallet transaction authorization: %v", err)
 	}
@@ -798,6 +805,9 @@ func initConfig() {
 	}
 	if err := initRoleServices(role); err != nil {
 		logrusLogger.Fatalf("error initializing role services: %v", err)
+	}
+	if err := initAccountEnrollment(role, noebsConfig, database, runtimeTenantCatalog); err != nil {
+		logrusLogger.Fatalf("error initializing account enrollment: %v", err)
 	}
 	if role == serviceRoleIdentityAuth {
 		ctx, cancel := context.WithTimeout(context.Background(), temporalWorkerDialTimeout)

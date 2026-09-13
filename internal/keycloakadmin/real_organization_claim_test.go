@@ -68,7 +68,7 @@ func TestRealKeycloak26_7OrganizationClaim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := repositoryDesiredState(t)
+	state := membershipTestDesiredState(t)
 	if _, err := bootstrap.Reconcile(context.Background(), state); err != nil {
 		t.Fatalf("real organization authority reconcile: %v", err)
 	}
@@ -107,7 +107,7 @@ func assertRealOrganizationAccessToken(
 		APIVersion: MembershipsAPIVersion,
 		Subject:    subject,
 		Memberships: []TenantMembership{
-			{Tenant: "tenant-cutover", Class: MembershipClassTenantAdmin},
+			{Tenant: "noebs", Class: MembershipClassTenantAdmin},
 			{Tenant: "tenant-sandbox", Class: MembershipClassUser},
 		},
 	}
@@ -115,7 +115,7 @@ func assertRealOrganizationAccessToken(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(actions) != 2 || actions[0].Tenant != "tenant-cutover" || actions[0].Action != MembershipActionAdd ||
+	if len(actions) != 2 || actions[0].Tenant != "noebs" || actions[0].Action != MembershipActionAdd ||
 		actions[1].Tenant != "tenant-sandbox" || actions[1].Action != MembershipActionAdd {
 		t.Fatalf("real membership actions = %#v", actions)
 	}
@@ -133,7 +133,7 @@ func assertRealOrganizationAccessToken(
 		t.Fatal(err)
 	}
 	wantAccess := map[string][]string{
-		"tenant-cutover": desiredOrganizationGroupRoles(t, state, "tenant-cutover", MembershipClassTenantAdmin),
+		"noebs":          desiredOrganizationGroupRoles(t, state, "noebs", MembershipClassTenantAdmin),
 		"tenant-sandbox": desiredOrganizationGroupRoles(t, state, "tenant-sandbox", MembershipClassUser),
 	}
 	assertRealOrganizationWireClaim(t, accessToken, topology, wantAccess)
@@ -161,21 +161,21 @@ func assertRealOrganizationAccessToken(
 		t.Fatalf("verified real identity = %+v", identity)
 	}
 
-	cutover, err := tenantauth.Authorize(claims, "tenant-cutover", tenantauth.RoleTenantAdmin)
+	cutover, err := tenantauth.Authorize(claims, "noebs", tenantauth.RoleTenantAdmin)
 	if err != nil {
-		t.Fatalf("authorize tenant-cutover administrator: %v", err)
+		t.Fatalf("authorize noebs administrator: %v", err)
 	}
-	if cutover.OrganizationID() != topology["tenant-cutover"].representation.ID ||
+	if cutover.OrganizationID() != topology["noebs"].representation.ID ||
 		!slices.Equal(cutover.Roles(), []tenantauth.Role{tenantauth.RoleTenantAdmin}) ||
 		cutover.HasRole(tenantauth.RoleUser) {
-		t.Fatalf("tenant-cutover principal: organization=%q roles=%v", cutover.OrganizationID(), cutover.Roles())
+		t.Fatalf("noebs principal: organization=%q roles=%v", cutover.OrganizationID(), cutover.Roles())
 	}
 	approve, err := tenantauth.NewPermissionPolicy(tenantauth.PermissionWalletWorkflowApprove, tenantauth.RoleTenantAdmin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := approve.Authorize(claims, "tenant-cutover"); err != nil {
-		t.Fatalf("authorize tenant-cutover approval: %v", err)
+	if _, err := approve.Authorize(claims, "noebs"); err != nil {
+		t.Fatalf("authorize noebs approval: %v", err)
 	}
 
 	sandbox, err := tenantauth.Authorize(claims, "tenant-sandbox", tenantauth.RoleUser)

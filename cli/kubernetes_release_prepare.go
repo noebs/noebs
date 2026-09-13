@@ -45,6 +45,8 @@ type kubernetesReleaseKeycloakInputs struct {
 	SMTP                               *keycloakadmin.SMTPConfig                           `yaml:"smtp"`
 	ReconcilerClientSecret             string                                              `yaml:"reconciler_client_secret"`
 	BackofficeClientSecret             string                                              `yaml:"backoffice_client_secret"`
+	WebClientSecret                    string                                              `yaml:"web_client_secret"`
+	AccountEnrollerClientSecret        string                                              `yaml:"account_enroller_client_secret"`
 	WalletAuthorizerClientSecret       string                                              `yaml:"wallet_authorizer_client_secret"`
 	TemporalLedgerClientSecret         string                                              `yaml:"temporal_ledger_client_secret"`
 	TemporalWorkerClientSecret         string                                              `yaml:"temporal_worker_client_secret"`
@@ -106,6 +108,8 @@ type preparedKubernetesRelease struct {
 type preparedKeycloakRelease struct {
 	reconcilerClientSecret             string
 	backofficeClientSecret             string
+	webClientSecret                    string
+	accountEnrollerClientSecret        string
 	walletAuthorizerClientSecret       string
 	temporalLedgerClientSecret         string
 	temporalWorkerClientSecret         string
@@ -591,6 +595,7 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 
 	apiGateway := base()
 	apiGateway["backoffice_client_secret"] = r.keycloak.backofficeClientSecret
+	apiGateway["web_client_secret"] = r.keycloak.webClientSecret
 	apiGateway["wallet_authorizer_client_secret"] = r.keycloak.walletAuthorizerClientSecret
 	apiGateway["gateway_auth_encryption_key_id"] = r.gatewayAuth.encryptionKeyID
 	apiGateway["gateway_auth_encryption_keys"] = r.gatewayAuth.encryptionKeys
@@ -608,6 +613,11 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	identityAuth, err := withDB(serviceRoleIdentityAuth)
 	if err != nil {
 		return nil, err
+	}
+	identityAuth["account_enrollment"] = map[string]interface{}{
+		"keycloak_client_id":     "noebs-account-enroller",
+		"keycloak_client_secret": r.keycloak.accountEnrollerClientSecret,
+		"keycloak_base_url":      "https://keycloak.noebs.svc.cluster.local:8443/auth",
 	}
 	r.addTemporalClientAuthority(identityAuth, r.keycloak.temporalIdentityClientSecret)
 	setSecret("identity-auth", identityAuth)
@@ -866,6 +876,14 @@ func prepareKeycloakRelease(inputs kubernetesReleaseKeycloakInputs) (preparedKey
 	if err != nil {
 		return preparedKeycloakRelease{}, err
 	}
+	webSecret, err := requireCanonicalReleaseSecret("Keycloak web client secret", inputs.WebClientSecret)
+	if err != nil {
+		return preparedKeycloakRelease{}, err
+	}
+	accountEnrollerSecret, err := requireCanonicalReleaseSecret("Keycloak account enroller client secret", inputs.AccountEnrollerClientSecret)
+	if err != nil {
+		return preparedKeycloakRelease{}, err
+	}
 	walletAuthorizerSecret, err := requireCanonicalReleaseSecret("Keycloak wallet authorizer client secret", inputs.WalletAuthorizerClientSecret)
 	if err != nil {
 		return preparedKeycloakRelease{}, err
@@ -890,7 +908,7 @@ func prepareKeycloakRelease(inputs kubernetesReleaseKeycloakInputs) (preparedKey
 	if err != nil {
 		return preparedKeycloakRelease{}, err
 	}
-	secrets := []string{reconcilerSecret, backofficeSecret, walletAuthorizerSecret, temporalLedgerSecret, temporalWorkerSecret, temporalIdentitySecret, temporalIdentityWorkerSecret, temporalBootstrapSecret}
+	secrets := []string{reconcilerSecret, backofficeSecret, webSecret, accountEnrollerSecret, walletAuthorizerSecret, temporalLedgerSecret, temporalWorkerSecret, temporalIdentitySecret, temporalIdentityWorkerSecret, temporalBootstrapSecret}
 	seen := make(map[string]struct{}, len(secrets))
 	for _, secret := range secrets {
 		seen[secret] = struct{}{}
@@ -901,6 +919,8 @@ func prepareKeycloakRelease(inputs kubernetesReleaseKeycloakInputs) (preparedKey
 	return preparedKeycloakRelease{
 		reconcilerClientSecret:             reconcilerSecret,
 		backofficeClientSecret:             backofficeSecret,
+		webClientSecret:                    webSecret,
+		accountEnrollerClientSecret:        accountEnrollerSecret,
 		walletAuthorizerClientSecret:       walletAuthorizerSecret,
 		temporalLedgerClientSecret:         temporalLedgerSecret,
 		temporalWorkerClientSecret:         temporalWorkerSecret,
@@ -994,6 +1014,8 @@ func (r preparedKubernetesRelease) keycloakReconcilerConfig() (string, error) {
 		ClientCredentials: map[string]keycloakadmin.ClientCredential{
 			"noebs-keycloak-reconciler":    {ClientSecret: r.keycloak.reconcilerClientSecret},
 			"noebs-backoffice":             {ClientSecret: r.keycloak.backofficeClientSecret},
+			"noebs-web":                    {ClientSecret: r.keycloak.webClientSecret},
+			"noebs-account-enroller":       {ClientSecret: r.keycloak.accountEnrollerClientSecret},
 			"noebs-wallet-authorizer":      {ClientSecret: r.keycloak.walletAuthorizerClientSecret},
 			temporalLedgerClientID:         {ClientSecret: r.keycloak.temporalLedgerClientSecret},
 			temporalWorkerClientID:         {ClientSecret: r.keycloak.temporalWorkerClientSecret},

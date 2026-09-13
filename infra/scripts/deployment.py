@@ -66,6 +66,7 @@ def load_config(path):
             raise InvalidDeployment('Unknown service_config role or invalid settings')
         reserved = {'service_role', 'db_url', 'db_driver', 'oidc', 'keycloak_proxy_trusted_addresses',
                     'backoffice_redirect_url', 'backoffice_post_logout_url', 'wallet_authorizer_redirect_url',
+                    'mobile_redirect_url', 'web_redirect_url', 'web_post_logout_url',
                     'service_discovery', 'grpc_service_discovery'}
         if reserved & settings.keys():
             raise InvalidDeployment('service_config cannot replace workload, database or public authentication authority')

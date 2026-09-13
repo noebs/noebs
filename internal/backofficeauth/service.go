@@ -33,22 +33,26 @@ type ServiceConfig struct {
 	RefreshSkew      time.Duration
 	TouchInterval    time.Duration
 	ReturnPathPrefix string
+	// AllowUnenrolledAccounts is reserved for the customer account-setup session.
+	// Operator sessions keep requiring at least one Organization membership.
+	AllowUnenrolledAccounts bool
 }
 
 type Service struct {
-	flows            FlowRepository
-	sessions         SessionRepository
-	oauth            *OAuthClient
-	keys             *Keyring
-	cookies          *CookiePolicy
-	clock            Clock
-	entropy          io.Reader
-	flowTTL          time.Duration
-	idleTTL          time.Duration
-	absoluteTTL      time.Duration
-	refreshSkew      time.Duration
-	touchInterval    time.Duration
-	returnPathPrefix string
+	flows                   FlowRepository
+	sessions                SessionRepository
+	oauth                   *OAuthClient
+	keys                    *Keyring
+	cookies                 *CookiePolicy
+	clock                   Clock
+	entropy                 io.Reader
+	flowTTL                 time.Duration
+	idleTTL                 time.Duration
+	absoluteTTL             time.Duration
+	refreshSkew             time.Duration
+	touchInterval           time.Duration
+	returnPathPrefix        string
+	allowUnenrolledAccounts bool
 }
 
 func NewService(config ServiceConfig) (*Service, error) {
@@ -61,19 +65,20 @@ func NewService(config ServiceConfig) (*Service, error) {
 		return nil, ErrInvalidConfiguration
 	}
 	return &Service{
-		flows:            config.Flows,
-		sessions:         config.Sessions,
-		oauth:            config.OAuth,
-		keys:             config.Keys,
-		cookies:          config.Cookies,
-		clock:            config.Clock,
-		entropy:          config.Entropy,
-		flowTTL:          config.FlowTTL,
-		idleTTL:          config.IdleTTL,
-		absoluteTTL:      config.AbsoluteTTL,
-		refreshSkew:      config.RefreshSkew,
-		touchInterval:    config.TouchInterval,
-		returnPathPrefix: config.ReturnPathPrefix,
+		flows:                   config.Flows,
+		sessions:                config.Sessions,
+		oauth:                   config.OAuth,
+		keys:                    config.Keys,
+		cookies:                 config.Cookies,
+		clock:                   config.Clock,
+		entropy:                 config.Entropy,
+		flowTTL:                 config.FlowTTL,
+		idleTTL:                 config.IdleTTL,
+		absoluteTTL:             config.AbsoluteTTL,
+		refreshSkew:             config.RefreshSkew,
+		touchInterval:           config.TouchInterval,
+		returnPathPrefix:        config.ReturnPathPrefix,
+		allowUnenrolledAccounts: config.AllowUnenrolledAccounts,
 	}, nil
 }
 
@@ -171,7 +176,7 @@ func (s *Service) CompleteLogin(ctx context.Context, state, browserBinding, code
 	if err != nil {
 		return LoginComplete{}, err
 	}
-	if len(oauthResult.claims.Memberships()) == 0 {
+	if !s.allowUnenrolledAccounts && len(oauthResult.claims.Memberships()) == 0 {
 		return LoginComplete{}, ErrInvalidAccessToken
 	}
 	sessionID, err := generateOpaque(s.entropy)
@@ -265,7 +270,8 @@ func (s *Service) Authenticate(ctx context.Context, rawSessionID string) (Authen
 		return AuthenticatedSession{}, err
 	}
 	identity := claims.Identity()
-	if identity.Issuer != session.Issuer || !identity.ExpiresAt.Equal(session.AccessExpiresAt) || len(claims.Memberships()) == 0 {
+	if identity.Issuer != session.Issuer || !identity.ExpiresAt.Equal(session.AccessExpiresAt) ||
+		(!s.allowUnenrolledAccounts && len(claims.Memberships()) == 0) {
 		return AuthenticatedSession{}, ErrInvalidAccessToken
 	}
 	now = s.clock.Now().UTC()

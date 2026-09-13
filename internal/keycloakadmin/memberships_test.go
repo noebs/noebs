@@ -12,19 +12,40 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/adonese/noebs/internal/tenantcatalog"
 )
 
 const membershipTestSubject = "11111111-1111-4111-8111-11111111111a"
 
-func TestLoadMembershipsStrictAndCanonical(t *testing.T) {
+// Synthetic second tenant keeps isolation coverage independent of the production catalog.
+func membershipTestDesiredState(t *testing.T) DesiredState {
+	t.Helper()
 	state := repositoryDesiredState(t)
-	catalog := repositoryTenantCatalog(t)
+	tenant := tenantcatalog.Tenant{ID: "tenant-sandbox", Name: "Synthetic Tenant"}
+	catalog, err := tenantcatalog.New(append(state.tenantCatalog.All(), tenant))
+	if err != nil {
+		t.Fatal(err)
+	}
+	organization := state.Organizations[0]
+	organization.Alias, organization.Name = string(tenant.ID), tenant.Name
+	state.Organizations = append(state.Organizations, organization)
+	state.tenantCatalog = catalog
+	if err := state.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	return state
+}
+
+func TestLoadMembershipsStrictAndCanonical(t *testing.T) {
+	state := membershipTestDesiredState(t)
+	catalog := membershipTestDesiredState(t).tenantCatalog
 	document := `api_version: noebs.sd/keycloak-memberships/v1
 subject: 11111111-1111-4111-8111-11111111111a
 memberships:
   - tenant: tenant-sandbox
     class: user
-  - tenant: tenant-cutover
+  - tenant: noebs
     class: tenant-admin
 `
 	memberships, err := LoadMemberships(strings.NewReader(document), catalog, state)
@@ -32,7 +53,7 @@ memberships:
 		t.Fatalf("LoadMemberships() error = %v", err)
 	}
 	if got := memberships.Memberships; !reflect.DeepEqual(got, []TenantMembership{
-		{Tenant: "tenant-cutover", Class: MembershipClassTenantAdmin},
+		{Tenant: "noebs", Class: MembershipClassTenantAdmin},
 		{Tenant: "tenant-sandbox", Class: MembershipClassUser},
 	}) {
 		t.Fatalf("memberships = %#v", got)
@@ -48,7 +69,7 @@ memberships:
 		{name: "noncanonical subject", document: strings.Replace(document, membershipTestSubject, strings.ToUpper(membershipTestSubject), 1)},
 		{name: "zero subject", document: strings.Replace(document, membershipTestSubject, "00000000-0000-0000-0000-000000000000", 1)},
 		{name: "missing memberships", document: "api_version: " + MembershipsAPIVersion + "\nsubject: " + membershipTestSubject + "\n"},
-		{name: "duplicate tenant", document: document + "  - tenant: tenant-cutover\n    class: user\n"},
+		{name: "duplicate tenant", document: document + "  - tenant: noebs\n    class: user\n"},
 		{name: "unknown tenant", document: strings.Replace(document, "tenant-sandbox", "tenant-unknown", 1)},
 		{name: "unknown class", document: strings.Replace(document, "class: user", "class: platform-admin", 1)},
 	}
@@ -68,10 +89,10 @@ memberships:
 }
 
 func TestAssignMembershipsCreatesAndThenIsIdempotent(t *testing.T) {
-	state := repositoryDesiredState(t)
+	state := membershipTestDesiredState(t)
 	fake, reconciler := newMembershipTestReconciler(t, state)
 	desired := loadMembershipTestDocument(t, state, `
-  - tenant: tenant-cutover
+  - tenant: noebs
     class: user
 `)
 
@@ -81,15 +102,15 @@ func TestAssignMembershipsCreatesAndThenIsIdempotent(t *testing.T) {
 	}
 	wantActions := []PlannedMembershipAction{{
 		Subject: membershipTestSubject,
-		Tenant:  "tenant-cutover",
+		Tenant:  "noebs",
 		Class:   MembershipClassUser,
 		Action:  MembershipActionAdd,
 	}}
 	if !reflect.DeepEqual(actions, wantActions) {
 		t.Fatalf("actions = %#v, want %#v", actions, wantActions)
 	}
-	if got := fake.classes("tenant-cutover", membershipTestSubject); !reflect.DeepEqual(got, []MembershipClass{MembershipClassUser}) {
-		t.Fatalf("tenant-cutover classes = %v", got)
+	if got := fake.classes("noebs", membershipTestSubject); !reflect.DeepEqual(got, []MembershipClass{MembershipClassUser}) {
+		t.Fatalf("noebs classes = %v", got)
 	}
 	if got := fake.writeCount(); got != 2 {
 		t.Fatalf("writes = %d, want add organization and add group", got)
@@ -107,11 +128,11 @@ func TestAssignMembershipsCreatesAndThenIsIdempotent(t *testing.T) {
 }
 
 func TestAssignMembershipsDowngradesBeforeAddingClass(t *testing.T) {
-	state := repositoryDesiredState(t)
+	state := membershipTestDesiredState(t)
 	fake, reconciler := newMembershipTestReconciler(t, state)
-	fake.setMembership("tenant-cutover", membershipTestSubject, MembershipClassTenantAdmin)
+	fake.setMembership("noebs", membershipTestSubject, MembershipClassTenantAdmin)
 	desired := loadMembershipTestDocument(t, state, `
-  - tenant: tenant-cutover
+  - tenant: noebs
     class: user
 `)
 
@@ -127,16 +148,16 @@ func TestAssignMembershipsDowngradesBeforeAddingClass(t *testing.T) {
 		!strings.HasPrefix(paths[1], http.MethodPut+" ") || !strings.Contains(paths[1], "-user/members/") {
 		t.Fatalf("downgrade writes = %v", paths)
 	}
-	if got := fake.classes("tenant-cutover", membershipTestSubject); !reflect.DeepEqual(got, []MembershipClass{MembershipClassUser}) {
+	if got := fake.classes("noebs", membershipTestSubject); !reflect.DeepEqual(got, []MembershipClass{MembershipClassUser}) {
 		t.Fatalf("classes after downgrade = %v", got)
 	}
 	assertNoRoleMappingWrites(t, paths)
 }
 
 func TestAssignMembershipsRemovesOmittedOrganization(t *testing.T) {
-	state := repositoryDesiredState(t)
+	state := membershipTestDesiredState(t)
 	fake, reconciler := newMembershipTestReconciler(t, state)
-	fake.setMembership("tenant-cutover", membershipTestSubject, MembershipClassBackoffice)
+	fake.setMembership("noebs", membershipTestSubject, MembershipClassBackoffice)
 	desired := loadMembershipTestDocument(t, state, " []\n")
 
 	actions, err := reconciler.AssignMemberships(context.Background(), state, desired, false)
@@ -149,19 +170,19 @@ func TestAssignMembershipsRemovesOmittedOrganization(t *testing.T) {
 	if got := fake.writePaths(); len(got) != 1 || !strings.Contains(got[0], "/members/"+membershipTestSubject) {
 		t.Fatalf("removal writes = %v", got)
 	}
-	if fake.isMember("tenant-cutover", membershipTestSubject) {
+	if fake.isMember("noebs", membershipTestSubject) {
 		t.Fatal("subject remains an organization member")
 	}
 }
 
 func TestAssignMembershipsDryRunIsStableAndReadOnly(t *testing.T) {
-	state := repositoryDesiredState(t)
+	state := membershipTestDesiredState(t)
 	fake, reconciler := newMembershipTestReconciler(t, state)
-	fake.setMembership("tenant-cutover", membershipTestSubject, MembershipClassTenantAdmin)
+	fake.setMembership("noebs", membershipTestSubject, MembershipClassTenantAdmin)
 	desired := loadMembershipTestDocument(t, state, `
   - tenant: tenant-sandbox
     class: backoffice
-  - tenant: tenant-cutover
+  - tenant: noebs
     class: user
 `)
 
@@ -173,21 +194,21 @@ func TestAssignMembershipsDryRunIsStableAndReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second dry-run AssignMemberships() error = %v", err)
 	}
-	if !reflect.DeepEqual(first, second) || len(first) != 2 || first[0].Tenant != "tenant-cutover" || first[1].Tenant != "tenant-sandbox" {
+	if !reflect.DeepEqual(first, second) || len(first) != 2 || first[0].Tenant != "noebs" || first[1].Tenant != "tenant-sandbox" {
 		t.Fatalf("dry-run plans = %#v and %#v", first, second)
 	}
 	if fake.writeCount() != 0 {
 		t.Fatalf("dry-run writes = %d", fake.writeCount())
 	}
-	if got := fake.classes("tenant-cutover", membershipTestSubject); !reflect.DeepEqual(got, []MembershipClass{MembershipClassTenantAdmin}) {
+	if got := fake.classes("noebs", membershipTestSubject); !reflect.DeepEqual(got, []MembershipClass{MembershipClassTenantAdmin}) {
 		t.Fatalf("dry-run changed classes to %v", got)
 	}
 }
 
 func TestAssignMembershipsFailuresAreTyped(t *testing.T) {
-	state := repositoryDesiredState(t)
+	state := membershipTestDesiredState(t)
 	desired := loadMembershipTestDocument(t, state, `
-  - tenant: tenant-cutover
+  - tenant: noebs
     class: user
 `)
 
@@ -202,7 +223,7 @@ func TestAssignMembershipsFailuresAreTyped(t *testing.T) {
 
 	t.Run("topology drift", func(t *testing.T) {
 		fake, reconciler := newMembershipTestReconciler(t, state)
-		fake.deleteGroup("tenant-cutover", MembershipClassUser)
+		fake.deleteGroup("noebs", MembershipClassUser)
 		_, err := reconciler.AssignMemberships(context.Background(), state, desired, false)
 		if !errors.Is(err, ErrMembershipTopology) || fake.writeCount() != 0 {
 			t.Fatalf("AssignMemberships() error = %v, writes = %d", err, fake.writeCount())
@@ -211,7 +232,7 @@ func TestAssignMembershipsFailuresAreTyped(t *testing.T) {
 
 	t.Run("descendant topology drift", func(t *testing.T) {
 		fake, reconciler := newMembershipTestReconciler(t, state)
-		fake.addChildGroup("tenant-cutover", MembershipClassUser, "rogue-child")
+		fake.addChildGroup("noebs", MembershipClassUser, "rogue-child")
 		_, err := reconciler.AssignMemberships(context.Background(), state, desired, false)
 		if !errors.Is(err, ErrMembershipTopology) || fake.writeCount() != 0 {
 			t.Fatalf("AssignMemberships() error = %v, writes = %d", err, fake.writeCount())
@@ -220,7 +241,7 @@ func TestAssignMembershipsFailuresAreTyped(t *testing.T) {
 
 	t.Run("group role mapping privilege drift", func(t *testing.T) {
 		fake, reconciler := newMembershipTestReconciler(t, state)
-		fake.addGroupRoleMapping("tenant-cutover", MembershipClassUser, "tenant-admin")
+		fake.addGroupRoleMapping("noebs", MembershipClassUser, "tenant-admin")
 		_, err := reconciler.AssignMemberships(context.Background(), state, desired, false)
 		if !errors.Is(err, ErrMembershipTopology) || fake.writeCount() != 0 {
 			t.Fatalf("AssignMemberships() error = %v, writes = %d", err, fake.writeCount())
@@ -259,7 +280,7 @@ func TestAssignMembershipsFailuresAreTyped(t *testing.T) {
 }
 
 func TestLookupSubjectEmailExact(t *testing.T) {
-	state := repositoryDesiredState(t)
+	state := membershipTestDesiredState(t)
 	fake, reconciler := newMembershipTestReconciler(t, state)
 
 	subject, err := reconciler.LookupSubject(context.Background(), SubjectLookup{Field: SubjectLookupEmail, Value: "user@example.com"})
@@ -290,7 +311,7 @@ func TestLookupSubjectEmailExact(t *testing.T) {
 func loadMembershipTestDocument(t *testing.T, state DesiredState, memberships string) Memberships {
 	t.Helper()
 	document := "api_version: " + MembershipsAPIVersion + "\nsubject: " + membershipTestSubject + "\nmemberships:" + memberships
-	result, err := LoadMemberships(strings.NewReader(document), repositoryTenantCatalog(t), state)
+	result, err := LoadMemberships(strings.NewReader(document), membershipTestDesiredState(t).tenantCatalog, state)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -723,7 +744,7 @@ func (f *membershipFake) String() string {
 }
 
 func TestLookupSubjectUsernameExact(t *testing.T) {
-	fake, reconciler := newMembershipTestReconciler(t, repositoryDesiredState(t))
+	fake, reconciler := newMembershipTestReconciler(t, membershipTestDesiredState(t))
 	fake.mu.Lock()
 	fake.users[membershipTestSubject] = membershipUserRepresentation{ID: membershipTestSubject, Username: "+249912345678"}
 	fake.mu.Unlock()
@@ -743,7 +764,7 @@ func TestLookupSubjectUsernameExact(t *testing.T) {
 }
 
 func TestLookupSubjectValidatesBeforeRequest(t *testing.T) {
-	fake, reconciler := newMembershipTestReconciler(t, repositoryDesiredState(t))
+	fake, reconciler := newMembershipTestReconciler(t, membershipTestDesiredState(t))
 	for _, lookup := range []SubjectLookup{
 		{}, {Field: SubjectLookupEmail}, {Field: SubjectLookupUsername},
 		{Field: "phone", Value: "+249912345678"},
