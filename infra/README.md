@@ -111,7 +111,7 @@ the following explicit application settings under `service_config.wallet-worker`
 ```yaml
 service_config:
   wallet-worker:
-    interop_tenant: tenant-bank
+    interop_tenant: noebs
     interop_fsp_id: noebs
     interop_sdk_outbound_url: http://100.64.0.10:4001
     interop_sdk_inbound_url: http://100.64.0.10:4000
@@ -128,6 +128,22 @@ cannot authorize callbacks. Configure the external SDK to use that callback URL.
 IP endpoints receive destination-specific egress rules; DNS endpoints receive
 rules limited to their configured TCP ports because Kubernetes NetworkPolicy does
 not resolve DNS names.
+
+The current fleet callback boundary requires one IPv4 Tailscale peer and an
+explicit `0.0.0.0:<port>` listener. Promotion installs
+`noebs-callback-source.service` on the worker under the release lease. Its owned
+mangle rule matches that peer, the worker's Tailscale address, original NodePort
+`30402`, and the translated listener port. It clears Tailscale's forwarded-SNAT
+mark only for that connection, preserving the socket peer and Kubernetes' other
+packet marks. The installer verifies the live Tailscale identity and mark rules
+before changing anything. The unit follows Tailscale restarts and retries startup
+failures every five seconds, up to twelve starts in two minutes.
+
+Disabling the integration removes the callback Service before removing this
+owned rule and unit. Verify harmless unknown-path requests from the actual SDK
+pod and wallet-worker pod, including an untrusted-peer rejection, after enabling
+the connection. The Noebs release does not enroll, deploy, or restore the external
+SDK service.
 
 A VPN can supply private connectivity without sharing a Kubernetes cluster.
 If the service requires OIDC federation or another authentication contract, that

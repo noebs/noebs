@@ -500,6 +500,9 @@ func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
 }
 
 func registerIdentityAuthRoutes(route *fiber.App, principalIdentity fiber.Handler, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+	// Fiber group middleware also matches subsequently registered routes.
+	// Enrollment verifies the signed identity before it has tenant membership.
+	registerAccountEnrollmentInternalRoutes(route)
 	consumerhandler.RegisterIdentityReviewRoutes(route.Group("/admin/identity", principalIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityInternalRoutes(route.Group("/internal/identity-auth", principalIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityPrincipalRoutes(route.Group("/consumer", principalIdentity), consumerHandler)
@@ -587,7 +590,6 @@ func GetMainEngine() *fiber.App {
 	if role == serviceRoleIdentityAuth {
 		consumerHandler := buildConsumerHandler()
 		registerIdentityAuthRoutes(route, principalIdentity, userIdentity, consumerHandler)
-		registerAccountEnrollmentInternalRoutes(route)
 		return route
 	}
 	if role == serviceRoleCardVault {

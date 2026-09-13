@@ -181,6 +181,8 @@ class PromotionSequenceTests(unittest.TestCase):
                 result = b'{"spec":{"hostPath":{"path":"/var/lib/rancher/k3s/storage/test"}}}'
             elif 'get' in args and any(arg in args for arg in ['pods', 'deployments,statefulsets,jobs', 'cronjobs']):
                 result = b'{"items":[]}'
+        elif command == 'tailscale ip -4':
+            result = b'100.85.107.107\n'
         elif command.startswith('ip -j route get '):
             result = b'[{"prefsrc":"100.85.107.107"}]'
         elif command.startswith('cat /var/lib/noebs/runtime/'):
@@ -237,6 +239,32 @@ class PromotionSequenceTests(unittest.TestCase):
                        for item in json.loads(event[3]['input'])['items']
                        if item.get('metadata', {}).get('name') == 'keycloak-smtp-egress']
             self.assertEqual(applied, [self.smtp_policy])
+
+    def test_enabled_callback_source_is_installed_before_callback_service(self):
+        self.config['service_config']['wallet-worker'] = {
+            'interop_tenant': 'noebs', 'interop_backend_allowed_peers': ['100.76.217.90'],
+            'interop_backend_listen_address': '0.0.0.0:4002',
+            'interop_sdk_outbound_url': 'http://100.76.217.90:30401',
+            'interop_sdk_inbound_url': 'http://100.76.217.90:30400',
+        }
+        self.invoke(Mock())
+        install = next(i for i, event in enumerate(self.events)
+                       if event[0] == 'ssh' and event[2] == 'sudo sh -s')
+        self.assertIn(b'systemctl enable noebs-callback-source.service', self.events[install][3]['input'])
+        callback = next(i for i, event in enumerate(self.events)
+                        if event[0] == 'ssh' and 'kubectl apply' in event[2]
+                        and any(obj.get('metadata', {}).get('name') == 'wallet-interop-callback'
+                                for obj in json.loads(event[3]['input'])['items']))
+        self.assertLess(install, callback)
+
+    def test_disabled_callback_source_is_removed_after_callback_service(self):
+        self.invoke(Mock())
+        remove_service = next(i for i, event in enumerate(self.events)
+                              if event[0] == 'ssh' and 'delete service/wallet-interop-callback' in event[2])
+        remove_rule = next(i for i, event in enumerate(self.events)
+                           if event[0] == 'ssh' and event[2] == 'sudo sh -s')
+        self.assertLess(remove_service, remove_rule)
+        self.assertIn(b'systemctl disable --now noebs-callback-source.service', self.events[remove_rule][3]['input'])
 
     def test_fresh_ingress_definitions_are_created_before_waiting_for_establishment(self):
         self.invoke(Mock())

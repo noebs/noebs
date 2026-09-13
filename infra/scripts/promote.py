@@ -19,6 +19,7 @@ import yaml
 from reconcile import ROOT, RemoteLease, run, ssh, ssh_args
 from deployment import load_config, prepare_source, configure_workload
 from external_transport import resources as external_transport_resources
+from external_transport_source import reconcile_callback_source
 
 ORIGIN = 'https://api.noebs.sd'
 
@@ -218,6 +219,9 @@ def promote(args, lease):
                 obj['data']['config.yaml']=(release/'config.yaml').read_text()
                 for path in (release/'services').glob('*.yaml'):
                     obj['data'][path.stem+'.service.yaml']=path.read_text()
+        settings = config['service_config'].get('wallet-worker', {})
+        if settings.get('interop_tenant'):
+            reconcile_callback_source(settings, key, worker, lease, ssh)
         apply([{'apiVersion':'v1','kind':'Namespace','metadata':{'name':name}} for name in ['noebs']])
         bootstrapping=phase('noebs-keycloak-delete-bootstrap-client')!='Complete'
         if bootstrapping:
@@ -299,6 +303,7 @@ def promote(args, lease):
         if not config['service_config'].get('wallet-worker', {}).get('interop_tenant'):
             kubectl(['-n','noebs','delete','service/wallet-interop-callback',
                      'networkpolicy/wallet-interop-transport','--ignore-not-found'])
+            reconcile_callback_source({}, key, worker, lease, ssh)
         marker={'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':'noebs-release','namespace':'noebs'},
                 'data':{'revision':revision,'image':app_image,'origin':ORIGIN,'fingerprint':fingerprint,'stage':'production'}}
         apply([marker])
