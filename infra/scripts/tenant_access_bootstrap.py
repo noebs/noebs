@@ -18,6 +18,17 @@ import uuid
 import yaml
 
 
+DATABASE_READINESS_SCRIPT = '''for attempt in {1..15}; do
+  if timeout 2 /bin/bash -c 'exec 3<>/dev/tcp/postgres/5432' >/dev/null 2>&1; then
+    exit 0
+  fi
+  sleep 1
+done
+echo 'Database network is not ready; bootstrap was not started.' >&2
+exit 1
+'''
+
+
 class ConfigurationError(ValueError):
     pass
 
@@ -72,9 +83,13 @@ def validate_reason(reason):
             'Reason must contain 1–2000 normalized UTF-8 bytes without control characters')
 
 
-def render(*, namespace, tenant, operation_id, reason, image, catalog, expected_subject=''):
+def render(*, namespace, tenant, operation_id, reason, image, catalog, tenant_catalog_configmap, expected_subject=''):
     require(isinstance(namespace, str) and len(namespace) <= 63
             and re.fullmatch(r'[a-z0-9](?:[a-z0-9-]*[a-z0-9])?', namespace), 'Namespace must be an explicit DNS label')
+    require(isinstance(tenant_catalog_configmap, str) and 1 <= len(tenant_catalog_configmap) <= 253
+            and all(len(label) <= 63 and re.fullmatch(r'[a-z0-9](?:[a-z0-9-]*[a-z0-9])?', label)
+                    for label in tenant_catalog_configmap.split('.')),
+            'Tenant catalog ConfigMap must be an explicit Kubernetes DNS name')
     tenant_id(tenant)
     canonical_uuid(operation_id, 'Operation ID')
     if expected_subject:
@@ -120,12 +135,21 @@ def render(*, namespace, tenant, operation_id, reason, image, catalog, expected_
         'serviceAccountName': name, 'automountServiceAccountToken': False, 'restartPolicy': 'Never',
         'enableServiceLinks': False, 'terminationGracePeriodSeconds': 10,
         'securityContext': {'runAsNonRoot': True, 'runAsUser': 10001, 'runAsGroup': 10001, 'fsGroup': 10001, 'seccompProfile': {'type': 'RuntimeDefault'}},
+        # Network policies may be programmed after a pod begins running. Probe
+        # only TCP in an init container that mounts no credentials.
+        # The command still verifies TLS and database identity itself.
+        'initContainers': [{
+            'name': 'wait-database', 'image': image, 'imagePullPolicy': 'IfNotPresent',
+            'command': ['/bin/bash', '-ec', DATABASE_READINESS_SCRIPT],
+            'securityContext': {'allowPrivilegeEscalation': False, 'readOnlyRootFilesystem': True, 'capabilities': {'drop': ['ALL']}},
+            'resources': {'requests': {'cpu': '10m', 'memory': '16Mi'}, 'limits': {'cpu': '100m', 'memory': '32Mi'}},
+        }],
         'containers': [container],
         'volumes': [
             {'name': 'config', 'configMap': {'name': 'noebs-config', 'items': [{'key': 'config.yaml', 'path': 'config.yaml'}, {'key': 'identity-auth.service.yaml', 'path': 'identity-auth.service.yaml'}]}},
             {'name': 'identity-auth-secrets', 'secret': {'secretName': 'identity-auth-secrets', 'defaultMode': 0o440, 'items': [{'key': 'secrets.yaml', 'path': 'secrets.yaml'}]}},
             {'name': 'migration-secrets', 'secret': {'secretName': 'identity-auth-migrate-secrets', 'defaultMode': 0o440, 'items': [{'key': 'secrets.yaml', 'path': 'secrets.yaml'}]}},
-            {'name': 'tenant-catalog', 'configMap': {'name': 'tenant-catalog', 'items': [{'key': 'tenant-catalog.yaml', 'path': 'tenant-catalog.yaml'}]}},
+            {'name': 'tenant-catalog', 'configMap': {'name': tenant_catalog_configmap, 'items': [{'key': 'tenant-catalog.yaml', 'path': 'tenant-catalog.yaml'}]}},
             {'name': 'operation', 'secret': {'secretName': name + '-why', 'defaultMode': 0o440, 'items': [{'key': 'reason', 'path': 'reason'}]}},
         ],
     }
@@ -159,7 +183,7 @@ def render(*, namespace, tenant, operation_id, reason, image, catalog, expected_
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    for argument in ['namespace', 'tenant', 'operation-id', 'reason-file', 'image', 'tenant-catalog', 'output']:
+    for argument in ['namespace', 'tenant', 'operation-id', 'reason-file', 'image', 'tenant-catalog', 'tenant-catalog-configmap', 'output']:
         parser.add_argument('--' + argument, required=True)
     parser.add_argument('--expected-subject', default='')
     args = parser.parse_args(argv)
@@ -170,7 +194,8 @@ def main(argv=None):
     require(len(catalog_bytes) <= 65536, 'Tenant catalog exceeds 64 KiB')
     catalog = yaml.load(catalog_bytes, Loader=UniqueLoader)
     documents = render(namespace=args.namespace, tenant=args.tenant, operation_id=args.operation_id, reason=reason,
-                       image=args.image, catalog=catalog, expected_subject=args.expected_subject)
+                       image=args.image, catalog=catalog, tenant_catalog_configmap=args.tenant_catalog_configmap,
+                       expected_subject=args.expected_subject)
     rendered = yaml.safe_dump_all(documents, sort_keys=False, explicit_start=True)
     output = Path(args.output)
     # No overwrite or stdout fallback: the accountable reason is private and

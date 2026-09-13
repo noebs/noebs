@@ -111,12 +111,32 @@ curl --fail-with-body --cookie /private/operator.cookies \
 Render the separately reviewed bootstrap Job and its restrictive network policies
 from the checked-in tool. The image must be the exact deployed release digest:
 
+The catalog ConfigMap has a Kustomize content hash in its deployed name. After the
+identity-auth rollout completes, resolve the exact ConfigMap from its deployed
+volume and confirm the ready identity-auth pods use that same name. Read that
+ConfigMap's catalog and compare its bytes with the authoritative release catalog
+before rendering or executing the Job. Stop if the name is missing, the contents
+differ, or a concurrent rollout changes the mounted name. Do not select a catalog
+by listing similarly named ConfigMaps; retained prior releases can coexist.
+
+```sh
+set -eu
+kubectl --namespace noebs rollout status deployment/identity-auth --timeout=60s
+bootstrap_catalog_configmap=$(kubectl --namespace noebs get deployment identity-auth \
+  -o 'jsonpath={.spec.template.spec.volumes[?(@.name=="tenant-catalog")].configMap.name}')
+test -n "$bootstrap_catalog_configmap"
+kubectl --namespace noebs get configmap "$bootstrap_catalog_configmap" \
+  -o 'jsonpath={.data.tenant-catalog\.yaml}' > /private/bootstrap-mounted-tenant-catalog.yaml
+cmp -- infra/kubernetes/keycloak-authority/tenant-catalog.yaml /private/bootstrap-mounted-tenant-catalog.yaml
+```
+
 ```sh
 python3 infra/scripts/tenant_access_bootstrap.py \
   --namespace noebs --tenant noebs --operation-id <fixed canonical UUID> \
   --reason-file <private reason file> \
   --image ghcr.io/noebs/noebs@sha256:<deployed release digest> \
   --tenant-catalog infra/kubernetes/keycloak-authority/tenant-catalog.yaml \
+  --tenant-catalog-configmap "$bootstrap_catalog_configmap" \
   --output <new private manifest path>
 ```
 
@@ -124,6 +144,11 @@ The renderer writes a new mode-0600 manifest and never applies it. It includes a
 operation-specific ServiceAccount with the existing GHCR pull secret, immutable
 reason Secret, exact DNS/PostgreSQL/Keycloak egress and matching ingress policies,
 and a nonroot Job with no service-account token, no restart and no automatic retry.
+An init container waits up to 45 seconds for the namespace-local PostgreSQL TCP
+port before the bootstrap command starts. It mounts no configuration or secrets
+and performs no authentication or SQL. This covers delayed pod network readiness;
+the command still verifies the pinned TLS CA and exact database session authority.
+The readiness loop never retries account creation or role changes.
 There is no direct SMTP or public network egress. Review and apply that exact file
 separately after the normal release and migration succeed. On retry retain the
 operation ID, reason and immutable Secret; replace only the exact owned finished

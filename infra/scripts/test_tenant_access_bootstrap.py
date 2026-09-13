@@ -17,6 +17,7 @@ from tenant_access_bootstrap import ConfigurationError, UniqueLoader, main, rend
 
 SCRIPT = Path(__file__).with_name('tenant_access_bootstrap.py')
 CATALOG = {'api_version': 'noebs.sd/tenants/v1', 'tenants': [{'id': 'noebs', 'name': 'Noebs'}]}
+CATALOG_CONFIGMAP = 'tenant-catalog-d22tgthc77'
 OPERATION = '22222222-2222-4222-8222-222222222222'
 SUBJECT = '33333333-3333-4333-8333-333333333333'
 IMAGE = 'ghcr.io/noebs/noebs@sha256:' + 'ab' * 32
@@ -26,13 +27,15 @@ REASON = 'Owner approved initial Noebs operator setup'
 class BootstrapRendererTests(unittest.TestCase):
     def manifest(self, **changes):
         values = dict(namespace='noebs', tenant='noebs', operation_id=OPERATION,
-                      reason=REASON, image=IMAGE, catalog=copy.deepcopy(CATALOG))
+                      reason=REASON, image=IMAGE, catalog=copy.deepcopy(CATALOG), tenant_catalog_configmap=CATALOG_CONFIGMAP)
         values.update(changes)
         return render(**values)
 
     def test_invalid_authority_inputs_fail_before_rendering(self):
         invalid = {
             'namespace': ['', ' noebs', 'Noebs', '-noebs', 'noebs-', 'noebs.other', 'x' * 64],
+            'tenant_catalog_configmap': ['', None, 'Catalog', '-catalog', 'catalog-', 'catalog.', 'a..b',
+                                         'catalog/name', 'catalog_name', 'x' * 64, 'a.' * 127 + 'a'],
             'tenant': ['', 'default', 'Noebs', 'noebs/other', 'noebs--other', 'other', 'x' * 64],
             'operation_id': ['', 'not-a-uuid', '0' * 32, OPERATION.replace('-', ''), OPERATION + ' '],
             'expected_subject': ['invalid', '00000000-0000-0000-0000-000000000000', SUBJECT.replace('-', '')],
@@ -89,7 +92,7 @@ class BootstrapRendererTests(unittest.TestCase):
             'runAsNonRoot': True, 'runAsUser': 10001, 'runAsGroup': 10001, 'fsGroup': 10001,
             'seccompProfile': {'type': 'RuntimeDefault'},
         })
-        for forbidden in ['hostNetwork', 'hostPID', 'hostIPC', 'initContainers', 'ephemeralContainers']:
+        for forbidden in ['hostNetwork', 'hostPID', 'hostIPC', 'ephemeralContainers']:
             self.assertNotIn(forbidden, pod)
         self.assertEqual(len(pod['containers']), 1)
         container = pod['containers'][0]
@@ -103,6 +106,46 @@ class BootstrapRendererTests(unittest.TestCase):
             'allowPrivilegeEscalation': False, 'readOnlyRootFilesystem': True, 'capabilities': {'drop': ['ALL']},
         })
         self.assertEqual(container['resources']['limits'], {'cpu': '500m', 'memory': '256Mi'})
+
+    def test_network_readiness_has_no_credentials_or_bootstrap_invocation(self):
+        pod = self.manifest()[-1]['spec']['template']['spec']
+        self.assertEqual(len(pod['initContainers']), 1)
+        gate = pod['initContainers'][0]
+        self.assertEqual(gate['image'], IMAGE)
+        self.assertEqual(gate['command'][:2], ['/bin/bash', '-ec'])
+        self.assertEqual(gate['securityContext'], pod['containers'][0]['securityContext'])
+        self.assertEqual(gate['resources']['limits'], {'cpu': '100m', 'memory': '32Mi'})
+        for field in ['volumeMounts', 'env', 'envFrom']:
+            self.assertNotIn(field, gate)
+        script = gate['command'][2]
+        self.assertNotIn('noebs', script)
+        self.assertNotIn('bootstrap-tenant-admin', script)
+        self.assertNotIn('password', script.lower())
+        subprocess.run(['/bin/bash', '-n'], input=script, text=True, check=True)
+
+    def test_network_readiness_retries_then_stops_without_running_application(self):
+        script = self.manifest()[-1]['spec']['template']['spec']['initContainers'][0]['command'][2]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            probe = root / 'timeout'
+            probe.write_text('''#!/bin/bash
+test "$#" = 4 && test "$1" = 2 && test "$2" = /bin/bash && test "$3" = -c && test "$4" = 'exec 3<>/dev/tcp/postgres/5432' || exit 90
+read -r attempts < "$READINESS_COUNT"
+attempts=$((attempts + 1))
+printf '%s\\n' "$attempts" > "$READINESS_COUNT"
+test "$attempts" -ge "$READINESS_SUCCEED_AT"
+''')
+            probe.chmod(0o755)
+            pause = root / 'sleep'
+            pause.write_text('#!/bin/bash\ntest "$#" = 1 && test "$1" = 1\n')
+            pause.chmod(0o755)
+            count = root / 'count'
+            for succeeds_at, expected_count, expected_exit in [('3', 3, 0), ('99', 15, 1)]:
+                count.write_text('0\n')
+                result = subprocess.run(['/bin/bash', '-ec', script], capture_output=True, text=True, timeout=5,
+                                        env={'PATH': directory, 'READINESS_COUNT': str(count), 'READINESS_SUCCEED_AT': succeeds_at})
+                self.assertEqual(result.returncode, expected_exit, result.stderr)
+                self.assertEqual(int(count.read_text()), expected_count)
 
     def test_only_exact_runtime_and_migration_authorities_are_mounted_readonly(self):
         documents = self.manifest()
@@ -122,7 +165,7 @@ class BootstrapRendererTests(unittest.TestCase):
             {'key': 'config.yaml', 'path': 'config.yaml'},
             {'key': 'identity-auth.service.yaml', 'path': 'identity-auth.service.yaml'},
         ]})
-        self.assertEqual(volumes['tenant-catalog']['configMap'], {'name': 'tenant-catalog', 'items': [
+        self.assertEqual(volumes['tenant-catalog']['configMap'], {'name': CATALOG_CONFIGMAP, 'items': [
             {'key': 'tenant-catalog.yaml', 'path': 'tenant-catalog.yaml'},
         ]})
         container = pod['containers'][0]
@@ -183,6 +226,7 @@ class BootstrapCommandTests(unittest.TestCase):
         self.output = self.root / 'operation.yaml'
         self.arguments = ['--namespace', 'noebs', '--tenant', 'noebs', '--operation-id', OPERATION,
                           '--reason-file', str(self.reason), '--image', IMAGE, '--tenant-catalog', str(self.catalog),
+                          '--tenant-catalog-configmap', CATALOG_CONFIGMAP,
                           '--output', str(self.output)]
 
     def invoke(self, args=None):
@@ -201,7 +245,18 @@ class BootstrapCommandTests(unittest.TestCase):
         documents = list(yaml.safe_load_all(self.output.read_text()))
         self.assertEqual(documents[-1]['kind'], 'Job')
         self.assertEqual(documents[1]['stringData']['reason'], REASON)
+        volumes = documents[-1]['spec']['template']['spec']['volumes']
+        self.assertEqual(next(v['configMap']['name'] for v in volumes if v['name'] == 'tenant-catalog'), CATALOG_CONFIGMAP)
         self.assertEqual(set(self.root.iterdir()), {self.reason, self.catalog, self.output})
+
+    def test_cli_rejects_empty_or_invalid_catalog_name_before_writing(self):
+        index = self.arguments.index('--tenant-catalog-configmap') + 1
+        for value in ['', 'Catalog', 'catalog/other']:
+            arguments = list(self.arguments)
+            arguments[index] = value
+            with self.subTest(value=value):
+                self.assertNotEqual(self.invoke(arguments).returncode, 0)
+                self.assertFalse(self.output.exists())
 
     def test_cli_requires_every_boundary_input_without_creating_output(self):
         for index in range(0, len(self.arguments), 2):
