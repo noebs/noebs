@@ -127,6 +127,16 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 		t.Fatal("rendered Kubernetes Secrets expose the SOPS age identity")
 	}
 	keycloakConfig := secretByName(t, secrets, "keycloak-secrets").StringData["keycloak.conf"]
+	if !strings.Contains(keycloakConfig, "truststore-paths=/opt/keycloak/conf/db-ca.pem\n") || !strings.Contains(keycloakConfig, "tls-hostname-verifier=DEFAULT\n") {
+		t.Fatal("Keycloak SMTP transport lacks explicit CA trust or hostname verification")
+	}
+	transport, err := readInternalTransportPlatformCredentials(root, filepath.Join(root, ".sops", "age-key.txt"), readPlainPreflightSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secretByName(t, secrets, "keycloak-secrets").StringData["db-ca.pem"] != transport.CACertificate {
+		t.Fatal("Keycloak SMTP trust must use the release internal transport CA")
+	}
 	for _, forbidden := range []string{"bootstrap-admin-username", "bootstrap-admin-password", "bootstrap-admin-client-id", "bootstrap-admin-client-secret"} {
 		if strings.Contains(keycloakConfig, forbidden) {
 			t.Fatalf("rendered steady Keycloak Secret contains %s", forbidden)

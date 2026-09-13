@@ -34,6 +34,7 @@ func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 		"services/api-gateway.yaml",
 		"platform/keycloak.conf",
 		"platform/keycloak-reconciler-config.yaml",
+		"platform/keycloak-smtp-egress.yaml",
 		"platform/gateway-auth-postgres-roles.secrets.yaml",
 		"platform/workload-auth-postgres-roles.secrets.yaml",
 		"platform/service-postgres-roles.secrets.yaml",
@@ -56,6 +57,8 @@ func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 		t.Fatal("prepared Keycloak config must retain the explicit proxy trust address")
 	}
 	for _, required := range []string{
+		"truststore-paths=/opt/keycloak/conf/db-ca.pem\n",
+		"tls-hostname-verifier=DEFAULT\n",
 		"db-tls-mode=verify-server\n",
 		"db-tls-trust-store-file=/opt/keycloak/conf/db-ca.pem\n",
 	} {

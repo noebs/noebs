@@ -167,6 +167,10 @@ func renderKubernetesSecrets(w io.Writer, root, namespace string, decrypt deploy
 	if err != nil {
 		return err
 	}
+	smtpEgress, err := readRequiredSecretText("Keycloak SMTP egress policy", filepath.Join(root, keycloakSMTPEgressArtifact))
+	if err != nil {
+		return err
+	}
 	ghcrDockerConfig, err := readRequiredSecretText("GHCR Docker config JSON", filepath.Join(root, "platform", "ghcr-dockerconfigjson"))
 	if err != nil {
 		return err
@@ -264,7 +268,10 @@ func renderKubernetesSecrets(w io.Writer, root, namespace string, decrypt deploy
 	}
 	manifests = append(manifests, newOpaqueSecret(namespace, "identity-worker-secrets", map[string]string{"secrets.yaml": string(identityPayload)}))
 	manifests = append(manifests,
-		newOpaqueSecret(namespace, "noebs-release-manifest", map[string]string{kubernetesReleaseManifestFile: releaseManifest}),
+		newOpaqueSecret(namespace, "noebs-release-manifest", map[string]string{
+			kubernetesReleaseManifestFile: releaseManifest,
+			"keycloak-smtp-egress.yaml":   smtpEgress,
+		}),
 		newOpaqueSecret(namespace, "postgres-credentials", map[string]string{
 			"ca.pem":  internalTransportPlatform.CACertificate,
 			"tls.crt": internalTransportPlatform.PostgresCertificate,

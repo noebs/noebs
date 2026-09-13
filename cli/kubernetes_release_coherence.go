@@ -44,6 +44,9 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 	if err != nil {
 		return err
 	}
+	if err := validateKeycloakSMTPEgressPolicy(root, reconciler.SMTP); err != nil {
+		return err
+	}
 	if reconciler.BaseURL != "https://keycloak.noebs.svc.cluster.local:8443/auth" {
 		return errors.New("steady Keycloak reconciler base_url must target the release Keycloak service")
 	}

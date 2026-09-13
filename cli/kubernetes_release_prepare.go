@@ -468,6 +468,13 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 	if err := writeReleaseFile(outputRoot, "platform/keycloak-reconciler-config.yaml", keycloakReconcilerConfig); err != nil {
 		return err
 	}
+	smtpEgress, err := yaml.Marshal(keycloakSMTPEgressPolicy(r.inputs.Noebs.Keycloak.SMTP))
+	if err != nil {
+		return fmt.Errorf("marshal Keycloak SMTP egress policy: %w", err)
+	}
+	if err := writeReleaseFile(outputRoot, keycloakSMTPEgressArtifact, string(smtpEgress)); err != nil {
+		return err
+	}
 	ghcrDockerConfig, err := r.ghcrDockerConfigJSON()
 	if err != nil {
 		return err
@@ -824,6 +831,8 @@ https-port=8443
 https-certificate-file=/opt/keycloak/conf/tls.crt
 https-certificate-key-file=/opt/keycloak/conf/tls.key
 https-protocols=TLSv1.3
+truststore-paths=/opt/keycloak/conf/db-ca.pem
+tls-hostname-verifier=DEFAULT
 http-management-scheme=http
 http-management-port=9000
 http-management-relative-path=/

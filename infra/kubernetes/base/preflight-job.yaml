@@ -44,6 +44,10 @@ spec:
               mountPath: /preflight/release-manifest.yaml
               subPath: release-manifest.yaml
               readOnly: true
+            - name: release-manifest
+              mountPath: /preflight/platform/keycloak-smtp-egress.yaml
+              subPath: keycloak-smtp-egress.yaml
+              readOnly: true
             - name: tenant-catalog
               mountPath: /preflight/tenant-catalog.yaml
               subPath: tenant-catalog.yaml

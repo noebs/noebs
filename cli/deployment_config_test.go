@@ -2792,7 +2792,7 @@ func renderedKubernetesSecretNames() map[string]bool {
 
 func renderedKubernetesSecretKeys() map[string]map[string]bool {
 	secrets := map[string]map[string]bool{
-		"noebs-release-manifest":                   {kubernetesReleaseManifestFile: true},
+		"noebs-release-manifest":                   {kubernetesReleaseManifestFile: true, "keycloak-smtp-egress.yaml": true},
 		"identity-worker-secrets":                  {"secrets.yaml": true},
 		"postgres-credentials":                     {"ca.pem": true, "tls.crt": true, "tls.key": true},
 		"service-postgres-roles":                   {"passwords.env": true, "bootstrap.sql": true, "roles.yaml": true},

@@ -198,6 +198,7 @@ def promote(args, lease):
             data['ca.crt'] = data.pop('ca.pem')
         objects=list(yaml.safe_load_all(run(['kustomize','build',str(source/'infra/kubernetes/overlays/exe')],capture_output=True).stdout))
         objects=[item for item in objects if item]
+        objects.append(yaml.safe_load((release/'platform/keycloak-smtp-egress.yaml').read_text()))
         objects.extend(external_transport_resources(config['service_config'].get('wallet-worker', {})))
         configuration = (release/'config.yaml').read_bytes()
         for path in sorted((release/'services').glob('*.yaml')):

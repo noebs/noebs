@@ -128,6 +128,14 @@ class PromotionSequenceTests(unittest.TestCase):
         self.events = []
         self.config = {'public_host': 'api.noebs.sd', 'trusted_proxy_cidrs': ['127.0.0.1/32'], 'service_config': {}}
         self.image = 'ghcr.io/noebs/noebs@sha256:' + 'a' * 64
+        self.smtp_policy = {
+            'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy',
+            'metadata': {'name': 'keycloak-smtp-egress', 'namespace': 'noebs'},
+            'spec': {'podSelector': {'matchLabels': {'app.kubernetes.io/name': 'keycloak'}},
+                     'policyTypes': ['Egress'], 'egress': [
+                         {'to': [{'ipBlock': {'cidr': '100.64.1.8/32'}}],
+                          'ports': [{'protocol': 'TCP', 'port': 465}]}]},
+        }
 
     def tearDown(self):
         self.directory.cleanup()
@@ -143,6 +151,8 @@ class PromotionSequenceTests(unittest.TestCase):
             (release / 'services').mkdir()
             (release / 'services/wallet-worker.yaml').write_text('noebs: {}')
             (release / 'config.yaml').write_text('noebs: {}')
+            (release / 'platform').mkdir()
+            (release / 'platform/keycloak-smtp-egress.yaml').write_text(yaml.safe_dump(self.smtp_policy))
         elif 'render-kubernetes-secrets' in command:
             result = yaml.safe_dump({'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'test-secret'},
                                      'stringData': {'private': 'secret-value'}}).encode()
@@ -216,6 +226,17 @@ class PromotionSequenceTests(unittest.TestCase):
         deletes = [event[2] for event in self.events if event[0] == 'ssh' and 'delete' in event[2]]
         self.assertFalse(any('deployment/caddy' in command or 'statefulset/noebs-mojaloop-redis' in command for command in deletes))
         self.assertFalse((self.work / 'release-receipt.json').exists())
+
+    def test_prepared_smtp_egress_is_applied_including_permission_removal(self):
+        for egress in [self.smtp_policy['spec']['egress'], []]:
+            self.events = []
+            self.smtp_policy['spec']['egress'] = egress
+            self.invoke(Mock())
+            applied = [item for event in self.events
+                       if event[0] == 'ssh' and 'kubectl apply' in event[2]
+                       for item in json.loads(event[3]['input'])['items']
+                       if item.get('metadata', {}).get('name') == 'keycloak-smtp-egress']
+            self.assertEqual(applied, [self.smtp_policy])
 
     def test_fresh_ingress_definitions_are_created_before_waiting_for_establishment(self):
         self.invoke(Mock())
