@@ -71,6 +71,9 @@ func runAssignKeycloakMemberships(args []string, httpClient *http.Client) (keycl
 		return keycloakadmin.Memberships{}, nil, false, errors.New("assign-keycloak-memberships requires --memberships, --desired-state, --tenant-catalog, --config, and --ca")
 	}
 
+	if !*dryRun {
+		return keycloakadmin.Memberships{}, nil, false, errors.New("whole-set membership writes are retired; use the private tenant access page/API for journaled grant/revoke changes, or bootstrap-tenant-admin for one-time deployment initialization")
+	}
 	catalog, state, config, err := loadKeycloakMembershipAuthority(*tenantCatalogPath, *desiredStatePath, *configPath)
 	if err != nil {
 		return keycloakadmin.Memberships{}, nil, *dryRun, err

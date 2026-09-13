@@ -129,7 +129,7 @@ class DeploymentConfigTest(unittest.TestCase):
         self.assertEqual(common['backoffice_redirect_url'], value['backoffice_origin'] + '/backoffice/oauth/callback')
         desired = yaml.safe_load((destination / 'infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml').read_text())
         self.assertEqual(desired['backoffice_origin'], value['backoffice_origin'])
-        self.assertEqual(desired['interactive_clients'][0]['redirect_uris'], [common['backoffice_redirect_url']])
+        self.assertEqual(desired['interactive_clients'][0]['redirect_uris'], [common['backoffice_redirect_url'], value['backoffice_origin'] + '/backoffice/setup-complete'])
         wallet = yaml.safe_load(result['data']['wallet-api.service.yaml'])
         self.assertEqual(wallet['noebs']['external_service_url'], 'https://external.example')
         self.assertEqual(result['data']['identity-auth.service.yaml'], manifest['data']['identity-auth.service.yaml'])

@@ -47,8 +47,10 @@ func (f *routeEnrollmentFixture) Save(_ context.Context, progress accountenrollm
 }
 
 func TestIdentityAuthRoutesPermitSignedEnrollmentBeforeTenantMembership(t *testing.T) {
-	previousConfig, previousService := noebsConfig, accountEnrollmentService
-	t.Cleanup(func() { noebsConfig, accountEnrollmentService = previousConfig, previousService })
+	previousConfig, previousService, previousAccess := noebsConfig, accountEnrollmentService, tenantAccessService
+	t.Cleanup(func() {
+		noebsConfig, accountEnrollmentService, tenantAccessService = previousConfig, previousService, previousAccess
+	})
 	policy := accountenrollment.RuntimeConfig{
 		Enabled: true, Issuer: "https://example.test/auth/realms/noebs",
 		TenantIDs: []string{"noebs"}, AllowVerifiedAccounts: true,
@@ -59,6 +61,7 @@ func TestIdentityAuthRoutesPermitSignedEnrollmentBeforeTenantMembership(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	tenantAccessService = &accessHTTPFixture{}
 	fixture := &routeEnrollmentFixture{}
 	accountEnrollmentService, err = accountenrollment.New(policy, catalog, fixture, fixture)
 	if err != nil {
@@ -68,7 +71,9 @@ func TestIdentityAuthRoutesPermitSignedEnrollmentBeforeTenantMembership(t *testi
 	app.Use(signedWorkloadBoundary(serviceRoleIdentityAuth, newTestWorkloadVerifier(t, string(serviceRoleIdentityAuth), string(serviceRoleAPIGateway))))
 	// Use production registration and real principal/user middleware: registering
 	// the shared /internal/identity-auth group first must fail this regression.
-	registerIdentityAuthRoutes(app, gateway.InternalPrincipalIdentityMiddleware(), gateway.InternalUserIdentityMiddleware(), &consumerhandler.Handler{})
+	if err := registerIdentityAuthRoutes(app, gateway.InternalPrincipalIdentityMiddleware(), gateway.InternalUserIdentityMiddleware(), &consumerhandler.Handler{}); err != nil {
+		t.Fatal(err)
+	}
 	signers := newTestWorkloadSigners(t, string(serviceRoleAPIGateway), string(serviceRoleIdentityAuth))
 	for _, tc := range []struct {
 		name, method, path, body, enrollmentStatus string

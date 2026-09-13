@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tenant access · Noebs</title>
+<link rel="stylesheet" href="/backoffice/assets/style.css">
+</head>
+<body>
+<main>
+<nav>
+<a href="/backoffice/home">Back office</a> / <a href="{{base .TenantID}}">Tenant access</a>
+</nav>
+<h1>Tenant access: {{.TenantID}}</h1>
+{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}<p>Roles are independent. Adding an operator role preserves wallet access only when the user role is also assigned. Removing roles can take up to five minutes to affect existing sessions.</p>
+{{if .List}}<h2>Current members</h2>
+<table>
+<thead>
+<tr>
+<th>Account</th>
+<th>Roles</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>{{range .Accounts}}<tr>
+<td>{{if .Email}}{{.Email}}{{else}}{{.Subject}}{{end}}</td>
+<td>{{range .Roles}}{{.}} {{end}}{{if .Disabled}}<br><strong>Identity disabled</strong>{{end}}</td>
+<td>
+<a href="{{base $.TenantID}}/{{.Subject}}">Inspect access</a>
+</td>
+</tr>{{else}}<tr>
+<td colspan="3">No current members.</td>
+</tr>{{end}}</tbody>
+</table>
+<h2>Inspect an exact account</h2>
+<form method="post" action="{{base .TenantID}}/lookup">
+<input type="hidden" name="_csrf" value="{{.CSRF}}">
+<label>Identity subject<input name="subject" required placeholder="Account subject UUID">
+</label>
+<button type="submit">Inspect access</button>
+</form>
+<p>Use the subject supplied by the account owner or identity administrator. Only current tenant members have names or email addresses shown here.</p>{{end}}
+{{with .Account}}<h2>{{if .Email}}{{.Email}}{{else}}{{.Subject}}{{end}}</h2>{{if .Fullname}}<p>{{.Fullname}}</p>{{end}}<p>Subject: <code>{{.Subject}}</code>
+</p>
+{{if .Disabled}}<p role="status">This identity is disabled in the identity authority.</p>{{end}}
+<h3>Assigned roles</h3>
+<ul>{{range .Roles}}<li>{{.}}</li>{{else}}<li>No tenant roles.</li>{{end}}</ul>
+<h3>Effective permissions</h3>
+<ul>{{range .Permissions}}<li>{{.}}</li>{{else}}<li>No operator permissions.</li>{{end}}</ul>{{if .EnrollmentSuppressed}}<p>Signup will not restore removed user access. An administrator must grant it explicitly.</p>{{end}}{{if .PendingOperationID}}<p role="status">Pending change: {{.PendingOperationID}}. Resume that operation before starting another change.</p>{{end}}
+{{if $.Edit}}<h3>Change role grants</h3>
+<form method="post" action="{{base $.TenantID}}/{{.Subject}}/changes">
+<input type="hidden" name="_csrf" value="{{$.CSRF}}">
+<input type="hidden" name="operation_id" value="{{$.OperationID}}">
+<input type="hidden" name="expected_revision" value="{{.Revision}}">
+<fieldset>
+<legend>Grant roles</legend>{{range roles}}<label>
+<input type="checkbox" name="grant_roles" value="{{.}}">{{.}}</label>{{end}}</fieldset>
+<fieldset>
+<legend>Revoke roles</legend>{{range roles}}<label>
+<input type="checkbox" name="revoke_roles" value="{{.}}">{{.}}</label>{{end}}</fieldset>
+<label>Reason<input name="reason" required maxlength="1000">
+</label>
+<p>Only selected grants and revocations change. All other roles and all other tenants are preserved.</p>
+<button type="submit">Apply access change</button>
+</form>{{else}}<a href="{{base $.TenantID}}/{{.Subject}}/edit">Change access (requires write permission)</a>{{end}}{{end}}
+{{if .History}}<h2>Access change history</h2>
+<table>
+<thead>
+<tr>
+<th>When</th>
+<th>Actor</th>
+<th>Change</th>
+<th>Reason</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>{{range .History}}<tr>
+<td>{{.CreatedAt}}</td>
+<td>{{.ActorSubject}}{{if .ActorKind}} ({{.ActorKind}}){{end}}<br><small>Source: {{.ActorSourceIP}}<br>Request: {{.ActorRequestID}}</small>{{if .RecoveryAttempts}}<details><summary>Recovery attempts</summary><ul>{{range .RecoveryAttempts}}<li>{{.AttemptedAt}}: {{.ActorSubject}} ({{.SourceIP}}, {{.RequestID}})</li>{{end}}</ul></details>{{end}}</td>
+<td>Grant: {{range .GrantRoles}}{{.}} {{else}}none{{end}}; revoke: {{range .RevokeRoles}}{{.}} {{else}}none{{end}}<br>Before: {{range .BeforeRoles}}{{.}} {{else}}none{{end}}; planned roles: {{range .AfterRoles}}{{.}} {{else}}none{{end}}<br>
+{{if eq .Status "complete"}}<br>Completed roles: {{range .CompletedRoles}}{{.}} {{else}}none{{end}}{{end}}<br><small>{{.OperationID}}</small>
+</td>
+<td>{{.Reason}}</td>
+<td>{{.Status}}</td>
+</tr>{{end}}</tbody>
+</table>{{end}}
+{{with .Retry}}<h2>Resume the pending change</h2>
+<p>Grant: {{range .GrantRoles}}{{.}} {{else}}none{{end}}. Revoke: {{range .RevokeRoles}}{{.}} {{else}}none{{end}}.</p>
+<p>Reason: {{.Reason}}</p>
+<form method="post" action="{{base $.TenantID}}/{{.TargetSubject}}/changes">
+<input type="hidden" name="_csrf" value="{{$.CSRF}}">
+<input type="hidden" name="operation_id" value="{{.OperationID}}">
+<input type="hidden" name="expected_revision" value="{{.ExpectedRevision}}">
+<input type="hidden" name="reason" value="{{.Reason}}">{{range .GrantRoles}}<input type="hidden" name="grant_roles" value="{{.}}">{{end}}{{range .RevokeRoles}}<input type="hidden" name="revoke_roles" value="{{.}}">{{end}}<button type="submit">Retry the same access change</button>
+</form>{{end}}
+</main>
+</body>
+</html>

@@ -67,6 +67,9 @@ func runMain() error {
 			identityTemporalClient.Close()
 		}
 	}()
+	if isTenantAccessBootstrapCommand() {
+		return tenantAccessBootstrapCommand()
+	}
 	if isIdentityReviewCommand() {
 		return identityReviewCommand()
 	}

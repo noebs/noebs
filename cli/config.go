@@ -499,14 +499,23 @@ func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
 	return chatGatewayIdentity{PrincipalIdentity: identity}, nil
 }
 
-func registerIdentityAuthRoutes(route *fiber.App, principalIdentity fiber.Handler, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+func registerIdentityAuthRoutes(route *fiber.App, principalIdentity fiber.Handler, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) error {
 	// Fiber group middleware also matches subsequently registered routes.
 	// Enrollment verifies the signed identity before it has tenant membership.
 	registerAccountEnrollmentInternalRoutes(route)
+	if noebsConfig.AccountEnrollment.Enabled {
+		if tenantAccessService == nil {
+			return errors.New("tenant access service is not initialized")
+		}
+		if err := registerTenantAccessRoutes(route, tenantAccessService); err != nil {
+			return err
+		}
+	}
 	consumerhandler.RegisterIdentityReviewRoutes(route.Group("/admin/identity", principalIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityInternalRoutes(route.Group("/internal/identity-auth", principalIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityPrincipalRoutes(route.Group("/consumer", principalIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityAuthedRoutes(route.Group("/consumer", userIdentity), consumerHandler)
+	return nil
 }
 
 func registerCardVaultRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, managementEnabled bool, consumerHandler *consumerhandler.Handler) {
@@ -589,7 +598,9 @@ func GetMainEngine() *fiber.App {
 	}
 	if role == serviceRoleIdentityAuth {
 		consumerHandler := buildConsumerHandler()
-		registerIdentityAuthRoutes(route, principalIdentity, userIdentity, consumerHandler)
+		if err := registerIdentityAuthRoutes(route, principalIdentity, userIdentity, consumerHandler); err != nil {
+			logrusLogger.Fatalf("register identity authorization routes: %v", err)
+		}
 		return route
 	}
 	if role == serviceRoleCardVault {
@@ -804,6 +815,9 @@ func initConfig() {
 	}
 	if err := initAccountEnrollment(role, noebsConfig, database, runtimeTenantCatalog); err != nil {
 		logrusLogger.Fatalf("error initializing account enrollment: %v", err)
+	}
+	if err := initTenantAccess(role, noebsConfig, database, runtimeTenantCatalog); err != nil {
+		logrusLogger.Fatalf("error initializing tenant access: %v", err)
 	}
 	if role == serviceRoleIdentityAuth {
 		ctx, cancel := context.WithTimeout(context.Background(), temporalWorkerDialTimeout)

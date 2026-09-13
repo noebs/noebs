@@ -65,9 +65,16 @@ tenant, and repeating enrollment does not restore access. Existing operator
 classes are preserved. Enrollment in a different tenant requires its own
 explicit caller selection and policy decision.
 
-This enrollment operation is separate from the existing administrator's
-`assign-keycloak-memberships` command: that command reconciles the complete
-desired membership set and can remove omitted tenants or replace classes.
+Operator changes use the single [tenant access service](tenant-access.md): explicit
+grant/revoke deltas, reviewed revision, stable operation ID and audit reason. The
+legacy whole-set `assign-keycloak-memberships` write path is retired (dry-run
+inspection remains available). An explicit user-role revoke atomically records a
+completed enrollment receipt with its pending access intent, even for migrated
+accounts that never acquired a signup receipt. Signup fails closed while an access
+change or operator bootstrap is pending; the admin-only bootstrap operation marker
+also covers a crash after native identity creation and before its subject is stored.
+This prevents signup from restoring revoked user access or adding a user role to
+an operator whose setup is only partially complete.
 
 ## Deployment policy and authority
 
@@ -79,8 +86,10 @@ routes. It supplies neither tenant roles nor an organization ID before admission
 
 Keycloak 26.7 requires `manage-organizations` and `manage-users` for native
 organization/group membership changes. The dedicated enroller has exactly
-these realm-management roles and no `realm-admin`. Its API adapter only reads
-the account and adds organization/group membership. The ordinary reconciler
+these realm-management roles and no `realm-admin`. The signup adapter only reads
+the account and adds organization/group membership. The explicit access adapter
+uses the same scoped native authority for journaled group-role deltas; it does
+not modify role definitions or group mappings. The ordinary reconciler
 continues to own organization topology and roles.
 
 The identity-auth runtime receives explicit policy, for example:

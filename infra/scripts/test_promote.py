@@ -292,16 +292,34 @@ class PrivateHTTPSVerificationTests(unittest.TestCase):
         private_origin = 'https://noebs-workers.tail09832.ts.net'
         headers = PrivateLoginTests().headers()
         payload = b'HTTP/2 303\r\n' + str(headers).replace('\n', '\r\n').encode() + b'\r\n'
-        with patch.object(promotion, 'ssh', return_value=CompletedProcess([], 0, payload)) as ssh:
+        netmap = json.dumps({'BackendState': 'Running', 'Self': {'DNSName': 'verifier.tail09832.ts.net.'},
+                             'Peer': {'worker': {'DNSName': 'noebs-workers.tail09832.ts.net.', 'Online': True,
+                                                 'TailscaleIPs': ['100.85.107.107']}}}).encode()
+        with patch.object(promotion, 'ssh', side_effect=[CompletedProcess([], 0, netmap), CompletedProcess([], 0, payload)]) as ssh:
             promotion.verify_private_backoffice('key', 'tailnet-peer', origin, private_origin)
         command = ssh.call_args.args[2]
         self.assertIn('--proto =https', command)
         self.assertIn('--noproxy "*"', command)
+        self.assertIn('--resolve noebs-workers.tail09832.ts.net:443:100.85.107.107', command)
         self.assertNotIn('--insecure', command)
         self.assertTrue(ssh.call_args.kwargs['capture_output'])
         bad = payload.replace(b'noebs-workers.tail09832.ts.net%2Fbackoffice', b'api.noebs.sd%2Fbackoffice')
-        with patch.object(promotion, 'ssh', return_value=CompletedProcess([], 0, bad)), self.assertRaises(RuntimeError):
+        with patch.object(promotion, 'ssh', side_effect=[CompletedProcess([], 0, netmap), CompletedProcess([], 0, bad)]), self.assertRaises(RuntimeError):
             promotion.verify_private_backoffice('key', 'tailnet-peer', origin, private_origin)
+
+    def test_private_probe_rejects_untrusted_or_ambiguous_peer_resolution(self):
+        private_origin = 'https://noebs-workers.tail09832.ts.net'
+        worker = {'DNSName': 'noebs-workers.tail09832.ts.net.', 'Online': True, 'TailscaleIPs': ['100.85.107.107']}
+        valid = {'BackendState': 'Running', 'Self': {'DNSName': 'verifier.tail09832.ts.net.'}, 'Peer': {'worker': worker}}
+        self.assertEqual(promotion.private_peer_address(valid, private_origin), '100.85.107.107')
+        variants = [valid | {'BackendState': 'Stopped'}, valid | {'Self': worker}, valid | {'Peer': {}},
+                    valid | {'Peer': {'worker': worker, 'duplicate': worker}},
+                    valid | {'Peer': {'worker': worker | {'Online': False}}},
+                    valid | {'Peer': {'worker': worker | {'TailscaleIPs': ['213.199.63.78']}}},
+                    valid | {'Peer': {'worker': worker | {'TailscaleIPs': ['100.85.107.107', '100.85.107.108']}}}]
+        for status in variants:
+            with self.subTest(status=status), self.assertRaises(ValueError):
+                promotion.private_peer_address(status, private_origin)
 
     def test_public_probe_denies_backoffice_and_verifies_public_account_login(self):
         calls = []

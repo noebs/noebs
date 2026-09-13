@@ -49,11 +49,11 @@ func TestKeycloakOperationRunnerUsesDeployedReleaseAuthority(t *testing.T) {
 	}{
 		{"lookup", "lookup", "valid", true},
 		{"membership dry run", "dry-run", "valid", true},
-		{"membership apply", "apply", "valid", true},
-		{"different revision", "apply", "revision", false},
-		{"different image authority", "apply", "image", false},
-		{"changed live authority", "apply", "authority", false},
-		{"unready Keycloak", "apply", "unready", false},
+		{"retired membership apply", "apply", "valid", false},
+		{"different revision", "dry-run", "revision", false},
+		{"different image authority", "dry-run", "image", false},
+		{"changed live authority", "dry-run", "authority", false},
+		{"unready Keycloak", "dry-run", "unready", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			directory := t.TempDir()

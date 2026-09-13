@@ -129,6 +129,11 @@ func desiredLocalAccountProfile() map[string]any {
 				"name": "lastName", "displayName": "${lastName}", "permissions": permissions, "multivalued": false,
 				"validations": map[string]any{"length": map[string]any{"max": 255}, "person-name-prohibited-characters": map[string]any{}},
 			},
+			{
+				"name": bootstrapOperationAttribute, "displayName": "Operator bootstrap operation", "multivalued": false,
+				"permissions": map[string]any{"view": []string{"admin"}, "edit": []string{"admin"}},
+				"validations": map[string]any{"length": map[string]any{"min": 36, "max": 36}, "pattern": map[string]any{"pattern": `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`}},
+			},
 		},
 		"groups": []any{},
 	}

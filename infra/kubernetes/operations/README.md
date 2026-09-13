@@ -41,46 +41,16 @@ kubectl -n noebs delete secret keycloak-subject-lookup
 rm -f /tmp/noebs-keycloak-lookup-email
 ```
 
-## Reconcile memberships
+## Change tenant access
 
-Copy `memberships.example.yaml` outside the repository, replace `subject`, and
-declare the complete desired tenant set for that subject. Omitting a tenant
-removes that organization membership. Each included tenant has exactly one of
-`user`, `backoffice`, or `tenant-admin`.
+Use the private [tenant access workflow](../../../docs/tenant-access.md) for
+explicit, composable role grants and revocations. It is the single journaled write
+path, with a reviewed revision, operation ID, reason and durable signup suppression.
+The former `apply` mode and `assign-keycloak-memberships` writes are retired and
+fail before contacting Kubernetes or Keycloak. Historical single-class membership
+files can still be inspected with `dry-run`; they are never applied.
 
-```sh
-umask 077
-cp infra/kubernetes/operations/memberships.example.yaml \
-  /tmp/noebs-keycloak-memberships.yaml
-${EDITOR:?set EDITOR} /tmp/noebs-keycloak-memberships.yaml
-
-kubectl -n noebs create secret generic keycloak-membership-assignment \
-  --from-file=memberships.yaml=/tmp/noebs-keycloak-memberships.yaml \
-  --dry-run=client -o yaml | kubectl apply -f -
-infra/kubernetes/operations/run-keycloak-job.sh dry-run
-kubectl -n noebs wait --for=condition=complete --timeout=120s \
-  job/noebs-keycloak-membership-assignment
-kubectl -n noebs logs job/noebs-keycloak-membership-assignment
-```
-
-Review the stable dry-run actions. Delete the dry-run Job, apply the same exact
-input, and inspect the verified result:
-
-```sh
-kubectl -n noebs delete job noebs-keycloak-membership-assignment
-infra/kubernetes/operations/run-keycloak-job.sh apply
-kubectl -n noebs wait --for=condition=complete --timeout=120s \
-  job/noebs-keycloak-membership-assignment
-kubectl -n noebs logs job/noebs-keycloak-membership-assignment
-```
-
-For an idempotency check, delete and run the apply Job once more; its summary
-must report zero actions. Then remove the Job, temporary Secret, and local
-input. The command assigns organization and organization-group membership only;
-it never assigns a user role directly.
-
-```sh
-kubectl -n noebs delete job noebs-keycloak-membership-assignment
-kubectl -n noebs delete secret keycloak-membership-assignment
-rm -f /tmp/noebs-keycloak-memberships.yaml
-```
+Initial `admin@noebs.sd` / `noebs-admin` setup uses the separate optional bootstrap
+renderer documented in the tenant access guide. It requires the deployed immutable
+image, operation-scoped manifests and the database migration owner. It is not part
+of ordinary fleet promotion and cannot be reused after later revocation.

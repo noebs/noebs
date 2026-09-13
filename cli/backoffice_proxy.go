@@ -284,5 +284,13 @@ func backofficeRouteSpecs() []backofficeRouteSpec {
 	routes = append(routes, backofficeRouteSpec{method: http.MethodPost, path: identityBase + "/:user_id/:session_id/decision", upstreamPath: "/admin/identity/:user_id/:session_id/decision", role: serviceRoleIdentityAuth, permission: tenantauth.PermissionIdentityReviewDecide, roles: backofficeWriteRoles})
 	routes = append(routes, write("/backoffice/t/:tenant/wallet/transactions/:client_reference/resolve", "/admin/wallet/transactions/:client_reference/resolve", tenantauth.PermissionWalletTransactionResolve))
 
+	accessBase := "/backoffice/t/:tenant/access"
+	routes = append(routes, backofficeRouteSpec{method: http.MethodPost, path: accessBase + "/lookup", upstreamPath: "/admin/access/lookup", role: serviceRoleIdentityAuth, permission: tenantauth.PermissionIdentityAccessRead, roles: backofficeWriteRoles})
+	for _, suffix := range []string{"", "/:subject"} {
+		routes = append(routes, backofficeRouteSpec{method: http.MethodGet, path: accessBase + suffix, upstreamPath: "/admin/access" + suffix, role: serviceRoleIdentityAuth, permission: tenantauth.PermissionIdentityAccessRead, roles: backofficeWriteRoles})
+	}
+	routes = append(routes, backofficeRouteSpec{method: http.MethodGet, path: accessBase + "/:subject/edit", upstreamPath: "/admin/access/:subject/edit", role: serviceRoleIdentityAuth, permission: tenantauth.PermissionIdentityAccessWrite, roles: backofficeWriteRoles})
+	routes = append(routes, backofficeRouteSpec{method: http.MethodPost, path: accessBase + "/:subject/changes", upstreamPath: "/admin/access/:subject/changes", role: serviceRoleIdentityAuth, permission: tenantauth.PermissionIdentityAccessWrite, roles: backofficeWriteRoles})
+
 	return routes
 }

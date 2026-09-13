@@ -15,12 +15,13 @@ import (
 )
 
 const (
-	backofficeLoginPath     = "/backoffice/login"
-	backofficeCallbackPath  = "/backoffice/oauth/callback"
-	backofficeLogoutPath    = "/backoffice/logout"
-	backofficeLoggedOutPath = "/backoffice/oauth/logout/callback"
-	backofficeHomePath      = "/backoffice/home"
-	backofficeRequestTTL    = 15 * time.Second
+	backofficeLoginPath         = "/backoffice/login"
+	backofficeCallbackPath      = "/backoffice/oauth/callback"
+	backofficeLogoutPath        = "/backoffice/logout"
+	backofficeLoggedOutPath     = "/backoffice/oauth/logout/callback"
+	backofficeHomePath          = "/backoffice/home"
+	backofficeSetupCompletePath = "/backoffice/setup-complete"
+	backofficeRequestTTL        = 15 * time.Second
 )
 
 type backofficeHTTP struct {
@@ -42,7 +43,33 @@ func registerBackofficeLifecycleRoutes(router *fiber.App, handler *backofficeHTT
 	router.Post(backofficeLogoutPath, adaptor.HTTPHandlerFunc(handler.logout))
 	router.Get(backofficeLoggedOutPath, adaptor.HTTPHandlerFunc(handler.loggedOut))
 	router.Get(backofficeHomePath, adaptor.HTTPHandlerFunc(handler.home))
+	router.Add(fiber.MethodGet, backofficeSetupCompletePath, adaptor.HTTPHandlerFunc(handler.setupComplete))
 	return nil
+}
+
+// setupComplete is the private terminal page for native required-action emails.
+// Query status never establishes a session; the existing OIDC login verifies
+// the account and its required assurance before granting any application access.
+func (h *backofficeHTTP) setupComplete(writer http.ResponseWriter, request *http.Request) {
+	noStore(writer)
+	if request.Method != http.MethodGet {
+		backofficeError(writer, http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.canonicalHost(request) {
+		backofficeError(writer, http.StatusBadRequest)
+		return
+	}
+	values, err := exactQuery(request.URL.RawQuery, map[string]queryCardinality{"kc_action_status": {minimum: 0, maximum: 1}})
+	if err != nil {
+		backofficeError(writer, http.StatusBadRequest)
+		return
+	}
+	if statuses := values["kc_action_status"]; len(statuses) > 0 && statuses[0] != "success" && statuses[0] != "cancelled" {
+		backofficeError(writer, http.StatusBadRequest)
+		return
+	}
+	http.Redirect(writer, request, backofficeLoginPath, http.StatusSeeOther)
 }
 
 func (h *backofficeHTTP) login(writer http.ResponseWriter, request *http.Request) {
@@ -206,7 +233,10 @@ func (h *backofficeHTTP) home(writer http.ResponseWriter, request *http.Request)
 		if slices.Contains(membership.Permissions, tenantauth.PermissionIdentityReviewRead) {
 			entry.VerificationURL = backofficeTenantPath(membership.TenantID, "verifications")
 		}
-		if entry.ReportingURL != "" || entry.WalletURL != "" || entry.VerificationURL != "" {
+		if slices.Contains(membership.Roles, tenantauth.RoleTenantAdmin) && slices.Contains(membership.Permissions, tenantauth.PermissionIdentityAccessRead) {
+			entry.AccessURL = backofficeTenantPath(membership.TenantID, "access")
+		}
+		if entry.ReportingURL != "" || entry.WalletURL != "" || entry.VerificationURL != "" || entry.AccessURL != "" {
 			page.Tenants = append(page.Tenants, entry)
 		}
 	}
@@ -237,6 +267,7 @@ type backofficeTenantView struct {
 	ReportingURL    string
 	WalletURL       string
 	VerificationURL string
+	AccessURL       string
 }
 
 type queryCardinality struct {

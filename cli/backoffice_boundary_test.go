@@ -721,6 +721,13 @@ func TestBackofficeRoutePermissionMatrixIsExact(t *testing.T) {
 		expectedRoute{http.MethodPost, "/backoffice/t/:tenant/verifications/:user_id/:session_id/decision", "/admin/identity/:user_id/:session_id/decision", serviceRoleIdentityAuth, tenantauth.PermissionIdentityReviewDecide, true},
 		expectedRoute{http.MethodPost, "/backoffice/t/:tenant/wallet/transactions/:client_reference/resolve", "/admin/wallet/transactions/:client_reference/resolve", serviceRoleWalletAPI, tenantauth.PermissionWalletTransactionResolve, true},
 	)
+	expected = append(expected,
+		expectedRoute{http.MethodPost, "/backoffice/t/:tenant/access/lookup", "/admin/access/lookup", serviceRoleIdentityAuth, tenantauth.PermissionIdentityAccessRead, true},
+		expectedRoute{http.MethodGet, "/backoffice/t/:tenant/access", "/admin/access", serviceRoleIdentityAuth, tenantauth.PermissionIdentityAccessRead, true},
+		expectedRoute{http.MethodGet, "/backoffice/t/:tenant/access/:subject", "/admin/access/:subject", serviceRoleIdentityAuth, tenantauth.PermissionIdentityAccessRead, true},
+		expectedRoute{http.MethodGet, "/backoffice/t/:tenant/access/:subject/edit", "/admin/access/:subject/edit", serviceRoleIdentityAuth, tenantauth.PermissionIdentityAccessWrite, true},
+		expectedRoute{http.MethodPost, "/backoffice/t/:tenant/access/:subject/changes", "/admin/access/:subject/changes", serviceRoleIdentityAuth, tenantauth.PermissionIdentityAccessWrite, true},
+	)
 	actual := backofficeRouteSpecs()
 	if len(actual) != len(expected) {
 		t.Fatalf("route count = %d, want %d", len(actual), len(expected))

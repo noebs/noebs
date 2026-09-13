@@ -6,6 +6,11 @@ if [[ $# -ne 1 || ("$1" != lookup && "$1" != dry-run && "$1" != apply) ]]; then
   exit 2
 fi
 
+if [[ "$1" == apply ]]; then
+  echo "Whole-set membership writes are retired. Use the private tenant access workflow; initial operator setup uses the separate tenant-access bootstrap renderer." >&2
+  exit 2
+fi
+
 mode="$1"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/../../.." && pwd)"

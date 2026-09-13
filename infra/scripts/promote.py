@@ -21,7 +21,7 @@ from reconcile import ROOT, RemoteLease, run, ssh, ssh_args
 from deployment import load_config, prepare_source, configure_workload
 from external_transport import resources as external_transport_resources
 from external_transport_source import reconcile_callback_source
-from private_backoffice import private_host, check_private_backoffice_target, reconcile_private_backoffice
+from private_backoffice import private_host, private_peer_address, check_private_backoffice_target, reconcile_private_backoffice
 
 ORIGIN = 'https://api.noebs.sd'
 
@@ -134,10 +134,14 @@ def verify_oidc_login(status, headers, origin, redirect_origin, client_id, callb
 
 
 def verify_private_backoffice(key, peer, origin, backoffice_origin):
-    private_host(backoffice_origin)
+    host = private_host(backoffice_origin)
+    status = json.loads(ssh(key, peer, 'tailscale status --json', capture_output=True).stdout)
+    address = private_peer_address(status, backoffice_origin)
     # A different fleet tailnet member exercises real TLS and Serve forwarding.
     # Never print the response's transient login state or session-binding cookie.
-    command = 'curl --silent --show-error --noproxy "*" --proto =https --max-time 30 --max-redirs 0 --dump-header - --output /dev/null ' + shlex.quote(backoffice_origin + '/backoffice/login')
+    command = ('curl --silent --show-error --noproxy "*" --proto =https --max-time 30 --max-redirs 0 '
+               '--resolve ' + shlex.quote(host + ':443:' + address) + ' --dump-header - --output /dev/null '
+               + shlex.quote(backoffice_origin + '/backoffice/login'))
     payload = ssh(key, peer, command, capture_output=True).stdout
     status, separator, header_bytes = payload.partition(b'\r\n')
     if not separator or len(status.split()) < 2 or not status.split()[1].isdigit():

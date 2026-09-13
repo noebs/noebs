@@ -40,12 +40,13 @@ func (a *EnrollmentAuthority) Inspect(ctx context.Context, subject string) (acco
 		return accountenrollment.Account{}, err
 	}
 	var user struct {
-		ID            string `json:"id"`
-		Email         string `json:"email"`
-		EmailVerified bool   `json:"emailVerified"`
-		Enabled       bool   `json:"enabled"`
-		FirstName     string `json:"firstName"`
-		LastName      string `json:"lastName"`
+		Attributes    map[string][]string `json:"attributes"`
+		ID            string              `json:"id"`
+		Email         string              `json:"email"`
+		EmailVerified bool                `json:"emailVerified"`
+		Enabled       bool                `json:"enabled"`
+		FirstName     string              `json:"firstName"`
+		LastName      string              `json:"lastName"`
 	}
 	found, err := session.get(ctx, realmPath("noebs")+"/users/"+url.PathEscape(subject), &user)
 	if err != nil {
@@ -55,6 +56,12 @@ func (a *EnrollmentAuthority) Inspect(ctx context.Context, subject string) (acco
 		return accountenrollment.Account{}, accountenrollment.ErrInvalidIdentity
 	}
 	result := accountenrollment.Account{Email: user.Email, EmailVerified: user.EmailVerified, Fullname: strings.TrimSpace(user.FirstName + " " + user.LastName), Memberships: map[string][]string{}}
+	if marker, exists := user.Attributes[bootstrapOperationAttribute]; exists {
+		if len(marker) != 1 || validateCanonicalSubject(marker[0]) != nil {
+			return result, accountenrollment.ErrInvalidIdentity
+		}
+		result.BootstrapOperationID = marker[0]
+	}
 	organizations, err := a.organizations(ctx, session)
 	if err != nil {
 		return result, err

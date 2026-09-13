@@ -389,6 +389,7 @@ func (s DesiredState) Validate() error {
 		"reporting:read", "wallet:read", "wallet:audit:read", "wallet:manual:create",
 		"wallet:fees:write", "wallet:rates:write", "wallet:workflow:approve", "wallet:workflow:reject",
 		"identity:review:read", "identity:review:decide", "wallet:transaction:resolve",
+		"identity:access:read", "identity:access:write",
 	) {
 		return fmt.Errorf("%w: resource_client.roles must contain the exact membership and route permission vocabulary", ErrInvalidDesiredState)
 	}
@@ -459,7 +460,7 @@ func (s DesiredState) Validate() error {
 			}
 		case "noebs-backoffice":
 			if client.Name != "Noebs Backoffice" || client.AccessType != "confidential" || client.Credential != "noebs-backoffice" || client.AuthenticationLevel != 1 ||
-				!equalStrings(client.RedirectURIs, []string{s.BackofficeOrigin + "/backoffice/oauth/callback"}) ||
+				!equalStrings(client.RedirectURIs, []string{s.BackofficeOrigin + "/backoffice/oauth/callback", s.BackofficeOrigin + "/backoffice/setup-complete"}) ||
 				!equalStrings(client.PostLogoutRedirectURIs, []string{s.BackofficeOrigin + "/backoffice/oauth/logout/callback"}) || len(client.WebOrigins) != 0 {
 				return fmt.Errorf("%w: noebs-backoffice must declare the exact confidential LoA1 client", ErrInvalidDesiredState)
 			}
@@ -625,6 +626,7 @@ func (s DesiredState) Validate() error {
 					"tenant-admin", "reporting:read", "wallet:read", "wallet:audit:read", "wallet:manual:create",
 					"wallet:fees:write", "wallet:rates:write", "wallet:workflow:approve", "wallet:workflow:reject",
 					"identity:review:read", "identity:review:decide", "wallet:transaction:resolve",
+					"identity:access:read", "identity:access:write",
 				) {
 					return fmt.Errorf("%w: organization tenant-admin group must map every route permission", ErrInvalidDesiredState)
 				}

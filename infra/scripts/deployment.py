@@ -132,7 +132,8 @@ def prepare_source(destination, config, keycloak_peers=None):
     authority['backoffice_origin'] = backoffice_origin
     for client in authority['interactive_clients']:
         if client['client_id'] == 'noebs-backoffice':
-            client['redirect_uris'] = [common['noebs']['backoffice_redirect_url']]
+            client['redirect_uris'] = [common['noebs']['backoffice_redirect_url'],
+                                       backoffice_origin + '/backoffice/setup-complete']
             client['post_logout_redirect_uris'] = [common['noebs']['backoffice_post_logout_url']]
     authority_path.write_text(yaml.safe_dump(authority, sort_keys=False))
     private_path = destination / 'infra/kubernetes/ingress/backoffice.yaml'

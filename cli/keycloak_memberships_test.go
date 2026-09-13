@@ -486,6 +486,8 @@ func cliMembershipGroups(organizationID string) []map[string]any {
 func cliMembershipClientRoles() []map[string]any {
 	descriptions := map[string]string{
 		"identity:review:read":       "Read tenant verification cases",
+		"identity:access:read":       "Read tenant role grants and access audit",
+		"identity:access:write":      "Explicitly grant or revoke tenant roles",
 		"identity:review:decide":     "Decide tenant verification cases",
 		"wallet:transaction:resolve": "Resolve tenant transactions manually",
 		"user":                       "Tenant user",
@@ -520,7 +522,7 @@ func cliMembershipRoleMappings(groupID string) map[string]any {
 	case strings.HasSuffix(groupID, "-tenant-admin"):
 		names = []string{
 			"tenant-admin", "reporting:read", "wallet:read", "wallet:audit:read", "wallet:manual:create",
-			"wallet:fees:write", "wallet:rates:write", "wallet:workflow:approve", "wallet:workflow:reject", "identity:review:read", "identity:review:decide", "wallet:transaction:resolve",
+			"wallet:fees:write", "wallet:rates:write", "wallet:workflow:approve", "wallet:workflow:reject", "identity:review:read", "identity:review:decide", "wallet:transaction:resolve", "identity:access:read", "identity:access:write",
 		}
 	default:
 		panic("unexpected membership group " + groupID)

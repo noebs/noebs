@@ -28,6 +28,8 @@ const (
 type Permission string
 
 const (
+	PermissionIdentityAccessRead       Permission = "identity:access:read"
+	PermissionIdentityAccessWrite      Permission = "identity:access:write"
 	PermissionIdentityReviewRead       Permission = "identity:review:read"
 	PermissionIdentityReviewDecide     Permission = "identity:review:decide"
 	PermissionWalletTransactionResolve Permission = "wallet:transaction:resolve"
@@ -52,7 +54,7 @@ func ParseTenantRole(raw string) (Role, error) {
 
 func ParsePermission(raw string) (Permission, error) {
 	switch Permission(raw) {
-	case PermissionIdentityReviewRead, PermissionIdentityReviewDecide, PermissionWalletTransactionResolve, PermissionReportingRead,
+	case PermissionIdentityAccessRead, PermissionIdentityAccessWrite, PermissionIdentityReviewRead, PermissionIdentityReviewDecide, PermissionWalletTransactionResolve, PermissionReportingRead,
 		PermissionWalletRead,
 		PermissionWalletAuditRead,
 		PermissionWalletManualCreate,

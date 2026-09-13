@@ -10,7 +10,7 @@ import (
 
 func TestPostgresMigrationsAreFreshCanonicalBaselines(t *testing.T) {
 	expectedFiles := map[string][]string{
-		MigrationScopeIdentityAuth:     {"001_identity_auth.sql", "002_identity_evidence.sql", "003_identity_review.sql", "004_verification_lifecycle.sql"},
+		MigrationScopeIdentityAuth:     {"001_identity_auth.sql", "002_identity_evidence.sql", "003_identity_review.sql", "004_verification_lifecycle.sql", "005_account_enrollment.sql", "006_tenant_access.sql"},
 		MigrationScopeCardVault:        {"001_card_vault.sql"},
 		MigrationScopeEBSAdapter:       {"001_ebs_adapter.sql"},
 		MigrationScopeAdminReporting:   {"001_admin_reporting.sql"},

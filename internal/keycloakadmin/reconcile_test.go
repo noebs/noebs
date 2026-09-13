@@ -66,7 +66,7 @@ func TestReconcileEmptyRealmThenNoOp(t *testing.T) {
 	if got := fake.organizationGroupRoles("noebs", "tenant-admin"); !equalStrings(got, []string{
 		"tenant-admin", "reporting:read", "wallet:read", "wallet:audit:read", "wallet:manual:create",
 		"wallet:fees:write", "wallet:rates:write", "wallet:workflow:approve", "wallet:workflow:reject",
-		"identity:review:read", "identity:review:decide", "wallet:transaction:resolve",
+		"identity:review:read", "identity:review:decide", "wallet:transaction:resolve", "identity:access:read", "identity:access:write",
 	}) {
 		t.Fatalf("tenant-admin mapped roles = %v", got)
 	}

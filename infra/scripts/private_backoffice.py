@@ -1,4 +1,5 @@
 """Declare and verify a private backoffice origin on the worker's own tailnet."""
+import ipaddress
 import json
 import re
 import shlex
@@ -26,6 +27,33 @@ def validate_worker(status, origin):
     if (status.get('BackendState') != 'Running' or status.get('Self', {}).get('DNSName') != host + '.'
             or host not in status.get('CertDomains', []) or not status.get('CurrentTailnet', {}).get('MagicDNSEnabled')):
         raise ValueError('Private backoffice origin is not the running worker HTTPS tailnet identity')
+
+
+def private_peer_address(status, origin):
+    """Resolve the exact private host through the verifier's authenticated netmap.
+
+    Fleet servers deliberately retain their own DNS configuration. Resolve only
+    this TLS probe from Tailscale state, without changing their system resolver.
+    """
+    host = private_host(origin) + '.'
+    if status.get('BackendState') != 'Running' or status.get('Self', {}).get('DNSName') == host:
+        raise ValueError('Private verification requires a different running tailnet peer')
+    peers = status.get('Peer')
+    if not isinstance(peers, dict):
+        raise ValueError('Private verification requires an authenticated tailnet peer map')
+    targets = [peer for peer in peers.values() if isinstance(peer, dict) and peer.get('DNSName') == host]
+    if len(targets) != 1 or targets[0].get('Online') is not True:
+        raise ValueError('Private backoffice host is not one online authenticated tailnet peer')
+    addresses = []
+    for raw in targets[0].get('TailscaleIPs', []):
+        address = ipaddress.ip_address(raw)
+        if address.version == 4:
+            if address not in ipaddress.ip_network('100.64.0.0/10'):
+                raise ValueError('Private backoffice peer has a non-tailnet IPv4 address')
+            addresses.append(str(address))
+    if len(addresses) != 1:
+        raise ValueError('Private backoffice peer requires one explicit tailnet IPv4 address')
+    return addresses[0]
 
 
 def validate_serve(current, desired, *, require_enabled=False):

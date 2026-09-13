@@ -32,6 +32,9 @@ templ backofficeHomePage(data backofficeHomeView) {
       if tenant.VerificationURL != "" {
        <a href={ tenant.VerificationURL }>Verifications</a>
       }
+      if tenant.AccessURL != "" {
+       <a href={ tenant.AccessURL }>Tenant access</a>
+      }
      </li>
     }
    </ul>

@@ -73,3 +73,9 @@ peer address. Traefik then appends its immediate peer `127.0.0.1`; the gateway's
 existing source parser therefore receives the tailnet client address. Tailscale
 identity headers never replace Noebs OIDC authorization. The application also
 checks its configured private origin and tailnet source before backoffice handlers.
+
+Deployment verifies the private login from a different fleet peer. Fleet servers
+retain their system DNS configuration, so this probe resolves the exact online
+worker from Tailscale's authenticated peer map and supplies that address to
+`curl --resolve`. HTTPS still verifies the private hostname's certificate and
+the normal OIDC callback and cookie; no system resolver or hosts file is changed.

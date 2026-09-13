@@ -32,8 +32,10 @@ application databases.
 Registration creates a realm identity. It does not assign an organization,
 create a wallet, grant a tenant role or create an application profile. The shared
 enrollment boundary applies explicit policy after authentication; operators can
-also use existing Keycloak membership operations to assign tenant and role by
-subject. `lookup-keycloak-subject --username-file <path> --config <path>
+use the private [tenant access workflow](tenant-access.md) for explicit, audited
+role grants/revocations by subject. Pending changes block signup; user-role
+revocations suppress automatic regrant even when no earlier enrollment receipt
+exists. Whole-set membership writes are retired. `lookup-keycloak-subject --username-file <path> --config <path>
 --ca <path>` resolves the subject of a phone-only account; the file contains its
 exact international username. Use `--email-file` for email lookup. Choose
 exactly one selector. The same rule applies to Google, other OIDC providers and local

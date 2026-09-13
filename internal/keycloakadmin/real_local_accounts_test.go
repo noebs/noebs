@@ -213,8 +213,29 @@ func assertRealLocalPrimarySSO(t *testing.T, baseURL string, browser *http.Clien
 			target = client
 		}
 	}
-	if len(target.RedirectURIs) != 1 {
-		t.Fatal("primary SSO fixture requires one exact configured callback")
+	publicOrigin, err := state.PublicOrigin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var redirectURI string
+	switch clientID {
+	case "noebs-web":
+		redirectURI = publicOrigin + "/account/oauth/callback"
+	case realMobileClientID:
+		redirectURI = publicOrigin + "/mobile/oauth/callback"
+	case "noebs-backoffice":
+		redirectURI = state.BackofficeOrigin + "/backoffice/oauth/callback"
+	default:
+		t.Fatalf("primary SSO fixture has no OAuth callback for client %s", clientID)
+	}
+	configured := 0
+	for _, allowed := range target.RedirectURIs {
+		if allowed == redirectURI {
+			configured++
+		}
+	}
+	if configured != 1 {
+		t.Fatalf("primary SSO fixture requires one exact configured OAuth callback for client %s", clientID)
 	}
 	authorization, err := url.Parse(realLocalAuthorizationURL(t, baseURL, authState, false))
 	if err != nil {
@@ -222,7 +243,7 @@ func assertRealLocalPrimarySSO(t *testing.T, baseURL string, browser *http.Clien
 	}
 	query := authorization.Query()
 	query.Set("client_id", clientID)
-	query.Set("redirect_uri", target.RedirectURIs[0])
+	query.Set("redirect_uri", redirectURI)
 	query.Set("scope", "openid organization:*")
 	if clientID == "noebs-web" {
 		query.Set("scope", "openid profile email organization:*")
@@ -231,10 +252,10 @@ func assertRealLocalPrimarySSO(t *testing.T, baseURL string, browser *http.Clien
 	t.Logf("primary SSO client=%s state=%s admitted=%t", clientID, authState, admitted)
 	callback, _ := realLocalGet(t, browser, authorization.String())
 	assertRealLocalCallback(t, callback, authState)
-	if callback.Scheme+"://"+callback.Host+callback.Path != target.RedirectURIs[0] {
+	if callback.Scheme+"://"+callback.Host+callback.Path != redirectURI {
 		t.Fatal("primary SSO left the exact configured callback")
 	}
-	values := url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {callback.Query().Get("code")}, "redirect_uri": {target.RedirectURIs[0]}, "code_verifier": {realLocalVerifier(authState)}}
+	values := url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {callback.Query().Get("code")}, "redirect_uri": {redirectURI}, "code_verifier": {realLocalVerifier(authState)}}
 	if target.AccessType == "confidential" {
 		values.Set("client_secret", r.config.ClientCredentials[target.Credential].ClientSecret)
 	}

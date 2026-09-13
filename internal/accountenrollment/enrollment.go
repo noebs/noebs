@@ -95,9 +95,10 @@ type Context struct {
 }
 
 type Account struct {
-	Fullname      string
-	Email         string
-	EmailVerified bool
+	BootstrapOperationID string
+	Fullname             string
+	Email                string
+	EmailVerified        bool
 	// Memberships includes existing classes even when they do not permit mobile use.
 	Memberships map[string][]string
 }
@@ -116,6 +117,18 @@ type ProgressAccess interface {
 	Load(context.Context) (*Progress, error)
 	Save(context.Context, Progress) error
 }
+
+// PendingAccess guards process-death recovery between external role mutations.
+// Production progress stores must expose it; pure in-memory enrollment fixtures
+// without access management have no pending journal to consult.
+type PendingAccess interface {
+	HasPendingAccessChange(context.Context) (bool, error)
+}
+
+type PendingBootstrapAccess interface {
+	HasPendingBootstrapOperation(context.Context, string) (bool, error)
+}
+
 type Store interface {
 	WithIdentity(context.Context, Identity, func(ProgressAccess) error) error
 }
@@ -147,6 +160,12 @@ func (s *Service) Execute(ctx context.Context, identity Identity, enroll bool) (
 		return result, ErrInvalidTenant
 	}
 	err = s.store.WithIdentity(ctx, identity, func(access ProgressAccess) error {
+		if pending, ok := access.(PendingAccess); ok {
+			blocked, err := pending.HasPendingAccessChange(ctx)
+			if err != nil || blocked {
+				return ErrUnavailable
+			}
+		}
 		progress, err := access.Load(ctx)
 		if err != nil {
 			return err
@@ -154,6 +173,16 @@ func (s *Service) Execute(ctx context.Context, identity Identity, enroll bool) (
 		account, err := s.authority.Inspect(ctx, identity.Subject)
 		if err != nil {
 			return err
+		}
+		if account.BootstrapOperationID != "" {
+			gate, ok := access.(PendingBootstrapAccess)
+			if !ok {
+				return ErrUnavailable
+			}
+			pending, err := gate.HasPendingBootstrapOperation(ctx, account.BootstrapOperationID)
+			if err != nil || pending {
+				return ErrUnavailable
+			}
 		}
 		classes, member := account.Memberships[identity.TenantID]
 		eligible := slices.Contains(s.policy.TenantIDs, identity.TenantID) && s.eligible(identity.Subject, account)

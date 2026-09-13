@@ -47,6 +47,10 @@ var migrationAuthorityContracts = map[string]migrationAuthorityContract{
 		sequenceRoles: []string{"identity_auth_runtime"},
 		specialGrants: []string{
 			`REVOKE DELETE ON TABLE public.account_enrollments FROM identity_auth_runtime`,
+			`REVOKE UPDATE, DELETE ON TABLE public.tenant_access_operations FROM identity_auth_runtime`,
+			`GRANT UPDATE (status, completed_at, completed_roles) ON TABLE public.tenant_access_operations TO identity_auth_runtime`,
+			`REVOKE UPDATE, DELETE ON TABLE public.tenant_access_recovery_attempts FROM identity_auth_runtime`,
+			`REVOKE INSERT, UPDATE, DELETE ON TABLE public.tenant_access_bootstrap FROM identity_auth_runtime`,
 			`REVOKE INSERT, UPDATE, DELETE ON TABLE public.identity_verifications FROM identity_auth_runtime`,
 			`REVOKE INSERT, UPDATE, DELETE ON TABLE public.identity_review_events FROM identity_auth_runtime`,
 			`GRANT INSERT (id, tenant_id, user_id, session_id, actor, action, revision, request_sha256, details) ON TABLE public.identity_review_events TO identity_auth_runtime`,
