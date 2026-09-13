@@ -172,8 +172,12 @@ one release. Old Google-specific ACR names and top-level `google_client_id` /
 `google_client_secret` release input fields are removed; no compatibility path
 is provided. Generate a new encrypted release input from
 `infra/exe/release.inputs.yaml.example`, including SMTP and the nested provider
-map, before preparing and promoting the release. The checked-in encrypted
-historical input is not automatically rewritten by source changes.
+map, before preparing and promoting the release. The checked-in production input
+now uses `noreply@noebs.sd` through `mail.noebs.sd:465` with implicit TLS and the
+nested Google provider credentials. The shared mail server, domain records,
+personal inboxes and recovery procedure are managed in
+[`infra/mail`](../infra/mail/README.md). Mailbox and application credentials remain
+SOPS encrypted; a separate brand supplies its own explicit sender and providers.
 
 ## Regression tests
 
