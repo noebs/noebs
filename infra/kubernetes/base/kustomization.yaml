@@ -38,7 +38,7 @@ labels:
 patches:
   - target:
       kind: Deployment
-      name: api-gateway
+      name: (api-gateway|identity-auth)
     patch: |-
       - op: add
         path: /spec/template/spec/containers/0/volumeMounts/-

@@ -499,6 +499,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/identity-auth.yaml:/app/service.yaml:ro"
+      - "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - *identity-auth-secret
     networks:

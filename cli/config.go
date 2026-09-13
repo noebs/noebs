@@ -694,15 +694,9 @@ func initConfig() {
 	if err := validateRoleDatabaseConfig(role, noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver); err != nil {
 		logrusLogger.Fatalf("error in runtime database config: %v", err)
 	}
-	runtimeTenantCatalog = tenantcatalog.Catalog{}
-	if role == serviceRoleAPIGateway {
-		runtimeTenantCatalog, err = tenantcatalog.LoadFile(tenantCatalogFilePath)
-		if err != nil {
-			logrusLogger.Fatalf("error loading API tenant catalog: %v", err)
-		}
-		if _, err := runtimeTenantCatalog.Require(tenantID); err != nil {
-			logrusLogger.Fatalf("default tenant is not in the API tenant catalog: %v", err)
-		}
+	runtimeTenantCatalog, err = loadRuntimeTenantCatalog(role, noebsConfig, tenantCatalogFilePath)
+	if err != nil {
+		logrusLogger.Fatalf("error loading runtime tenant catalog: %v", err)
 	}
 	if err := validateRoleRuntimeConfig(role, noebsConfig); err != nil {
 		logrusLogger.Fatalf("error in runtime service config: %v", err)

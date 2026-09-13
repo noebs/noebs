@@ -72,23 +72,23 @@ func TestTenantCatalogKubernetesMountContract(t *testing.T) {
 	}
 
 	var migrationPatch string
-	var gatewayPatch string
+	var runtimePatch string
 	for _, candidate := range kustomization.Patches {
 		if candidate.Target.Kind == "Job" && candidate.Target.Name == tenantCatalogMigrationTarget {
 			migrationPatch = candidate.Patch
 		}
-		if candidate.Target.Kind == "Deployment" && candidate.Target.Name == "api-gateway" {
-			gatewayPatch = candidate.Patch
+		if candidate.Target.Kind == "Deployment" && candidate.Target.Name == "(api-gateway|identity-auth)" {
+			runtimePatch = candidate.Patch
 		}
 	}
 	if migrationPatch == "" {
 		t.Fatalf("missing exact migration tenant catalog target %q", tenantCatalogMigrationTarget)
 	}
-	if gatewayPatch == "" {
-		t.Fatal("missing API gateway tenant catalog patch")
+	if runtimePatch == "" {
+		t.Fatal("missing API gateway and identity-auth tenant catalog patch")
 	}
 	assertTenantCatalogPatch(t, migrationPatch, "migration")
-	assertTenantCatalogPatch(t, gatewayPatch, "API gateway")
+	assertTenantCatalogPatch(t, runtimePatch, "API gateway and identity-auth")
 
 	preflight := decodeCatalogWorkload(t, filepath.Join(base, "preflight-job.yaml"))
 	requireConfigMapFileMount(t, preflight, "tenant-catalog", "tenant-catalog", "/preflight/tenant-catalog.yaml", "tenant-catalog.yaml")
@@ -136,7 +136,7 @@ func TestTenantCatalogDockerMigrationMountContract(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
 	wantMount := "./infra/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
 	for _, service := range []string{
-		"api-gateway",
+		"api-gateway", "identity-auth",
 		"identity-auth-migrate", "card-vault-migrate", "ebs-adapter-migrate",
 		"admin-reporting-migrate", "notification-chat-migrate", "wallet-ledger-migrate",
 		"gateway-auth-migrate",
