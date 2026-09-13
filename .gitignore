@@ -66,3 +66,5 @@ secrets.decrypted.yaml
 
 # Local credentials, test services and generated runtime state.
 /.state/
+__pycache__/
+*.py[cod]
