@@ -3,6 +3,7 @@
 import argparse
 import copy
 import hashlib
+from email.parser import BytesParser
 from http.cookies import SimpleCookie
 import ipaddress
 import json
@@ -20,6 +21,7 @@ from reconcile import ROOT, RemoteLease, run, ssh, ssh_args
 from deployment import load_config, prepare_source, configure_workload
 from external_transport import resources as external_transport_resources
 from external_transport_source import reconcile_callback_source
+from private_backoffice import private_host, check_private_backoffice_target, reconcile_private_backoffice
 
 ORIGIN = 'https://api.noebs.sd'
 
@@ -75,34 +77,73 @@ def verify_public(host, origin):
     with fetch('/.well-known/assetlinks.json') as response:
         if 'application/json' not in response.headers['Content-Type'] or not json.load(response):
             raise RuntimeError('Public Android app association is unavailable')
+    for path in ['/backoffice', '/backoffice/login', '/backoffice/assets/style.css',
+                 '/BACKOFFICE/login', '/back%6fffice/login', '/backoffice%2flogin', '/%2562ackoffice/login']:
+        for method in ['GET', 'POST', 'OPTIONS', 'DELETE']:
+            try:
+                request = Request('https://' + host + path, method=method)
+                with build_opener(NoRedirect).open(request, timeout=30):
+                    raise RuntimeError('Public backoffice is reachable')
+            except HTTPError as response:
+                try:
+                    if response.code not in [400, 404] or response.headers.get('Set-Cookie'):
+                        raise RuntimeError('Public backoffice did not fail closed') from None
+                finally:
+                    response.close()
     try:
-        with build_opener(NoRedirect).open('https://' + host + '/backoffice/login', timeout=30):
-            raise RuntimeError('Public backoffice did not start its OIDC login')
+        with build_opener(NoRedirect).open('https://' + host + '/account/login', timeout=30):
+            raise RuntimeError('Public account did not start its OIDC login')
     except HTTPError as response:
-        verify_login_response(response.code, response.headers, origin)
+        try:
+            verify_oidc_login(response.code, response.headers, origin, origin, 'noebs-web',
+                              '/account/oauth/callback', '__Host-noebs_account_flow')
+        finally:
+            response.close()
     for path in ['/auth/admin/', '/auth/realms/master/.well-known/openid-configuration']:
         try:
             with fetch(path):
                 raise RuntimeError('Private identity administration is publicly reachable')
         except HTTPError as error:
-            if error.code != 404:
-                raise RuntimeError('Unexpected response at private identity route') from None
+            try:
+                if error.code != 404:
+                    raise RuntimeError('Unexpected response at private identity route') from None
+            finally:
+                error.close()
 
 
-def verify_login_response(status, headers, origin):
+def verify_login_response(status, headers, origin, backoffice_origin):
+    private_host(backoffice_origin)
+    verify_oidc_login(status, headers, origin, backoffice_origin, 'noebs-backoffice',
+                      '/backoffice/oauth/callback', '__Host-noebs_backoffice_flow')
+
+
+def verify_oidc_login(status, headers, origin, redirect_origin, client_id, callback, cookie_name):
     location = urlsplit(headers.get('Location', ''))
     query = parse_qs(location.query)
     if (status != 303 or location.scheme + '://' + location.netloc != origin
             or location.path != '/auth/realms/noebs/protocol/openid-connect/auth'
-            or query.get('client_id') != ['noebs-backoffice']
-            or query.get('redirect_uri') != [origin + '/backoffice/oauth/callback']):
-        raise RuntimeError('Public backoffice Host or OIDC redirect was changed by the proxy')
+            or query.get('client_id') != [client_id]
+            or query.get('redirect_uri') != [redirect_origin + callback]):
+        raise RuntimeError('Authentication Host or OIDC redirect was changed by the proxy')
     cookies = SimpleCookie()
     for value in headers.get_all('Set-Cookie', []):
         cookies.load(value)
-    cookie = cookies.get('__Host-noebs_backoffice_flow')
+    cookie = cookies.get(cookie_name)
     if cookie is None or not cookie['secure'] or not cookie['httponly'] or cookie['path'] != '/' or cookie['domain']:
-        raise RuntimeError('Public backoffice browser binding cookie was changed by the proxy')
+        raise RuntimeError('Authentication browser binding cookie was changed by the proxy')
+
+
+def verify_private_backoffice(key, peer, origin, backoffice_origin):
+    private_host(backoffice_origin)
+    # A different fleet tailnet member exercises real TLS and Serve forwarding.
+    # Never print the response's transient login state or session-binding cookie.
+    command = 'curl --silent --show-error --noproxy "*" --proto =https --max-time 30 --max-redirs 0 --dump-header - --output /dev/null ' + shlex.quote(backoffice_origin + '/backoffice/login')
+    payload = ssh(key, peer, command, capture_output=True).stdout
+    status, separator, header_bytes = payload.partition(b'\r\n')
+    if not separator or len(status.split()) < 2 or not status.split()[1].isdigit():
+        raise RuntimeError('Private backoffice returned invalid HTTPS headers')
+    headers = BytesParser().parsebytes(header_bytes)
+    verify_login_response(int(status.split()[1]), headers, origin, backoffice_origin)
 
 
 def verify_receipt(path, revision):
@@ -179,6 +220,7 @@ def promote(args, lease):
     nodes=json.loads(kubectl(['get','nodes','-o','json'],capture=True).stdout)['items']
     networks={node['metadata']['name']:ipaddress.IPv4Network(node['spec']['podCIDR']) for node in nodes}
     worker=machines['noebs-workers']['ssh_destination']
+    check_private_backoffice_target(config['backoffice_origin'], key, worker, lease, ssh)
     target=str(networks['noebs-data'].network_address+2)
     route=json.loads(ssh(key,worker,'ip -j route get '+target,capture_output=True).stdout)[0]
     keycloak_proxy=str(ipaddress.IPv4Address(route['prefsrc']))+'/32'
@@ -273,7 +315,7 @@ def promote(args, lease):
                 apply([steady_keycloak])
                 kubectl(['-n','noebs','rollout','status','deployment/keycloak','--timeout=300s'])
                 kubectl(['-n','noebs','delete','secret','keycloak-bootstrap-admin','keycloak-bootstrap-reconciler-credentials'])
-        edge=list(yaml.safe_load_all(run(['kustomize','build',str(ROOT/'infra/kubernetes/ingress')],capture_output=True).stdout))
+        edge=list(yaml.safe_load_all(run(['kustomize','build',str(source/'infra/kubernetes/ingress')],capture_output=True).stdout))
         apply([obj for obj in edge if obj])
         kubectl(['-n','kube-system','rollout','status','deployment/traefik','--timeout=300s'])
         pods=json.loads(kubectl(['-n','noebs','get','pods','-o','json'],capture=True).stdout)['items']
@@ -293,6 +335,8 @@ def promote(args, lease):
         ssh(key, 'exe.dev', 'share port noebs-workers 8081 --json')
         ssh(key, 'exe.dev', 'share set-public noebs-workers --json')
         ensure_public_domain(key, config['public_host'])
+        reconcile_private_backoffice(config['backoffice_origin'], key, worker, lease, ssh)
+        verify_private_backoffice(key, server, ORIGIN, config['backoffice_origin'])
         verify_public(config['public_host'], ORIGIN)
         kubectl(['-n','edge','delete','deployment/caddy','--ignore-not-found','--wait=true'])
         # Retire the old embedded adapter. Persistent data is retained by its PVC.

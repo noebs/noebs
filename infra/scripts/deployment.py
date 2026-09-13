@@ -8,6 +8,7 @@ import shutil
 import yaml
 
 from reconcile import ROOT
+from private_backoffice import private_host
 
 
 class InvalidDeployment(ValueError):
@@ -40,13 +41,17 @@ def load_document(path):
 
 def load_config(path):
     value = load_document(path)
-    fields = {'api_version', 'public_host', 'trusted_proxy_cidrs', 'service_config'}
+    fields = {'api_version', 'public_host', 'backoffice_origin', 'trusted_proxy_cidrs', 'service_config'}
     if not isinstance(value, dict) or set(value) != fields:
         raise InvalidDeployment('Deployment requires exactly: ' + ', '.join(sorted(fields)))
     if value['api_version'] != 'noebs.infrastructure/v1':
         raise InvalidDeployment('Unsupported deployment api_version')
     if value['public_host'] != 'api.noebs.sd':
         raise InvalidDeployment('public_host must match the application and OIDC authority: api.noebs.sd')
+    try:
+        private_host(value['backoffice_origin'])
+    except ValueError as error:
+        raise InvalidDeployment(str(error)) from None
     peers = value['trusted_proxy_cidrs']
     if (not isinstance(peers, list) or not peers or any(not isinstance(peer, str) for peer in peers)
             or len(peers) != len(set(peers))):
@@ -65,7 +70,7 @@ def load_config(path):
         if not isinstance(role, str) or role + '.service.yaml' not in data or not isinstance(settings, dict):
             raise InvalidDeployment('Unknown service_config role or invalid settings')
         reserved = {'service_role', 'db_url', 'db_driver', 'oidc', 'keycloak_proxy_trusted_addresses',
-                    'backoffice_redirect_url', 'backoffice_post_logout_url', 'wallet_authorizer_redirect_url',
+                    'backoffice_origin', 'backoffice_redirect_url', 'backoffice_post_logout_url', 'wallet_authorizer_redirect_url',
                     'mobile_redirect_url', 'web_redirect_url', 'web_post_logout_url',
                     'service_discovery', 'grpc_service_discovery'}
         if reserved & settings.keys():
@@ -108,6 +113,11 @@ def prepare_source(destination, config, keycloak_peers=None):
     manifest = yaml.safe_load(path.read_text())
     data = manifest['data']
     common = yaml.safe_load(data['config.yaml'])
+    backoffice_origin = config['backoffice_origin']
+    host = private_host(backoffice_origin)
+    common['noebs']['backoffice_origin'] = backoffice_origin
+    common['noebs']['backoffice_redirect_url'] = backoffice_origin + '/backoffice/oauth/callback'
+    common['noebs']['backoffice_post_logout_url'] = backoffice_origin + '/backoffice/oauth/logout/callback'
     if keycloak_peers is not None:
         common['noebs']['keycloak_proxy_trusted_addresses'] = ','.join(keycloak_peers)
     data['config.yaml'] = yaml.safe_dump(common, sort_keys=False)
@@ -117,6 +127,19 @@ def prepare_source(destination, config, keycloak_peers=None):
         service['noebs'].update(settings)
         data[name] = yaml.safe_dump(service, sort_keys=False)
     path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+    authority_path = destination / 'infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml'
+    authority = yaml.safe_load(authority_path.read_text())
+    authority['backoffice_origin'] = backoffice_origin
+    for client in authority['interactive_clients']:
+        if client['client_id'] == 'noebs-backoffice':
+            client['redirect_uris'] = [common['noebs']['backoffice_redirect_url']]
+            client['post_logout_redirect_uris'] = [common['noebs']['backoffice_post_logout_url']]
+    authority_path.write_text(yaml.safe_dump(authority, sort_keys=False))
+    private_path = destination / 'infra/kubernetes/ingress/backoffice.yaml'
+    private_objects = list(yaml.safe_load_all(private_path.read_text()))
+    private_objects[0]['spec']['routes'][0]['match'] = 'Host(`' + host + '`) && PathRegexp(`(?i)^/backoffice(?:/|$)`) '
+    private_objects[1]['spec']['headers']['customRequestHeaders']['X-Forwarded-Host'] = host
+    private_path.write_text(yaml.safe_dump_all(private_objects, sort_keys=False))
 
 
 def render_ingress_config(config):

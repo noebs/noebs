@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/backofficeauth"
 	"github.com/adonese/noebs/internal/keycloakadmin"
 	"github.com/adonese/noebs/internal/tenantcatalog"
 )
@@ -154,8 +155,8 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 	if apiGateway.WalletAuthorizerRedirectURL != origin+"/wallet/authorizations/oauth/callback" {
 		return errors.New("api-gateway wallet authorizer redirect URL does not match the Keycloak client boundary")
 	}
-	if apiGateway.BackofficeRedirectURL != origin+"/backoffice/oauth/callback" || apiGateway.BackofficePostLogoutURL != origin+"/backoffice/oauth/logout/callback" {
-		return errors.New("api-gateway back-office redirects do not match the release Keycloak boundary")
+	if backofficeauth.ValidateSeparateOrigin(apiGateway.BackofficeOrigin, origin) != nil || apiGateway.BackofficeRedirectURL != apiGateway.BackofficeOrigin+backofficeCallbackPath || apiGateway.BackofficePostLogoutURL != apiGateway.BackofficeOrigin+backofficeLoggedOutPath {
+		return errors.New("api-gateway back-office redirects do not match its separate private origin")
 	}
 	if apiGateway.WebRedirectURL != origin+"/account/oauth/callback" || apiGateway.WebPostLogoutURL != origin+"/account/oauth/logout/callback" {
 		return errors.New("api-gateway account redirects do not match the release Keycloak boundary")

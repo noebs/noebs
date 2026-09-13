@@ -64,7 +64,7 @@ spec:
           serversTransport: keycloak
     # Unlisted auth paths and methods have no router, so Traefik returns 404.
     - kind: Rule
-      match: Host(`api.noebs.sd`) && !Path(`/auth`) && !PathPrefix(`/auth/`)
+      match: Host(`api.noebs.sd`) && !Path(`/auth`) && !PathPrefix(`/auth/`) && !PathRegexp(`(?i)^/backoffice(?:/|$)`)
       priority: 1
       middlewares: [{name: public-headers}, {name: compress}]
       services:

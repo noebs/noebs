@@ -11,7 +11,7 @@ import (
 
 const walletAuthorizationCallbackURI = "https://api.noebs.sd/wallet/authorizations/oauth/callback"
 
-func TestDesiredStateUsesOneExplicitDeploymentOrigin(t *testing.T) {
+func TestDesiredStateUsesSeparatePublicAndBackofficeOrigins(t *testing.T) {
 	state := repositoryDesiredState(t)
 	for index := range state.InteractiveClients {
 		client := &state.InteractiveClients[index]
@@ -27,7 +27,7 @@ func TestDesiredStateUsesOneExplicitDeploymentOrigin(t *testing.T) {
 	}
 	state.InteractiveClients[1].RedirectURIs[0] = "https://elsewhere.example/backoffice/oauth/callback"
 	if err := state.Validate(); err == nil {
-		t.Fatal("accepted browser clients on different origins")
+		t.Fatal("accepted backoffice callback outside its declared origin")
 	}
 }
 

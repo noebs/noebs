@@ -47,7 +47,7 @@ func TestReconcileEmptyRealmThenNoOp(t *testing.T) {
 	if !ok || backoffice.PublicClient || backoffice.Secret != "backoffice-secret" {
 		t.Fatalf("backoffice client = %#v", backoffice)
 	}
-	if backoffice.Attributes["post.logout.redirect.uris"] != "https://api.noebs.sd/backoffice/oauth/logout/callback" {
+	if backoffice.Attributes["post.logout.redirect.uris"] != "https://noebs-workers.tail09832.ts.net/backoffice/oauth/logout/callback" {
 		t.Fatalf("backoffice post logout URI = %q", backoffice.Attributes["post.logout.redirect.uris"])
 	}
 	if backoffice.Attributes["pkce.code.challenge.method"] != "S256" {

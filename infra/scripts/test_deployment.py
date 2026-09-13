@@ -26,6 +26,7 @@ loader.exec_module(deploy_command)
 
 def config():
     return {'api_version': 'noebs.infrastructure/v1', 'public_host': 'api.noebs.sd',
+            'backoffice_origin': 'https://noebs-workers.tail09832.ts.net',
             'trusted_proxy_cidrs': ['10.42.0.1/32'], 'service_config': {}}
 
 
@@ -61,7 +62,11 @@ class DeploymentConfigTest(unittest.TestCase):
                            ('service_config', {'wallet-api': {'db_url': 'should-not-print'}}),
                            ('service_config', {'wallet-api': {'oidc': {'issuer': 'https://wrong'}}}),
                            ('service_config', {False: {}}), ('service_config', {'unknown': {}}),
-                           ('public_host', 'other.example')]:
+                           ('public_host', 'other.example'), ('backoffice_origin', 'https://api.noebs.sd'),
+                           ('backoffice_origin', 'http://noebs-workers.tail09832.ts.net'),
+                           ('backoffice_origin', 'https://noebs-workers.tail09832.ts.net:443'),
+                           ('backoffice_origin', 'https://noebs-workers.tail09832.ts.net/'),
+                           ('backoffice_origin', 'https://*.tail09832.ts.net')]:
             candidate = config()
             candidate[key] = value
             cases.append(candidate)
@@ -106,6 +111,12 @@ class DeploymentConfigTest(unittest.TestCase):
                              'wallet-api.service.yaml': 'noebs: {service_role: wallet-api}',
                              'identity-auth.service.yaml': 'noebs: {service_role: identity-auth}'}}
         (base / 'configmap.yaml').write_text(yaml.safe_dump(manifest))
+        authority = root / 'infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml'
+        authority.parent.mkdir(parents=True)
+        authority.write_text(yaml.safe_dump({'interactive_clients': [{'client_id': 'noebs-backoffice'}]}))
+        private_route = root / 'infra/kubernetes/ingress/backoffice.yaml'
+        private_route.parent.mkdir(parents=True)
+        private_route.write_text((deployment.ROOT / 'infra/kubernetes/ingress/backoffice.yaml').read_text())
         value = config()
         value['service_config'] = {'wallet-api': {'external_service_url': 'https://external.example'}}
         before = copy.deepcopy(value)
@@ -113,6 +124,12 @@ class DeploymentConfigTest(unittest.TestCase):
         with patch.object(deployment, 'ROOT', root):
             deployment.prepare_source(destination, value)
         result = yaml.safe_load((destination / 'infra/kubernetes/base/configmap.yaml').read_text())
+        common = yaml.safe_load(result['data']['config.yaml'])['noebs']
+        self.assertEqual(common['backoffice_origin'], value['backoffice_origin'])
+        self.assertEqual(common['backoffice_redirect_url'], value['backoffice_origin'] + '/backoffice/oauth/callback')
+        desired = yaml.safe_load((destination / 'infra/kubernetes/keycloak-authority/keycloak-desired-state.yaml').read_text())
+        self.assertEqual(desired['backoffice_origin'], value['backoffice_origin'])
+        self.assertEqual(desired['interactive_clients'][0]['redirect_uris'], [common['backoffice_redirect_url']])
         wallet = yaml.safe_load(result['data']['wallet-api.service.yaml'])
         self.assertEqual(wallet['noebs']['external_service_url'], 'https://external.example')
         self.assertEqual(result['data']['identity-auth.service.yaml'], manifest['data']['identity-auth.service.yaml'])

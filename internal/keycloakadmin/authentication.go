@@ -112,6 +112,12 @@ func desiredAuthenticationFlows(state DesiredState) []managedAuthenticationFlow 
 		Executions: []managedAuthenticationExecution{
 			{Requirement: "CONDITIONAL", Priority: 10, Flow: &loa1Flow},
 			{Requirement: "CONDITIONAL", Priority: 20, Flow: &loa2Flow},
+			// For organization-scoped SSO, Keycloak's cookie authenticator
+			// attaches the verified user but reports ATTEMPTED. Both level
+			// flows can then be skipped because assurance is already met.
+			// Complete only after the required levels; the processor still
+			// rejects a flow without an authenticated user.
+			{ProviderID: "allow-access-authenticator", Requirement: "REQUIRED", Priority: 30},
 		},
 	}
 	browser := managedAuthenticationFlow{

@@ -55,3 +55,21 @@ References: [k3s bundled chart](https://github.com/k3s-io/k3s/blob/v1.35.4%2Bk3s
 [Traefik CRD transport and routing](https://doc.traefik.io/traefik/v3.6/reference/routing-configuration/kubernetes/crd/http/serverstransport/),
 [forwarded header implementation](https://github.com/traefik/traefik/blob/v3.6.13/pkg/middlewares/forwardedheaders/forwarded_header.go),
 [Helm values](https://github.com/traefik/traefik-helm-chart/blob/v39.0.7/traefik/values.yaml).
+
+
+Backoffice uses `https://noebs-workers.tail09832.ts.net/backoffice/home` over
+Tailscale. The worker's persistent `tailscale serve --bg` HTTPS listener forwards
+to Traefik on `127.0.0.1:8082`; it never enables Funnel. That loopback entrypoint
+trusts only `127.0.0.1/32` for forwarded headers and routes only the exact private
+host's `/backoffice` paths. The existing gateway TLS server verification and mTLS
+client identity also protect this connection. Public ingress excludes backoffice
+for every method, including case variants, and rejects ambiguous encoded percent,
+slash, backslash and NUL characters. Public `/account` and API routes retain their
+existing origin.
+
+Tailscale 1.102.4's [Serve implementation](https://github.com/tailscale/tailscale/blob/v1.102.4/ipn/ipnlocal/serve.go)
+preserves the incoming Host and replaces X-Forwarded-For with the authenticated
+peer address. Traefik then appends its immediate peer `127.0.0.1`; the gateway's
+existing source parser therefore receives the tailnet client address. Tailscale
+identity headers never replace Noebs OIDC authorization. The application also
+checks its configured private origin and tailnet source before backoffice handlers.

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/adonese/noebs/internal/backofficeauth"
 	"github.com/adonese/noebs/internal/tenantcatalog"
 	"gopkg.in/yaml.v3"
 )
@@ -54,6 +55,7 @@ type IdentityProviderCredential struct {
 
 type DesiredState struct {
 	APIVersion         string              `yaml:"api_version"`
+	BackofficeOrigin   string              `yaml:"backoffice_origin"`
 	Realm              Realm               `yaml:"realm"`
 	Authentication     Authentication      `yaml:"authentication"`
 	ReconcilerClient   ReconcilerClient    `yaml:"reconciler_client"`
@@ -444,6 +446,9 @@ func (s DesiredState) Validate() error {
 	if err != nil {
 		return err
 	}
+	if err := backofficeauth.ValidateSeparateOrigin(s.BackofficeOrigin, origin); err != nil {
+		return fmt.Errorf("%w: backoffice_origin must be a separate exact HTTPS origin", ErrInvalidDesiredState)
+	}
 	for _, client := range s.InteractiveClients {
 		switch client.ClientID {
 		case "noebs-mobile":
@@ -454,8 +459,8 @@ func (s DesiredState) Validate() error {
 			}
 		case "noebs-backoffice":
 			if client.Name != "Noebs Backoffice" || client.AccessType != "confidential" || client.Credential != "noebs-backoffice" || client.AuthenticationLevel != 1 ||
-				!equalStrings(client.RedirectURIs, []string{origin + "/backoffice/oauth/callback"}) ||
-				!equalStrings(client.PostLogoutRedirectURIs, []string{origin + "/backoffice/oauth/logout/callback"}) || len(client.WebOrigins) != 0 {
+				!equalStrings(client.RedirectURIs, []string{s.BackofficeOrigin + "/backoffice/oauth/callback"}) ||
+				!equalStrings(client.PostLogoutRedirectURIs, []string{s.BackofficeOrigin + "/backoffice/oauth/logout/callback"}) || len(client.WebOrigins) != 0 {
 				return fmt.Errorf("%w: noebs-backoffice must declare the exact confidential LoA1 client", ErrInvalidDesiredState)
 			}
 		case walletAuthorizerClientID:
@@ -646,8 +651,8 @@ func (s DesiredState) Validate() error {
 	return nil
 }
 
-// The mobile callback names the public deployment origin; all browser clients
-// must use this same origin and their fixed callback paths.
+// The mobile callback names the public application origin. The backoffice uses
+// its independently declared private origin; other clients keep the public one.
 func (s DesiredState) PublicOrigin() (string, error) {
 	for _, client := range s.InteractiveClients {
 		if client.ClientID != "noebs-mobile" || len(client.RedirectURIs) != 1 {

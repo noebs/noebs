@@ -58,11 +58,27 @@ spec:
         proxyProtocol:
           trustedIPs: []
           insecure: false
+      backoffice:
+        port: 8082
+        hostIP: 127.0.0.1
+        expose:
+          default: false
+        forwardedHeaders:
+          trustedIPs: [127.0.0.1/32]
+          insecure: false
+        proxyProtocol:
+          trustedIPs: []
+          insecure: false
       websecure: null
       metrics: null
     metrics:
       prometheus: null
     additionalArguments:
+      - --entrypoints.web.http.encodedcharacters.allowencodedpercent=false
+      - --entrypoints.backoffice.http.encodedcharacters.allowencodedpercent=false
+      - --entrypoints.backoffice.http.encodedcharacters.allowencodedslash=false
+      - --entrypoints.backoffice.http.encodedcharacters.allowencodedbackslash=false
+      - --entrypoints.backoffice.http.encodedcharacters.allowencodednullcharacter=false
       - --entrypoints.web.http.encodedcharacters.allowencodedslash=false
       - --entrypoints.web.http.encodedcharacters.allowencodedbackslash=false
       - --entrypoints.web.http.encodedcharacters.allowencodednullcharacter=false

@@ -42,6 +42,21 @@ and verifies the gateway's TLS certificate using the release CA and an mTLS clie
 identity. Public Keycloak routes are limited by method and path. Administration
 and master-realm routes return 404. Android app association is served by noebs.
 
+Backoffice is private at `https://noebs-workers.tail09832.ts.net/backoffice/home`.
+Set the required `backoffice_origin` to the worker's exact HTTPS MagicDNS origin.
+Deployment verifies that the running worker owns that DNS name and certificate
+domain, and refuses conflicting Serve handlers or any Funnel exposure. It renders
+the application origin, exact Keycloak callbacks and private ingress from that one
+value; public account setup, mobile callbacks and the OIDC issuer stay on
+`api.noebs.sd`. Backoffice memberships and permissions are unchanged.
+
+The existing Tailscale daemon owns the persistent HTTPS listener and certificate
+renewal. It forwards only to the dedicated loopback listener on port 8082; the
+public EXE proxy continues to use port 8081. Serve configuration is reconciled
+under the normal release lease after the private ingress is ready, and the release
+checks private HTTPS login from another fleet tailnet member plus public
+backoffice denial. Do not expose port 8082 or enable Tailscale Funnel.
+
 ## Deploy
 
 Install Go at the version in `go.mod`, Python 3 with PyYAML, OpenSSH, `dig`, SOPS

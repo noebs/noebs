@@ -62,23 +62,24 @@ class DomainRegistrationTests(unittest.TestCase):
                 ssh.assert_not_called()
 
 
-class PublicLoginTests(unittest.TestCase):
+class PrivateLoginTests(unittest.TestCase):
+    private_origin = 'https://noebs-workers.tail09832.ts.net'
     origin = 'https://api.noebs.sd'
 
     def headers(self):
         headers = Message()
-        headers['Location'] = self.origin + '/auth/realms/noebs/protocol/openid-connect/auth?client_id=noebs-backoffice&redirect_uri=https%3A%2F%2Fapi.noebs.sd%2Fbackoffice%2Foauth%2Fcallback'
+        headers['Location'] = self.origin + '/auth/realms/noebs/protocol/openid-connect/auth?client_id=noebs-backoffice&redirect_uri=https%3A%2F%2Fnoebs-workers.tail09832.ts.net%2Fbackoffice%2Foauth%2Fcallback'
         headers['Set-Cookie'] = '__Host-noebs_backoffice_flow=example; Path=/; Secure; HttpOnly; SameSite=Lax'
         return headers
 
     def test_exact_public_identity_and_cookie_are_required(self):
-        verify_login_response(303, self.headers(), self.origin)
+        verify_login_response(303, self.headers(), self.origin, self.private_origin)
         for field, value in [('Location', 'https://noebs-workers.exe.xyz/auth'),
                              ('Set-Cookie', '__Host-noebs_backoffice_flow=example; Path=/; HttpOnly')]:
             headers = self.headers()
             headers.replace_header(field, value)
             with self.subTest(field=field), self.assertRaises(RuntimeError):
-                verify_login_response(303, headers, self.origin)
+                verify_login_response(303, headers, self.origin, self.private_origin)
 
 
 class ReceiptTests(unittest.TestCase):
@@ -126,7 +127,7 @@ class PromotionSequenceTests(unittest.TestCase):
         self.args = SimpleNamespace(key=self.work / 'key', machines=machines_file, receipts=self.work,
                                     work=self.work, config=self.work / 'deployment.yaml')
         self.events = []
-        self.config = {'public_host': 'api.noebs.sd', 'trusted_proxy_cidrs': ['127.0.0.1/32'], 'service_config': {}}
+        self.config = {'public_host': 'api.noebs.sd', 'backoffice_origin': 'https://noebs-workers.tail09832.ts.net', 'trusted_proxy_cidrs': ['127.0.0.1/32'], 'service_config': {}}
         self.image = 'ghcr.io/noebs/noebs@sha256:' + 'a' * 64
         self.smtp_policy = {
             'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy',
@@ -197,8 +198,14 @@ class PromotionSequenceTests(unittest.TestCase):
              patch.object(promotion, 'verify_receipt', return_value=self.image), \
              patch.object(promotion, 'require_public_dns'), patch.object(promotion, 'prepare_source'), \
              patch.object(promotion, 'public_domain_registered', return_value=True), \
-             patch.object(promotion, 'verify_public', side_effect=verify_public), patch.dict(promotion.os.environ):
+             patch.object(promotion, 'verify_public', side_effect=verify_public), \
+             patch.object(promotion, 'check_private_backoffice_target') as private_check, \
+             patch.object(promotion, 'reconcile_private_backoffice') as private_reconcile, \
+             patch.object(promotion, 'verify_private_backoffice') as private_verify, patch.dict(promotion.os.environ):
             promotion.promote(self.args, Mock())
+            private_check.assert_called_once()
+            private_reconcile.assert_called_once()
+            private_verify.assert_called_once()
 
     def test_public_verification_precedes_retirement_and_secret_errors_are_captured(self):
         def verify(*args):
@@ -277,6 +284,53 @@ class PromotionSequenceTests(unittest.TestCase):
         self.assertTrue(all(commands.index(command) < established for command in created))
         self.assertLess(established, next(i for i, command in enumerate(commands) if 'kubectl apply' in command))
 
+
+
+class PrivateHTTPSVerificationTests(unittest.TestCase):
+    def test_private_probe_requires_verified_https_and_exact_callback_without_exposing_cookie(self):
+        origin = 'https://api.noebs.sd'
+        private_origin = 'https://noebs-workers.tail09832.ts.net'
+        headers = PrivateLoginTests().headers()
+        payload = b'HTTP/2 303\r\n' + str(headers).replace('\n', '\r\n').encode() + b'\r\n'
+        with patch.object(promotion, 'ssh', return_value=CompletedProcess([], 0, payload)) as ssh:
+            promotion.verify_private_backoffice('key', 'tailnet-peer', origin, private_origin)
+        command = ssh.call_args.args[2]
+        self.assertIn('--proto =https', command)
+        self.assertIn('--noproxy "*"', command)
+        self.assertNotIn('--insecure', command)
+        self.assertTrue(ssh.call_args.kwargs['capture_output'])
+        bad = payload.replace(b'noebs-workers.tail09832.ts.net%2Fbackoffice', b'api.noebs.sd%2Fbackoffice')
+        with patch.object(promotion, 'ssh', return_value=CompletedProcess([], 0, bad)), self.assertRaises(RuntimeError):
+            promotion.verify_private_backoffice('key', 'tailnet-peer', origin, private_origin)
+
+    def test_public_probe_denies_backoffice_and_verifies_public_account_login(self):
+        calls = []
+        class Response(io.BytesIO):
+            status = 200
+            headers = {'Content-Type': 'application/json'}
+        def public_fetch(request, **kwargs):
+            target = request.full_url
+            if target.endswith('/test'):
+                return Response(b'{}')
+            if target.endswith('/auth/realms/noebs/.well-known/openid-configuration'):
+                return Response(b'{"issuer":"https://api.noebs.sd/auth/realms/noebs"}')
+            if target.endswith('/.well-known/assetlinks.json'):
+                return Response(b'[{}]')
+            raise HTTPError(target, 404, 'Not Found', {}, io.BytesIO())
+        def auth_fetch(request, **kwargs):
+            target = request if isinstance(request, str) else request.full_url
+            calls.append(target)
+            if target.endswith('/account/login'):
+                headers = Message()
+                headers['Location'] = 'https://api.noebs.sd/auth/realms/noebs/protocol/openid-connect/auth?client_id=noebs-web&redirect_uri=https%3A%2F%2Fapi.noebs.sd%2Faccount%2Foauth%2Fcallback'
+                headers['Set-Cookie'] = '__Host-noebs_account_flow=example; Path=/; Secure; HttpOnly; SameSite=Lax'
+                raise HTTPError(target, 303, 'See Other', headers, io.BytesIO())
+            raise HTTPError(target, 404, 'Not Found', {}, io.BytesIO())
+        opener = Mock(open=Mock(side_effect=auth_fetch))
+        with patch.object(promotion, 'urlopen', side_effect=public_fetch), patch.object(promotion, 'build_opener', return_value=opener):
+            promotion.verify_public('api.noebs.sd', 'https://api.noebs.sd')
+        self.assertEqual(len(calls), 29)
+        self.assertEqual(calls[-1], 'https://api.noebs.sd/account/login')
 
 
 if __name__ == '__main__':

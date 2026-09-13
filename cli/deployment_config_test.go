@@ -1615,8 +1615,8 @@ func TestKeycloakBackofficeCallbacksMatchGatewayLifecycle(t *testing.T) {
 		"gateway config":         configData["config.yaml"],
 	}
 	for _, required := range []string{
-		"https://api.noebs.sd/backoffice/oauth/callback",
-		"https://api.noebs.sd/backoffice/oauth/logout/callback",
+		"https://noebs-workers.tail09832.ts.net/backoffice/oauth/callback",
+		"https://noebs-workers.tail09832.ts.net/backoffice/oauth/logout/callback",
 	} {
 		for name, text := range texts {
 			if !strings.Contains(text, required) {

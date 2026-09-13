@@ -217,8 +217,9 @@ func cliTestConfig(role serviceRole, dbURL string) ebs_fields.NoebsConfig {
 		cfg.KeycloakCACertificate = testKeycloakCACertificate
 		cfg.MobileRedirectURL = "https://app.example/mobile/oauth/callback"
 		cfg.BackofficeClientSecret = "test-backoffice-client-secret"
-		cfg.BackofficeRedirectURL = "https://app.example/backoffice/oauth/callback"
-		cfg.BackofficePostLogoutURL = "https://app.example/backoffice/oauth/logout/callback"
+		cfg.BackofficeOrigin = "https://backoffice.example"
+		cfg.BackofficeRedirectURL = "https://backoffice.example/backoffice/oauth/callback"
+		cfg.BackofficePostLogoutURL = "https://backoffice.example/backoffice/oauth/logout/callback"
 		cfg.WebClientSecret = "test-web-client-secret"
 		cfg.WebRedirectURL = "https://app.example/account/oauth/callback"
 		cfg.WebPostLogoutURL = "https://app.example/account/oauth/logout/callback"

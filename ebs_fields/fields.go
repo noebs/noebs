@@ -918,6 +918,7 @@ type NoebsConfig struct {
 	KeycloakCACertificate                      string                          `json:"keycloak_ca_certificate"`
 	BackofficeClientSecret                     string                          `json:"backoffice_client_secret"`
 	KeycloakProxyTrustedAddresses              string                          `json:"keycloak_proxy_trusted_addresses"`
+	BackofficeOrigin                           string                          `json:"backoffice_origin"`
 	BackofficeRedirectURL                      string                          `json:"backoffice_redirect_url"`
 	BackofficePostLogoutURL                    string                          `json:"backoffice_post_logout_url"`
 	WebClientSecret                            string                          `json:"web_client_secret"`

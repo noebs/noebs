@@ -71,7 +71,7 @@ func TestBackofficeLifecycleUsesExactCanonicalEndpoints(t *testing.T) {
 	wrongHost := backofficeBoundaryRequest(t, http.MethodGet, backofficeLoginPath, nil)
 	wrongHost.Host = "other.example"
 	response = backofficeBoundaryDo(t, app, wrongHost)
-	if response.StatusCode != http.StatusBadRequest {
+	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("wrong-host login status = %d", response.StatusCode)
 	}
 	assertBackofficeNoStore(t, response)
@@ -401,7 +401,7 @@ func TestBackofficeProxyAuthenticatesScopesRewritesAndSigns(t *testing.T) {
 	wrongHost := backofficeBoundaryRequest(t, http.MethodGet, "/backoffice/t/tenant-a/wallet/wallets", nil)
 	wrongHost.Host = "other.example"
 	response := backofficeBoundaryDo(t, app, wrongHost)
-	if response.StatusCode != http.StatusBadRequest {
+	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("wrong-host proxy status = %d", response.StatusCode)
 	}
 	assertBackofficeFiberHeaders(t, response)
@@ -424,7 +424,7 @@ func TestBackofficeProxyAuthenticatesScopesRewritesAndSigns(t *testing.T) {
 	request.Header.Set(workloadauth.HeaderTenantID, "tenant-b")
 	request.Header.Set(workloadauth.HeaderSignature, "attacker")
 	request.Header.Set(backofficeauth.HeaderCSRFToken, "attacker")
-	request.Header.Set("X-Forwarded-For", "203.0.113.7")
+	request.Header.Set("X-Forwarded-For", "100.64.0.7")
 	response = backofficeBoundaryDo(t, app, request)
 	if response.StatusCode != http.StatusNoContent {
 		t.Fatalf("authorized read status = %d body=%s", response.StatusCode, backofficeBoundaryBody(t, response))
@@ -462,7 +462,7 @@ func TestBackofficeProxyAuthenticatesScopesRewritesAndSigns(t *testing.T) {
 	if principal.TenantID != "tenant-a" || principal.OrganizationID != "org-a" ||
 		principal.Issuer != backofficeBoundaryIssuer || principal.Subject != backofficeBoundarySubject ||
 		principal.AuthorizedParty != backofficeClientID || principal.UserID != 0 ||
-		principal.SourceIP != "203.0.113.7" || !principal.HasRole(tenantauth.RoleBackoffice) ||
+		principal.SourceIP != "100.64.0.7" || !principal.HasRole(tenantauth.RoleBackoffice) ||
 		principal.Permission() != tenantauth.PermissionWalletRead {
 		t.Fatalf("signed upstream principal = %+v roles=%v permission=%q", principal, principal.Roles(), principal.Permission())
 	}
@@ -1118,7 +1118,7 @@ func backofficeBoundaryRequest(t *testing.T, method, target string, body io.Read
 	t.Helper()
 	request := httptest.NewRequest(method, target, body)
 	request.Host = backofficeBoundaryHost
-	request.Header.Set("X-Forwarded-For", "203.0.113.7")
+	request.Header.Set("X-Forwarded-For", "100.64.0.7")
 	return request
 }
 

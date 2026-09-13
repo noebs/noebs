@@ -34,6 +34,11 @@ mailboxes:
   quota_bytes: 1073741824
   role: User
   password_policy: Managed
+- email: admin@noebs.sd
+  name: Noebs backoffice administrator
+  quota_bytes: 1073741824
+  role: User
+  password_policy: Initial
 - email: postmaster@adonese.sd
   name: adonese.sd postmaster
   quota_bytes: 1073741824

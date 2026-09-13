@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -23,6 +24,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/adonese/noebs/internal/accountenrollment"
+	"github.com/adonese/noebs/internal/oidcauth"
+	"github.com/adonese/noebs/internal/tenantauth"
+	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2"
 )
 
 // These cases exercise Keycloak's hosted forms over HTTPS. They deliberately
@@ -134,6 +141,14 @@ func assertRealLocalAccounts(t *testing.T, baseURL string, transport http.RoundT
 			action = realLocalForm(t, page, body, "kc-form-login")
 			page, _ = realLocalPost(t, client, action, url.Values{"username": {login}, "password": {password}})
 			assertRealLocalCallback(t, page, "native-login")
+			exchangeRealMobileAuthorizationCode(t, transport, baseURL, page.Query().Get("code"), realLocalVerifier("native-login"))
+			if account.email != "" {
+				if !t.Run("PrimarySSOAfterOrganizationEnrollment", func(t *testing.T) {
+					assertRealLocalEnrollmentSSO(t, baseURL, client, reconciler, state, users[0].ID)
+				}) {
+					return
+				}
+			}
 
 			currentPassword := password
 			if account.email != "" {
@@ -166,6 +181,108 @@ func assertRealLocalAccounts(t *testing.T, baseURL string, transport http.RoundT
 			}
 			t.Log("native signup, OTP enrollment, wrong-password rejection, primary login and two fresh MFA authorizations passed")
 		})
+	}
+}
+
+func assertRealLocalEnrollmentSSO(t *testing.T, baseURL string, browser *http.Client, r *Reconciler, state DesiredState, subject string) {
+	t.Helper()
+	// Establish this same confidential web client before enrollment, as the BFF
+	// does when a new identity has no organization claims yet. No new credential
+	// form may be needed when the existing browser already has primary assurance.
+	assertRealLocalPrimarySSO(t, baseURL, browser, r, state, subject, "noebs-web", "web-before-enrollment", false)
+	policy := accountenrollment.RuntimeConfig{Enabled: true, Issuer: "https://api.noebs.sd/auth/realms/noebs", TenantIDs: []string{"noebs"}, AllowedSubjects: []string{subject}, KeycloakBaseURL: r.config.BaseURL, KeycloakClientID: state.EnrollmentClient.ClientID, KeycloakClientSecret: r.config.ClientCredentials[state.EnrollmentClient.Credential].ClientSecret}
+	authority, err := NewEnrollmentAuthority(policy, state.tenantCatalog, r.http)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := authority.EnsureUserMembership(context.Background(), subject, "noebs"); err != nil {
+		t.Fatalf("native account organization enrollment: %v", err)
+	}
+	for _, clientID := range []string{"noebs-web", "noebs-web", realMobileClientID, "noebs-backoffice"} {
+		authState := fmt.Sprintf("enrolled-primary-%s-%d", clientID, time.Now().UnixNano())
+		assertRealLocalPrimarySSO(t, baseURL, browser, r, state, subject, clientID, authState, true)
+	}
+	t.Log("organization-scoped primary SSO completed before enrollment, twice after enrollment, and across mobile/private backoffice clients with verified fresh claims")
+}
+
+func assertRealLocalPrimarySSO(t *testing.T, baseURL string, browser *http.Client, r *Reconciler, state DesiredState, subject, clientID, authState string, admitted bool) {
+	t.Helper()
+	var target InteractiveClient
+	for _, client := range state.InteractiveClients {
+		if client.ClientID == clientID {
+			target = client
+		}
+	}
+	if len(target.RedirectURIs) != 1 {
+		t.Fatal("primary SSO fixture requires one exact configured callback")
+	}
+	authorization, err := url.Parse(realLocalAuthorizationURL(t, baseURL, authState, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := authorization.Query()
+	query.Set("client_id", clientID)
+	query.Set("redirect_uri", target.RedirectURIs[0])
+	query.Set("scope", "openid organization:*")
+	if clientID == "noebs-web" {
+		query.Set("scope", "openid profile email organization:*")
+	}
+	authorization.RawQuery = query.Encode()
+	t.Logf("primary SSO client=%s state=%s admitted=%t", clientID, authState, admitted)
+	callback, _ := realLocalGet(t, browser, authorization.String())
+	assertRealLocalCallback(t, callback, authState)
+	if callback.Scheme+"://"+callback.Host+callback.Path != target.RedirectURIs[0] {
+		t.Fatal("primary SSO left the exact configured callback")
+	}
+	values := url.Values{"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {callback.Query().Get("code")}, "redirect_uri": {target.RedirectURIs[0]}, "code_verifier": {realLocalVerifier(authState)}}
+	if target.AccessType == "confidential" {
+		values.Set("client_secret", r.config.ClientCredentials[target.Credential].ClientSecret)
+	}
+	response, err := browser.PostForm(baseURL+"/realms/noebs/protocol/openid-connect/token", values)
+	if err != nil {
+		t.Fatal("primary SSO token exchange request failed")
+	}
+	body := readRealResponse(t, response)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("primary SSO token exchange status %d", response.StatusCode)
+	}
+	var tokens struct {
+		AccessToken string `json:"access_token"`
+		IDToken     string `json:"id_token"`
+	}
+	if err := json.Unmarshal(body, &tokens); err != nil {
+		t.Fatal("primary SSO token response is malformed")
+	}
+	issuer := baseURL + "/realms/noebs"
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, browser)
+	keys := oidc.NewRemoteKeySet(ctx, issuer+"/protocol/openid-connect/certs")
+	idToken, err := oidc.NewVerifier(issuer, keys, &oidc.Config{ClientID: clientID, SupportedSigningAlgs: []string{"RS256"}}).Verify(ctx, tokens.IDToken)
+	if err != nil {
+		t.Fatalf("verify primary SSO ID token: %v", err)
+	}
+	var idClaims struct {
+		Nonce string `json:"nonce"`
+	}
+	if err := idToken.Claims(&idClaims); err != nil || idToken.Subject != subject || idClaims.Nonce != authState+"-nonce" {
+		t.Fatal("primary SSO ID token identity or nonce changed")
+	}
+	verifier, err := oidcauth.NewRemoteVerifier(oidcauth.RuntimeConfig{Issuer: issuer, JWKSURL: issuer + "/protocol/openid-connect/certs", Audience: state.ResourceClient.ClientID, AllowedClients: []string{clientID}, AccessTokenType: "Bearer", MaxFutureIssuedAtSeconds: 5, JWKSRefreshSeconds: 300, UnknownKeyRefreshIntervalSeconds: 30}, browser, oidcauth.SystemClock{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := verifier.VerifyAccessToken(ctx, tokens.AccessToken)
+	if err != nil || claims.Identity().Subject != subject || claims.Identity().AuthorizedParty != clientID {
+		t.Fatal("primary SSO access token identity could not be verified")
+	}
+	if !admitted {
+		if len(claims.Memberships()) != 0 {
+			t.Fatal("unassigned native account acquired implicit organization claims")
+		}
+		return
+	}
+	principal, err := tenantauth.Authorize(claims, "noebs", tenantauth.RoleUser)
+	if err != nil || len(claims.Memberships()) != 1 || len(principal.Roles()) != 1 {
+		t.Fatal("primary SSO did not refresh the exact enrolled Noebs user membership")
 	}
 }
 
@@ -289,7 +406,7 @@ func realLocalFollow(t *testing.T, client *http.Client, response *http.Response)
 		if err != nil || next.Scheme != "https" || next.User != nil {
 			t.Fatal("native flow returned an invalid redirect")
 		}
-		if next.Host == "api.noebs.sd" {
+		if realLocalIsConfiguredCallback(t, next) {
 			return next, nil
 		}
 		if next.Host != issuer {
@@ -306,9 +423,26 @@ func realLocalFollow(t *testing.T, client *http.Client, response *http.Response)
 
 func assertRealLocalCallback(t *testing.T, callback *url.URL, state string) {
 	t.Helper()
-	if callback.Host != "api.noebs.sd" || callback.Query().Get("state") != state || callback.Query().Get("code") == "" || callback.Query().Get("error") != "" {
-		t.Fatalf("native authorization did not complete successfully at %s", callback.Path)
+	if !realLocalIsConfiguredCallback(t, callback) || callback.Query().Get("state") != state || callback.Query().Get("code") == "" || callback.Query().Get("error") != "" {
+		t.Fatalf("native authorization did not complete successfully at %s: expected state=%q actual state=%q error=%q", callback.Path, state, callback.Query().Get("state"), callback.Query().Get("error"))
 	}
+}
+
+func realLocalIsConfiguredCallback(t *testing.T, target *url.URL) bool {
+	t.Helper()
+	if target == nil || target.User != nil || target.Fragment != "" {
+		return false
+	}
+	callback := *target
+	callback.RawQuery = ""
+	for _, client := range repositoryDesiredState(t).InteractiveClients {
+		for _, allowed := range client.RedirectURIs {
+			if callback.String() == allowed {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func assertRealLocalLoginPage(t *testing.T, body []byte) {

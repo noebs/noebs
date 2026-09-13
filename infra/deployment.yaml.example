@@ -1,5 +1,6 @@
 api_version: noebs.infrastructure/v1
 public_host: api.noebs.sd
+backoffice_origin: https://noebs-workers.tail09832.ts.net
 # exe.dev reaches this VM through loopback. This trust contract is verified by
 # the ingress tests; additional forwarding proxies require explicit CIDRs.
 trusted_proxy_cidrs:

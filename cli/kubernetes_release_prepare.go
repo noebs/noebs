@@ -347,6 +347,17 @@ func readKubernetesReleaseInputs(path, ageKeyPath string, decrypt deploymentDecr
 }
 
 func (r preparedKubernetesRelease) validate() error {
+	configPayload, err := configMapDataValue(r.configData, "config.yaml")
+	if err != nil {
+		return err
+	}
+	var config map[string]interface{}
+	if err := yaml.Unmarshal([]byte(configPayload), &config); err != nil {
+		return err
+	}
+	if firstString(getMap(config, "noebs"), "backoffice_origin") != r.keycloakDesiredState.BackofficeOrigin {
+		return errors.New("gateway and Keycloak backoffice_origin must match")
+	}
 	if _, err := r.keycloakReconcilerConfig(); err != nil {
 		return err
 	}

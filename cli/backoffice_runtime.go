@@ -96,6 +96,13 @@ func validateBackofficeRuntimeConfig(cfg ebs_fields.NoebsConfig) error {
 }
 
 func buildBackofficeRuntimeDependencies(cfg ebs_fields.NoebsConfig) (backofficeRuntimeDependencies, error) {
+	publicOrigin, err := originOf(cfg.MobileRedirectURL)
+	if err != nil || backofficeauth.ValidateSeparateOrigin(cfg.BackofficeOrigin, publicOrigin) != nil {
+		return backofficeRuntimeDependencies{}, backofficeauth.ErrInvalidConfiguration
+	}
+	if cfg.BackofficeRedirectURL != cfg.BackofficeOrigin+backofficeCallbackPath || cfg.BackofficePostLogoutURL != cfg.BackofficeOrigin+backofficeLoggedOutPath {
+		return backofficeRuntimeDependencies{}, backofficeauth.ErrInvalidConfiguration
+	}
 	clock := backofficeauth.SystemClock{}
 	if err := requireHTTPSKeycloakEndpoint(cfg.OIDC.JWKSURL); err != nil {
 		return backofficeRuntimeDependencies{}, err

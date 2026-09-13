@@ -48,7 +48,15 @@ class IngressConfigurationTests(unittest.TestCase):
         self.assertEqual(crd['namespaces'], ['noebs'])
         self.assertFalse(crd['allowCrossNamespace'])
         self.assertFalse(crd['allowExternalNameServices'])
+        self.assertEqual(values['ports']['backoffice']['hostIP'], '127.0.0.1')
+        self.assertEqual(values['ports']['backoffice']['port'], 8082)
+        self.assertEqual(values['ports']['backoffice']['forwardedHeaders'], {'trustedIPs': ['127.0.0.1/32'], 'insecure': False})
         self.assertEqual(values['additionalArguments'], [
+            '--entrypoints.web.http.encodedcharacters.allowencodedpercent=false',
+            '--entrypoints.backoffice.http.encodedcharacters.allowencodedpercent=false',
+            '--entrypoints.backoffice.http.encodedcharacters.allowencodedslash=false',
+            '--entrypoints.backoffice.http.encodedcharacters.allowencodedbackslash=false',
+            '--entrypoints.backoffice.http.encodedcharacters.allowencodednullcharacter=false',
             '--entrypoints.web.http.encodedcharacters.allowencodedslash=false',
             '--entrypoints.web.http.encodedcharacters.allowencodedbackslash=false',
             '--entrypoints.web.http.encodedcharacters.allowencodednullcharacter=false'])
@@ -151,7 +159,7 @@ class IngressBehaviorTests(unittest.TestCase):
                        stderr=subprocess.DEVNULL)
 
     @contextlib.contextmanager
-    def proxy(self, trusted_ips=(), bad_transport=None):
+    def proxy(self, trusted_ips=(), bad_transport=None, private=False):
         transports = {}
         for obj in yaml.safe_load_all((INGRESS / 'transport.yaml').read_text()):
             transport = obj['spec']
@@ -172,6 +180,9 @@ class IngressBehaviorTests(unittest.TestCase):
                                           'passHostHeader': True, 'serversTransport': name}}
                     for name, server in self.servers.items()}
         routes = yaml.safe_load((INGRESS / 'routes.yaml').read_text())['spec']['routes']
+        private_objects = list(yaml.safe_load_all((INGRESS / 'backoffice.yaml').read_text()))
+        if private:
+            routes = private_objects[0]['spec']['routes']
         routers = {f'route-{index}': {'rule': route['match'], 'entryPoints': ['web'],
                                      'priority': route['priority'],
                                      'middlewares': [item['name'] for item in route['middlewares']],
@@ -179,6 +190,7 @@ class IngressBehaviorTests(unittest.TestCase):
                    for index, route in enumerate(routes)}
         middlewares = {obj['metadata']['name']: obj['spec'] for obj in
                        yaml.safe_load_all((INGRESS / 'headers.yaml').read_text())}
+        middlewares[private_objects[1]['metadata']['name']] = private_objects[1]['spec']
         dynamic = self.path / 'dynamic.yaml'
         dynamic.write_text(yaml.safe_dump({'http': {'routers': routers, 'services': services,
                                                    'middlewares': middlewares,
@@ -188,7 +200,7 @@ class IngressBehaviorTests(unittest.TestCase):
         static.write_text(yaml.safe_dump({'entryPoints': {'web': {'address': f'127.0.0.1:{port}',
                                           'forwardedHeaders': {'trustedIPs': list(trusted_ips), 'insecure': False},
                                           'http': {'encodedCharacters': {'allowEncodedSlash': False,
-                                                    'allowEncodedBackSlash': False, 'allowEncodedNullCharacter': False}}}},
+                                                    'allowEncodedBackSlash': False, 'allowEncodedNullCharacter': False, 'allowEncodedPercent': False}}}},
                                          'providers': {'file': {'filename': str(dynamic)}},
                                          'log': {'level': 'ERROR'}}))
         with (self.path / 'traefik.log').open('w+') as log:
@@ -199,7 +211,7 @@ class IngressBehaviorTests(unittest.TestCase):
                         log.seek(0)
                         self.fail(log.read())
                     try:
-                        status, _, _ = self.request(port, 'GET', '/test')
+                        status, _, _ = self.request(port, 'GET', '/backoffice/login' if private else '/test', {'Host': 'noebs-workers.tail09832.ts.net'} if private else None)
                         if status != 404:
                             break
                     except OSError:
@@ -304,6 +316,39 @@ class IngressBehaviorTests(unittest.TestCase):
             with self.subTest(failure=failure), self.proxy(bad_transport=failure) as port:
                 expected = 502 if failure == 'no client certificate' else 500
                 self.assertEqual(self.request(port, 'GET', '/test')[0], expected)
+
+    def test_backoffice_public_denial_including_encoded_paths_and_methods(self):
+        paths = ['/backoffice', '/backoffice/', '/backoffice/login', '/backoffice/oauth/callback',
+                 '/backoffice/assets/style.css', '/BACKOFFICE/login', '/back%6fffice/login',
+                 '//backoffice/login', '/x/../backoffice/login', '/backoffice%2flogin',
+                 '/backoffice%5clogin', '/backoffice%00/login', '/%2562ackoffice/login']
+        with self.proxy() as port:
+            for path in paths:
+                for method in ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'TRACE']:
+                    with self.subTest(path=path, method=method):
+                        status, headers, _ = self.request(port, method, path)
+                        self.assertIn(status, [400, 404])
+                        self.assertNotIn('Set-Cookie', headers)
+            self.assertEqual(self.request(port, 'GET', '/backoffice/login',
+                                          {'Host': 'noebs-workers.tail09832.ts.net'})[0], 404)
+            self.assertEqual(self.request(port, 'GET', '/account/login')[0], 200)
+
+    def test_private_backoffice_preserves_host_and_authenticated_tailnet_source(self):
+        private_host = 'noebs-workers.tail09832.ts.net'
+        with self.proxy(['127.0.0.1/32'], private=True) as port:
+            status, _, body = self.request(port, 'GET', '/backoffice/login', {
+                'Host': private_host, 'X-Forwarded-For': '100.85.8.9',
+                'X-Forwarded-Host': 'attacker.example', 'X-Forwarded-Proto': 'http',
+                'X-Real-IP': 'attacker.example'})
+            self.assertEqual(status, 200)
+            self.assertEqual(body['headers']['Host'], private_host)
+            self.assertEqual(body['headers']['X-Forwarded-Host'], private_host)
+            self.assertEqual(body['headers']['X-Forwarded-Proto'], 'https')
+            self.assertEqual(body['headers']['X-Forwarded-For'], '100.85.8.9, 127.0.0.1')
+            self.assertNotIn('X-Real-Ip', body['headers'])
+            for path in ['/test', '/account/login', '/auth/realms/noebs/protocol/openid-connect/auth']:
+                self.assertEqual(self.request(port, 'GET', path, {'Host': private_host})[0], 404)
+            self.assertEqual(self.request(port, 'GET', '/backoffice/login')[0], 404)
 
     def test_keycloak_discards_caller_source_chain_and_preserves_pkce_query(self):
         path = '/auth/realms/noebs/protocol/openid-connect/auth?state=opaque&code_challenge=pkce&code_challenge_method=S256'

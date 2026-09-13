@@ -32,7 +32,7 @@ func TestPrimaryAuthenticationSupportsLocalCredentialsWithoutIdentityProviders(t
 	if levels.Requirement != "ALTERNATIVE" || levels.Flow == nil || levels.Flow.Alias != authenticationLevelsFlowAlias {
 		t.Fatalf("browser credential path = %#v", levels)
 	}
-	if len(levels.Flow.Executions) != 2 {
+	if len(levels.Flow.Executions) != 3 {
 		t.Fatalf("authentication levels = %#v", levels.Flow.Executions)
 	}
 	primary := levels.Flow.Executions[0]
@@ -53,6 +53,10 @@ func TestPrimaryAuthenticationSupportsLocalCredentialsWithoutIdentityProviders(t
 		}
 	}
 	assertRequiredTOTP(t, mfa)
+	completion := levels.Flow.Executions[2]
+	if completion.ProviderID != "allow-access-authenticator" || completion.Requirement != "REQUIRED" || completion.Priority <= mfa.Priority {
+		t.Fatalf("organization SSO must finish only after all required assurance levels: %#v", completion)
+	}
 }
 
 func TestFirstBrokerLoginValidatesProfileAndRepairsLinkingDrift(t *testing.T) {

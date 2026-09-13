@@ -3,5 +3,6 @@ kind: Kustomization
 namespace: noebs
 resources:
   - routes.yaml
+  - backoffice.yaml
   - transport.yaml
   - headers.yaml
