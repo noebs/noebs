@@ -1,0 +1,47 @@
+image: ${WEBMAIL_IMAGE:?Set the immutable official Roundcube image}
+platform: linux/amd64
+user: "33:33"
+init: true
+restart: unless-stopped
+read_only: true
+cap_drop: [ALL]
+security_opt: [no-new-privileges:true]
+cpus: ${WEBMAIL_CPUS:?Set the webmail CPU limit}
+mem_limit: ${WEBMAIL_MEMORY_MIB:?Set the webmail memory limit}m
+pids_limit: ${WEBMAIL_PIDS:?Set the webmail process limit}
+stop_grace_period: 30s
+environment:
+  ROUNDCUBEMAIL_DB_TYPE: sqlite
+  ROUNDCUBEMAIL_DEFAULT_HOST: ssl://${MAIL_HOSTNAME:?Set the mail hostname}
+  ROUNDCUBEMAIL_DEFAULT_PORT: "993"
+  ROUNDCUBEMAIL_SMTP_SERVER: ssl://${MAIL_HOSTNAME:?Set the mail hostname}
+  ROUNDCUBEMAIL_SMTP_PORT: "465"
+  ROUNDCUBEMAIL_USERNAME_DOMAIN: ""
+  ROUNDCUBEMAIL_REQUEST_PATH: https://${WEBMAIL_HOSTNAME:?Set the webmail hostname}/
+  ROUNDCUBEMAIL_PLUGINS: archive,zipdownload
+  ROUNDCUBEMAIL_SKIN: elastic
+ports:
+  - "127.0.0.1:${WEBMAIL_PORT:?Set the webmail loopback port}:8000"
+volumes:
+  - ${WEBMAIL_STATE:?Set webmail state}/db:/var/roundcube/db
+  - ${WEBMAIL_STATE:?Set webmail state}/config:/var/roundcube/config:ro
+  - ${WEBMAIL_STATE:?Set webmail state}/roundcube_des_key:/run/secrets/roundcube_des_key:ro
+  - ${WEBMAIL_STATE:?Set webmail state}/php.ini:/usr/local/etc/php/conf.d/zzz-noebs-webmail.ini:ro
+tmpfs:
+  # The official entrypoint installs this image's application here on every
+  # start. Persist only user metadata and the stable session encryption key.
+  - /var/www/html:rw,nosuid,nodev,size=256m,uid=33,gid=33,mode=0750
+  - /tmp:rw,nosuid,nodev,size=64m,mode=1777
+  - /var/run/apache2:rw,nosuid,nodev,size=4m,uid=33,gid=33,mode=0750
+  - /var/lock/apache2:rw,nosuid,nodev,size=4m,uid=33,gid=33,mode=0750
+healthcheck:
+  test: [CMD, php, -r, "exit(@fsockopen('127.0.0.1', 8000) ? 0 : 1);"]
+  interval: 30s
+  timeout: 5s
+  start_period: 60s
+  retries: 3
+logging:
+  driver: local
+  options:
+    max-size: 10m
+    max-file: "3"

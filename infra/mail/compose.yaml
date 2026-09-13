@@ -1,0 +1,44 @@
+name: noebs-mail
+
+services:
+  stalwart:
+    image: ${STALWART_IMAGE:?Set the immutable Stalwart image digest}
+    platform: linux/amd64
+    hostname: ${MAIL_HOSTNAME:?Set the mail server hostname}
+    user: "2000:2000"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    # The upstream binary carries this file capability and will not execute if
+    # it is absent from the bounding set.
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    cpus: ${MAIL_CPUS:?Set the CPU limit}
+    mem_limit: ${MAIL_MEMORY_MIB:?Set the memory limit}m
+    pids_limit: ${MAIL_PIDS:?Set the process limit}
+    stop_grace_period: 60s
+    environment:
+      STALWART_HOSTNAME: ${MAIL_HOSTNAME:?Set the mail server hostname}
+      STALWART_PUBLIC_URL: https://${MAIL_HOSTNAME:?Set the mail server hostname}
+      STALWART_HEALTHCHECK_URL: http://127.0.0.1:8080/healthz/live
+    ports:
+      - "${MAIL_PUBLIC_IPV4:?Set the public IPv4 address}:25:25"
+      - "${MAIL_PUBLIC_IPV4:?Set the public IPv4 address}:465:465"
+      - "${MAIL_PUBLIC_IPV4:?Set the public IPv4 address}:587:587"
+      - "${MAIL_PUBLIC_IPV4:?Set the public IPv4 address}:993:993"
+      # The existing HTTPS proxy and SSH tunnels reach this listener locally.
+      - "127.0.0.1:18080:8080"
+    volumes:
+      - ${MAIL_STATE_DIRECTORY:?Set the private mail state directory}/config:/etc/stalwart
+      - ${MAIL_STATE_DIRECTORY:?Set the private mail state directory}/data:/var/lib/stalwart
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m,mode=1777
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"

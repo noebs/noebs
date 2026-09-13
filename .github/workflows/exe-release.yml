@@ -56,6 +56,7 @@ jobs:
           go install sigs.k8s.io/kustomize/kustomize/v5@v5.8.1
           python3 -m pip install PyYAML==6.0.2
           python3 -B -m unittest discover -s infra/scripts -p 'test_*.py'
+          python3 -B -m unittest discover -s infra/mail -p 'test_*.py'
       - name: Validate provider and automation
         run: |
           go -C infra/exedev-provider test ./...

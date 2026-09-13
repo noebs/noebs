@@ -16,6 +16,11 @@ path; it does not install Mojaloop or invoke another repository.
 | `noebs-backup` | Encrypted backup storage |
 | `noebs-telegram` | Existing notification VM, outside Kubernetes |
 
+The existing Contabo host runs the shared Stalwart mail service and Roundcube
+browser inbox for `noebs.sd`, `adonese.sd`, and `2t.sd`. Its accounts, DNS,
+certificates, proxy integration and encrypted backups are managed by
+[`mail/`](mail/README.md). Mail does not require another exe.dev VM.
+
 The desired machines and capacities are in `exedev/fleet.json`. Terraform owns
 their lifecycle; Kubernetes schedules workloads and CoreDNS resolves their
 Services. Internal calls use names such as `wallet-ledger.noebs.svc.cluster.local`.

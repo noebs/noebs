@@ -1,0 +1,86 @@
+api_version: noebs.mail/v1
+ssh_destination: adonese@100.102.164.34
+hostname: mail.noebs.sd
+public_ipv4: 213.199.63.78
+tailscale_ipv4: 100.102.164.34
+image: stalwartlabs/stalwart:v0.16.21@sha256:93c574e52249c1ebf90061da2c4c0756a7b72abfcc1fec34506a03c2e38b5977
+state_directory: /var/lib/noebs-mail
+resources:
+  cpus: 1
+  memory_mib: 2048
+  pids: 256
+domains:
+- noebs.sd
+- adonese.sd
+- 2t.sd
+mailboxes:
+- email: postmaster@noebs.sd
+  name: noebs.sd postmaster
+  quota_bytes: 1073741824
+  role: Admin
+  password_policy: Managed
+- email: adonese@noebs.sd
+  name: Adonese
+  quota_bytes: 5368709120
+  role: User
+  password_policy: Initial
+- email: info@noebs.sd
+  name: noebs.sd info
+  quota_bytes: 1073741824
+  role: User
+  password_policy: Initial
+- email: noreply@noebs.sd
+  name: noebs.sd noreply
+  quota_bytes: 1073741824
+  role: User
+  password_policy: Managed
+- email: postmaster@adonese.sd
+  name: adonese.sd postmaster
+  quota_bytes: 1073741824
+  role: User
+  password_policy: Managed
+- email: adonese@adonese.sd
+  name: Adonese
+  quota_bytes: 5368709120
+  role: User
+  password_policy: Initial
+- email: info@adonese.sd
+  name: adonese.sd info
+  quota_bytes: 1073741824
+  role: User
+  password_policy: Initial
+- email: noreply@adonese.sd
+  name: adonese.sd noreply
+  quota_bytes: 1073741824
+  role: User
+  password_policy: Managed
+- email: postmaster@2t.sd
+  name: 2t.sd postmaster
+  quota_bytes: 1073741824
+  role: User
+  password_policy: Managed
+- email: adonese@2t.sd
+  name: Adonese
+  quota_bytes: 5368709120
+  role: User
+  password_policy: Initial
+- email: info@2t.sd
+  name: 2t.sd info
+  quota_bytes: 1073741824
+  role: User
+  password_policy: Initial
+- email: noreply@2t.sd
+  name: 2t.sd noreply
+  quota_bytes: 1073741824
+  role: User
+  password_policy: Managed
+dkim_selector: noebs2026
+public_interface: eth0
+webmail:
+  hostname: webmail.adonese.sd
+  loopback_port: 18089
+  image: roundcube/roundcubemail:1.7.4-apache-nonroot@sha256:d4a7389d5e3d2d2c74985577807f78f168a43b5b8812d215df303514274cfa76
+  resources:
+    cpus: 0.5
+    memory_mib: 512
+    pids: 128
